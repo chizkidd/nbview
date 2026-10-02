@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>nbview</title>
+  <meta name="description" content="Read Jupyter notebooks from any public GitHub repo.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📓</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="is-home">
+  <header class="bar">
+    <a class="brand" href="#/">nbview</a>
+    <form id="jump" class="jump" role="search">
+      <input id="jump-input" type="text" placeholder="owner/repo, GitHub link or .ipynb URL"
+             aria-label="Open a repo or notebook" autocomplete="off" spellcheck="false">
+    </form>
+    <button id="settings-btn" class="btn" type="button">GitHub token</button>
+  </header>
+
+  <main id="app"></main>
+
+  <dialog id="settings">
+    <form method="dialog" class="settings-form">
+      <h2>GitHub token</h2>
+      <p>Opening notebooks never counts against GitHub's limits. Browsing folders does: 60 listings an hour without a token, 5,000 with one. A classic token with no scopes is enough. It's stored in this browser only.</p>
+      <input id="token-input" type="password" placeholder="ghp_..." autocomplete="off" spellcheck="false" aria-label="GitHub token">
+      <div class="dialog-actions">
+        <button class="btn" value="clear">Remove token</button>
+        <button class="btn" value="cancel">Cancel</button>
+        <button class="btn primary" value="save">Save token</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
