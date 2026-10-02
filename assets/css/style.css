@@ -1,31 +1,40 @@
 /* nbview styles. In-prompts are blue, Out-prompts red, after Jupyter's own convention. */
 :root {
-  --bg: #F6F7F9;
-  --surface: #FFFFFF;
-  --ink: #17202C;
-  --muted: #5A6576;
-  --rule: #DAE0E7;
-  --in: #2D52CF;
-  --out: #B23A22;
-  --code-bg: #F0F2F5;
-  --err-bg: #FCEEEA;
-  --stderr-bg: #FFF5E3;
-  --grid: rgba(45, 82, 207, 0.07);
+  color-scheme: light dark;
 
-  --syn-kw: #7A2EB8;
-  --syn-str: #1F7A3F;
-  --syn-num: #A3570A;
-  --syn-com: #7B8696;
-  --syn-fn: #2D52CF;
-  --syn-meta: #8A5A00;
+  --bg: light-dark(#F6F7F9, #0F141B);
+  --surface: light-dark(#FFFFFF, #161C25);
+  --ink: light-dark(#17202C, #E3E8EF);
+  --muted: light-dark(#5A6576, #93A0B2);
+  --rule: light-dark(#DAE0E7, #2A3341);
+  --in: light-dark(#2D52CF, #8FA8FF);
+  --out: light-dark(#B23A22, #FF8C73);
+  --code-bg: light-dark(#F0F2F5, #1B222D);
+  --err-bg: light-dark(#FCEEEA, #2C1B1A);
+  --stderr-bg: light-dark(#FFF5E3, #2A2416);
+  --grid: light-dark(rgba(45, 82, 207, 0.07), rgba(143, 168, 255, 0.05));
 
-  --a-black: #2E3440; --a-red: #C0392B; --a-green: #2E7D32; --a-yellow: #9A6A00;
-  --a-blue: #2D52CF; --a-magenta: #9C27B0; --a-cyan: #00838F; --a-white: #8A93A0;
+  --syn-kw: light-dark(#7A2EB8, #C99BFF);
+  --syn-str: light-dark(#1F7A3F, #8BD49C);
+  --syn-num: light-dark(#A3570A, #F2B370);
+  --syn-com: light-dark(#7B8696, #6E7B8E);
+  --syn-fn: light-dark(#2D52CF, #8FA8FF);
+  --syn-meta: light-dark(#8A5A00, #E6C07B);
+
+  --a-black: light-dark(#2E3440, #8A93A0);
+  --a-red: light-dark(#C0392B, #FF7B72);
+  --a-green: light-dark(#2E7D32, #7EE787);
+  --a-yellow: light-dark(#9A6A00, #E3B341);
+  --a-blue: light-dark(#2D52CF, #79C0FF);
+  --a-magenta: light-dark(#9C27B0, #D2A8FF);
+  --a-cyan: light-dark(#00838F, #56D4DD);
+  --a-white: light-dark(#8A93A0, #C9D1D9);
 
   --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color-scheme: light;
 }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"]  { color-scheme: dark; }
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -109,6 +118,24 @@ code, pre { font-family: var(--mono); }
 #settings-btn { margin-left: auto; }
 .is-home .jump { visibility: hidden; }
 
+.theme-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: -0.4rem;
+  padding: 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.theme-btn:hover { border-color: var(--in); color: var(--in); }
+.theme-btn svg { width: 16px; height: 16px; }
+.theme-btn[data-current="dark"] .moon,
+.theme-btn[data-current="light"] .sun { display: none; }
+
 main { padding: 1.75rem 1.25rem 5rem; }
 
 /* Buttons */
@@ -128,7 +155,7 @@ main { padding: 1.75rem 1.25rem 5rem; }
 }
 .btn:hover { border-color: var(--in); }
 .btn.primary { background: var(--in); border-color: var(--in); color: #fff; }
-@media (prefers-color-scheme: dark) { .btn.primary { color: #0F141B; } }
+.btn.primary { color: light-dark(#fff, #0F141B); }
 .btn[aria-pressed="true"] { border-color: var(--in); color: var(--in); }
 
 /* Home */

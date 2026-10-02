@@ -947,7 +947,28 @@
     }
     if (app.querySelector('.error-box')) route();
   });
+  // Theme toggle: follows the system until the user picks one, then remembers it.
+  const themeBtn = document.getElementById('theme-btn');
+  const systemDark = matchMedia('(prefers-color-scheme: dark)');
+  const currentTheme = () =>
+    document.documentElement.dataset.theme || (systemDark.matches ? 'dark' : 'light');
 
+  function syncThemeBtn() {
+    const t = currentTheme();
+    const label = t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
+    themeBtn.dataset.current = t;
+    themeBtn.setAttribute('aria-label', label);
+    themeBtn.title = label;
+  }
+
+  themeBtn.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    store.set('nbv.theme', next);
+    syncThemeBtn();
+  });
+  systemDark.addEventListener('change', syncThemeBtn);
+  syncThemeBtn();
   window.addEventListener('hashchange', route);
   route();
 })();

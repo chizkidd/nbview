@@ -10,11 +10,21 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+    <script>
+    try {
+        var t = localStorage.getItem('nbv.theme');
+        if (t) document.documentElement.dataset.theme = JSON.parse(t);
+    } catch (e) {}
+    </script>
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body class="is-home">
   <header class="bar">
     <a class="brand" href="#/">nbview</a>
+    <button id="theme-btn" class="theme-btn" type="button" aria-label="Switch to dark mode">
+    <svg class="moon" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 10.2A5.8 5.8 0 0 1 5.8 2.5a5.8 5.8 0 1 0 7.7 7.7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    <svg class="sun" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3 3l1.1 1.1M11.9 11.9 13 13M3 13l1.1-1.1M11.9 4.1 13 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+    </button>
     <form id="jump" class="jump" role="search">
       <input id="jump-input" type="text" placeholder="owner/repo, GitHub link or .ipynb URL"
              aria-label="Open a repo or notebook" autocomplete="off" spellcheck="false">
