@@ -19,6 +19,8 @@
   let routeId = 0;
   let katexMacros = {};
   let downloadUrl = null;
+  const BIG_NB = 10 * 1024 * 1024;
+  const bigOk = new Set();
 
   /* ---------- small helpers ---------- */
 
@@ -381,6 +383,25 @@
     }
     const text = await res.text();
     if (stale(id)) return;
+
+    if (text.length > BIG_NB && !bigOk.has(location.hash)) {
+      const name = isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb');
+      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+      downloadUrl = URL.createObjectURL(new Blob([text], { type: 'application/x-ipynb+json' }));
+      app.innerHTML = `
+        <div class="error-box" role="alert">
+          <h2>This notebook is large (${esc(fmtSize(text.length))})</h2>
+          <p>Big embedded outputs, such as images and tables, can make this tab slow or freeze it while the notebook renders. You can open it anyway or download the file instead.</p>
+          <div class="toolbar">
+            <button class="btn primary" id="big-open" type="button">Open anyway</button>
+            <a class="btn" id="big-dl" download="${esc(name)}">Download</a>
+            <a class="btn" href="#/">Back to start</a>
+          </div>
+        </div>`;
+      document.getElementById('big-dl').href = downloadUrl;
+      document.getElementById('big-open').addEventListener('click', () => { bigOk.add(location.hash); route(); });
+      return;
+    }
 
     let nb;
     try { nb = JSON.parse(text); } catch {
