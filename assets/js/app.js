@@ -211,7 +211,7 @@
   }
 
   function renderHome() {
-    document.title = 'nbview';
+    document.title = 'nbview: Jupyter notebook viewer for GitHub';
     const recents = store.get('nbv.recent', []);
     app.innerHTML = `
       <div class="home">

@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>nbview</title>
-  <meta name="description" content="Read Jupyter notebooks from any public GitHub repo.">
+  <title>nbview: Jupyter notebook viewer for GitHub</title>
+  <meta name="description" content="nbview renders Jupyter notebooks from any public GitHub repo, right in your browser. A fast nbviewer alternative: change nbviewer.org to nbview.org in a link and it opens the same notebook.">
+  <link rel="canonical" href="https://nbview.org/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="nbview">
-  <meta property="og:title" content="nbview">
-  <meta property="og:description" content="Read Jupyter notebooks from any public GitHub repo.">
+  <meta property="og:title" content="nbview: Jupyter notebook viewer for GitHub">
+  <meta property="og:description" content="nbview renders Jupyter notebooks from any public GitHub repo, right in your browser. A fast nbviewer alternative: change nbviewer.org to nbview.org in a link and it opens the same notebook.">
   <meta property="og:url" content="https://nbview.org/">
   <meta property="og:image" content="https://nbview.org/assets/og.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -42,7 +43,12 @@
     </a>
   </header>
 
-  <main id="app"></main>
+  <main id="app">
+    <div class="home">
+      <h1 class="home-title">Read Jupyter notebooks from any public GitHub repo.</h1>
+      <p class="hint">nbview is a fast nbviewer alternative that runs entirely in your browser, so there is no server to go down. Paste a GitHub repo, notebook link, gist or nbviewer link, or change <code>nbviewer.org</code> to <code>nbview.org</code> in the address bar and the same notebook opens here.</p>
+    </div>
+  </main>
 
   <dialog id="settings">
     <form method="dialog" class="settings-form">
