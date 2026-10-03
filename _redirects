@@ -1,0 +1,2 @@
+# Redirect nbviewer.org-style links: swap the domain and it just works.
+/github/*  /#/github/:splat  302

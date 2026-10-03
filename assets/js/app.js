@@ -6,6 +6,7 @@
  *   #/github/{owner}/{repo}                    resolve default branch, then browse
  *   #/github/{owner}/{repo}/tree/{ref}/{path}  browse a folder
  *   #/github/{owner}/{repo}/blob/{ref}/{path}  render a notebook
+ *   #/gist/{id}                               open the first notebook in a gist
  *   #/url/{encoded url}                        render a notebook from any CORS-friendly URL
  */
 (() => {
@@ -82,6 +83,9 @@
     if ((m = s.match(/^(?:https?:\/\/)?raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+?)(?:[?#].*)?$/i))) {
       return hashFor(m[1], m[2], 'blob', m[3], safeDecode(m[4]));
     }
+    if ((m = s.match(/^(?:https?:\/\/)?gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]+)(?:[/?#].*)?$/i))) {
+      return '#/gist/' + m[1];
+    }
     if ((m = s.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i))) {
       s = m[1];
     } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/github\/(.+)$/i))) {
@@ -106,7 +110,22 @@
 
   /* ---------- GitHub ---------- */
 
+  const CACHE_MS = 5 * 60 * 1000;
+
+  function cacheGet(path) {
+    try {
+      const v = JSON.parse(sessionStorage.getItem('nbv.c:' + path));
+      return v && Date.now() - v.t < CACHE_MS ? v.d : null;
+    } catch { return null; }
+  }
+
+  function cacheSet(path, d) {
+    try { sessionStorage.setItem('nbv.c:' + path, JSON.stringify({ t: Date.now(), d })); } catch { /* storage full or unavailable */ }
+  }
+
   async function gh(path) {
+    const cached = cacheGet(path);
+    if (cached) return cached;
     const headers = { Accept: 'application/vnd.github+json' };
     const token = store.get('nbv.token');
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -117,7 +136,11 @@
     } catch {
       throw new ViewError("Couldn't reach GitHub", 'The network request failed. Check your connection and try again.');
     }
-    if (res.ok) return res.json();
+    if (res.ok) {
+      const data = await res.json();
+      cacheSet(path, data);
+      return data;
+    }
 
     if ((res.status === 403 || res.status === 429) && res.headers.get('x-ratelimit-remaining') === '0') {
       const reset = Number(res.headers.get('x-ratelimit-reset')) * 1000;
@@ -323,6 +346,16 @@
     }
   }
 
+  async function viewGist(gistId, id) {
+    showLoading('Fetching gist');
+    const g = await gh(`/gists/${encodeURIComponent(gistId)}`);
+    if (stale(id)) return;
+    const files = Object.values(g.files || {});
+    const file = files.find(f => isNbName(f.filename));
+    if (!file) throw new ViewError('No notebook in this gist', "The gist doesn't contain an .ipynb file.");
+    location.replace('#/url/' + encodeURIComponent(file.raw_url));
+  }
+
   async function viewNotebook(src, id) {
     showLoading('Fetching notebook');
     const isGh = !src.url;
@@ -366,6 +399,7 @@
     await showNotebook(nb, ctx, {
       name,
       text,
+      shareable: true,
       crumbs: isGh
         ? crumbs(src.owner, src.repo, src.ref, src.path)
         : `<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">${esc(host)}</span>`,
@@ -449,6 +483,7 @@
           <div class="toolbar">
             <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
             <a class="btn" id="dl">Download</a>
+            ${info.shareable ? '<button class="btn" id="copy-link" type="button">Copy link</button>' : ''}
             ${info.colab ? `<a class="btn" href="${esc(info.colab)}" target="_blank" rel="noopener">Open in Colab</a>` : ''}
             ${info.github ? `<a class="btn" href="${esc(info.github)}" target="_blank" rel="noopener">View on GitHub</a>` : ''}
             ${info.source ? `<a class="btn" href="${esc(info.source)}" target="_blank" rel="noopener">Source</a>` : ''}
@@ -463,6 +498,15 @@
     const dl = document.getElementById('dl');
     dl.href = downloadUrl;
     dl.download = info.name;
+
+    const copy = document.getElementById('copy-link');
+    if (copy) {
+      copy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(location.href); copy.textContent = 'Copied'; }
+        catch { copy.textContent = 'Press Ctrl+C'; window.prompt('Copy this link', location.href); }
+        setTimeout(() => { copy.textContent = 'Copy link'; }, 1800);
+      });
+    }
 
     const toggle = document.getElementById('toggle-code');
     toggle.addEventListener('click', () => {
@@ -854,6 +898,8 @@
       if (parts[0] === 'url' && parts[1]) {
         return await viewNotebook({ url: parts.slice(1).join('/') }, id);
       }
+
+      if (parts[0] === 'gist' && parts[1]) return await viewGist(parts[1], id);
 
       if (parts[0] === 'github' && parts[1]) {
         const [, owner, repo, kind, ref, ...rest] = parts;
