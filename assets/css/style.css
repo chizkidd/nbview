@@ -106,6 +106,7 @@ code, pre { font-family: var(--mono); }
 }
 .theme-btn:hover { border-color: var(--in); color: var(--in); }
 .theme-btn svg { width: 16px; height: 16px; }
+.gh-link { margin-left: 0; flex: none; }
 .theme-btn[data-current="dark"] .moon,
 .theme-btn[data-current="light"] .sun { display: none; }
 
