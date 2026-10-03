@@ -719,7 +719,75 @@
 
   /* ---------- markdown + math ---------- */
 
+  /* Python highlighter that emits Pygments token classes, so code looks like nbviewer's.
+   * highlight.js leaves operators and module names unmarked, which CSS can't recover. */
+  const PY_KW = new Set('and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield'.split(' '));
+  const PY_OPWORD = new Set(['and', 'or', 'not', 'in', 'is']);
+  const PY_CONST = new Set(['True', 'False', 'None']);
+  const PY_BUILTIN = new Set(('abs aiter all anext any ascii bin bool breakpoint bytearray bytes callable chr classmethod compile complex ' +
+    'delattr dict dir divmod enumerate eval exec filter float format frozenset getattr globals hasattr hash help hex id input int ' +
+    'isinstance issubclass iter len list locals map max memoryview min next object oct open ord pow print property range repr ' +
+    'reversed round set setattr slice sorted staticmethod str sum super tuple type vars zip').split(' '));
+  const PY_TOKEN = new RegExp([
+    /(#[^\n]*)/,
+    /((?<!\w)(?:[rRbBuUfF]{1,2})?(?:'''[\s\S]*?(?:'''|(?![\s\S]))|"""[\s\S]*?(?:"""|(?![\s\S]))|'(?:\\[\s\S]|[^'\\\n])*'?|"(?:\\[\s\S]|[^"\\\n])*"?))/,
+    /((?<![\w.])(?:0[xX][0-9a-fA-F_]+|0[bB][01_]+|0[oO][0-7_]+|(?:\d[\d_]*\.?[\d_]*|\.\d[\d_]*)(?:[eE][+-]?\d+)?[jJ]?))/,
+    /([A-Za-z_]\w*)/,
+    /((?<=^[ \t]*)@[\w.]+)/,
+    /(\*\*=?|\/\/=?|<<=?|>>=?|->|:=|!=|[<>=+\-*/%&|^@]=?|~)/,
+    /(\n)/,
+    /([\s\S])/,
+  ].map(r => r.source).join('|'), 'gm');
+
+  function pyHighlight(code) {
+    let out = '';
+    let m;
+    let mode = null;      // 'from' or 'mod' while module names follow; 'alias' right after `as`
+    let lineStart = true; // only whitespace seen since the last newline
+    let after = null;     // 'def' or 'class' when the next identifier names it
+    let prevDot = false;
+    const span = (cls, t) => `<span class="${cls}">${esc(t)}</span>`;
+    const reset = () => { after = null; prevDot = false; };
+    while ((m = PY_TOKEN.exec(code))) {
+      const t = m[0];
+      if (m[1]) { out += span('c1', t); continue; }
+      if (m[2]) { out += span('s', t); lineStart = false; reset(); continue; }
+      if (m[3]) { out += span('m', t); lineStart = false; reset(); continue; }
+      if (m[5]) { out += span('nd', t); lineStart = false; reset(); continue; }
+      if (m[7]) { out += t; lineStart = true; mode = null; reset(); continue; }
+      if (m[6]) { out += span('o', t); lineStart = false; reset(); continue; }
+      if (m[4]) {
+        const bol = lineStart;
+        lineStart = false;
+        if (prevDot && !mode) { out += esc(t); prevDot = false; continue; }
+        prevDot = false;
+        if (mode === 'alias') { out += esc(t); mode = 'mod'; continue; }
+        if (t === 'as' && mode) { out += span('kn', t); mode = 'alias'; continue; }
+        if (t === 'import' && (bol || mode === 'from')) { out += span('kn', t); mode = mode === 'from' ? null : 'mod'; continue; }
+        if (t === 'from' && bol) { out += span('kn', t); mode = 'from'; continue; }
+        if (mode) { out += span('nn', t); continue; }
+        if (after) { out += span(after === 'def' ? 'nf' : 'nc', t); after = null; continue; }
+        after = (t === 'def' || t === 'class') ? t : null;
+        if (PY_OPWORD.has(t)) out += span('ow', t);
+        else if (PY_CONST.has(t)) out += span('kc', t);
+        else if (PY_KW.has(t)) out += span('k', t);
+        else if (PY_BUILTIN.has(t)) out += span('nb', t);
+        else if (t === 'self' || t === 'cls') out += span('bp', t);
+        else if (/^[A-Z]\w*(Error|Exception|Warning)$/.test(t) || t === 'StopIteration' || t === 'KeyboardInterrupt') out += span('ne', t);
+        else out += esc(t);
+        continue;
+      }
+      // whitespace, punctuation
+      if (!/\s/.test(t)) lineStart = false;
+      prevDot = t === '.';
+      if (t === ',' && mode === 'alias') mode = 'mod';
+      out += esc(t);
+    }
+    return out;
+  }
+
   function highlight(code, lang) {
+    if (/^(python|python3|ipython3?|py)$/.test(lang || '')) return pyHighlight(code);
     if (window.hljs && lang && hljs.getLanguage(lang)) {
       try { return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; } catch { /* fall through */ }
     }

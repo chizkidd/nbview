@@ -14,13 +14,25 @@
   --stderr-bg: light-dark(#FFF5E3, #2A2416);
   --grid: light-dark(rgba(45, 82, 207, 0.07), rgba(143, 168, 255, 0.05));
 
+  /* Notebook colors follow nbviewer (Jupyter classic + Pygments "default") */
+  --nb-page: light-dark(#FFFFFF, #0F141B);
+  --nb-text: light-dark(#000000, #E3E8EF);
+  --nb-input-bg: light-dark(#F7F7F7, #161C25);
+  --nb-input-bd: light-dark(#CFCFCF, #2A3341);
+  --nb-code: light-dark(#EFF0F1, #202A37);
+  --nb-in: light-dark(#303F9F, #8FA8FF);
+  --nb-out: light-dark(#D84315, #FF8C73);
+
   --syn-kw: light-dark(#008000, #6FD07A);
   --syn-op: light-dark(#AA22FF, #C99BFF);
+  --syn-opr: light-dark(#666666, #B0B8C4);
   --syn-str: light-dark(#BA2121, #FF8C73);
-  --syn-num: light-dark(#666666, #B0B8C4);
+  --syn-num: light-dark(#008800, #7EE787);
   --syn-com: light-dark(#408080, #7FB5B5);
   --syn-fn: light-dark(#0000FF, #8FA8FF);
-  --syn-meta: light-dark(#8A5A00, #E6C07B);
+  --syn-exc: light-dark(#D2413A, #FF7B72);
+  --syn-type: light-dark(#B00040, #FF9FB5);
+  --syn-meta: light-dark(#AA22FF, #C99BFF);
 
   --a-black: light-dark(#2E3440, #8A93A0);
   --a-red: light-dark(#C0392B, #FF7B72);
@@ -33,6 +45,8 @@
 
   --serif: "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --nb-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --nb-mono: monospace;
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"]  { color-scheme: dark; }
@@ -46,6 +60,7 @@ body {
   font: 17px/1.6 var(--serif);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+body:not(.is-home) { background: var(--nb-page); }
 body.is-home {
   background-image:
     linear-gradient(var(--grid) 1px, transparent 1px),
@@ -297,56 +312,57 @@ main { padding: 1.75rem 1.25rem 5rem; }
 .error-box p { margin: 0 0 1.1rem; color: var(--muted); }
 .error-box .toolbar { justify-content: flex-start; }
 
-/* Notebook */
-.cells { margin-top: 1.75rem; }
-.cell { margin-bottom: 1.1rem; }
+/* Notebook: typography and boxes follow nbviewer's Jupyter classic look */
+.cells { margin-top: 1.75rem; font: 14px/1.42857 var(--nb-sans); color: var(--nb-text); }
+.cell { margin-bottom: 0.9rem; }
 .row {
   display: grid;
-  grid-template-columns: 8.5ch minmax(0, 1fr);
-  gap: 0 0.9rem;
+  grid-template-columns: 15ex minmax(0, 1fr);
+  gap: 0 0.4rem;
 }
 .prompt {
-  font: 12px/1 var(--mono);
+  font: 13px/1.21429 var(--nb-mono);
   text-align: right;
-  padding-top: 0.85rem;
+  padding: 0.55em 0.4em 0 0;
   white-space: nowrap;
   user-select: none;
 }
-.prompt.in { color: var(--in); }
-.prompt.out { color: var(--out); }
+.prompt.in { color: var(--nb-in); }
+.prompt.out { color: var(--nb-out); }
 .content { min-width: 0; }
 .input pre {
   margin: 0;
-  background: var(--code-bg);
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 0.7rem 0.9rem;
+  background: var(--nb-input-bg);
+  border: 1px solid var(--nb-input-bd);
+  border-radius: 2px;
+  padding: 0.4em;
   overflow-x: auto;
-  font-size: 13.5px;
-  line-height: 1.55;
+  font: 13px/1.21429em var(--nb-mono);
+  color: var(--nb-text);
   tab-size: 4;
 }
-.output-row .content { padding-top: 0.35rem; overflow-x: auto; }
-.output-row + .output-row .content { padding-top: 0.15rem; }
+.input pre code { font: inherit; }
+.output-row .content { padding-top: 0.2rem; overflow-x: auto; }
+.output-row + .output-row .content { padding-top: 0.1rem; }
 .output pre {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font: 13px/1.42857 var(--nb-mono);
+  color: var(--nb-text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-.output pre.stream { max-height: 34rem; overflow: auto; padding: 0.25rem 0; }
-.output pre.stderr { background: var(--stderr-bg); padding: 0.45rem 0.7rem; border-radius: 4px; }
-.output pre.error { background: var(--err-bg); padding: 0.6rem 0.8rem; border-radius: 4px; }
+.output pre.stream { max-height: 34rem; overflow: auto; padding: 1px 0; }
+.output pre.stderr { background: var(--stderr-bg); padding: 0.45rem 0.7rem; border-radius: 2px; }
+.output pre.error { background: var(--err-bg); padding: 0.6rem 0.8rem; border-radius: 2px; }
 .output img { max-width: 100%; height: auto; display: block; background: #fff; }
-.output .note { font: 12px var(--mono); color: var(--muted); padding: 0.3rem 0; }
-.raw { margin: 0; font-size: 13px; color: var(--muted); white-space: pre-wrap; }
+.output .note { font: 12px var(--nb-mono); color: var(--muted); padding: 0.3rem 0; }
+.raw { margin: 0; font: 13px var(--nb-mono); color: var(--muted); white-space: pre-wrap; }
 .hide-code .cell-code .input { display: none; }
 
 /* Tables from pandas and friends */
 .html-out table, .prose table {
   border-collapse: collapse;
-  font: 13px/1.4 var(--mono);
+  font: 12px/1.4 var(--nb-sans);
   margin: 0.25rem 0;
 }
 .html-out th, .html-out td, .prose th, .prose td {
@@ -359,39 +375,54 @@ main { padding: 1.75rem 1.25rem 5rem; }
 .html-out tbody tr:nth-child(odd) { background: color-mix(in srgb, var(--code-bg) 60%, transparent); }
 .prose th, .prose td { text-align: left; }
 
-/* Markdown cells */
-.prose { max-width: 72ch; font-size: 1.0625rem; line-height: 1.65; overflow-wrap: break-word; }
+/* Markdown cells (Jupyter classic .rendered_html) */
+.prose { max-width: none; padding: 0.5em 0.5em 0.5em 0.4em; color: var(--nb-text); overflow-wrap: break-word; }
 .prose > :first-child { margin-top: 0; }
 .prose > :last-child { margin-bottom: 0; }
 .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  margin: 1.5em 0 0.45em;
+  font-weight: bold;
+  line-height: 1;
+  margin: 1.27em 0 0;
   scroll-margin-top: 4.5rem;
 }
-.prose h1 { font-size: 1.85rem; }
-.prose h2 { font-size: 1.45rem; }
-.prose h3 { font-size: 1.2rem; }
-.prose h4, .prose h5, .prose h6 { font-size: 1.05rem; }
-.prose p, .prose ul, .prose ol { margin: 0 0 0.9em; }
-.prose code { font-size: 0.9em; background: var(--code-bg); border: 1px solid var(--rule); padding: 0.12em 0.35em; border-radius: 3px; }
-.prose pre { background: var(--code-bg); padding: 0.7rem 0.9rem; border-radius: 4px; overflow-x: auto; }
-.prose pre code { background: none; border: 0; padding: 0; font-size: 13px; }
-.prose blockquote { margin: 0 0 0.9em; padding-left: 1rem; border-left: 3px solid var(--rule); color: var(--muted); }
-.prose img { max-width: 100%; height: auto; }
-.prose hr { border: 0; border-top: 1px solid var(--rule); margin: 1.5em 0; }
-.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2rem 0; }
+.prose h1 { font-size: 185.7%; margin-top: 1.08em; }
+.prose h2 { font-size: 157.1%; }
+.prose h3 { font-size: 128.6%; margin-top: 1.55em; }
+.prose h4, .prose h5, .prose h6 { font-size: 100%; }
+.prose p, .prose ul, .prose ol { margin: 0 0 10px; }
+.prose p { text-align: left; }
+.prose code { font: 100% var(--nb-mono); background: var(--nb-code); color: var(--nb-text); padding: 1px 5px; border-radius: 2px; }
+.prose pre { margin: 1em 2em; padding: 0; background: transparent; overflow-x: auto; }
+.prose pre code { background: none; padding: 0; font-size: 13px; }
+.prose blockquote { margin: 1em 2em; padding-left: 0; border: 0; color: inherit; }
+.prose img { display: block; margin-left: auto; margin-right: auto; max-width: 100%; height: auto; }
+.prose hr { border: 0; border-top: 1px solid var(--nb-text); margin: 1.5em 0; }
+.prose ul { list-style: disc; }
+.prose ul ul { list-style: square; margin-top: 0; }
+.prose ul ul ul { list-style: circle; }
+.prose a { color: var(--in); }
 
-/* Syntax colors */
-.hljs-keyword, .hljs-built_in, .hljs-selector-tag, .hljs-type { color: var(--syn-kw); font-weight: 700; }
-.hljs-operator { color: var(--syn-op); }
-.hljs-string, .hljs-regexp, .hljs-addition { color: var(--syn-str); }
-.hljs-number, .hljs-symbol { color: var(--syn-num); }
-.hljs-literal { color: var(--syn-kw); font-weight: 700; }
-.hljs-comment, .hljs-quote { color: var(--syn-com); font-style: italic; }
-.hljs-title, .hljs-title.function_, .hljs-title.class_, .hljs-section { color: var(--syn-fn); }
-.hljs-meta, .hljs-attr, .hljs-variable, .hljs-template-variable { color: var(--syn-meta); }
-.hljs-deletion { color: var(--a-red); }
+/* Math: nbviewer's MathJax shows variables upright, so drop KaTeX's italic math font */
+.katex { font-size: 1.1em; }
+.katex .mathnormal, .katex .mathit { font-family: KaTeX_Main, "Times New Roman", serif; font-style: normal; }
+.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.2rem 0; margin: 1em 0; }
+
+/* Syntax colors: Pygments "default" token classes, as nbviewer ships them */
+pre .k, pre .kn, pre .kd, pre .kc, pre .kr, pre .hljs-keyword, pre .hljs-selector-tag { color: var(--syn-kw); font-weight: bold; }
+pre .kp, pre .nb, pre .bp, pre .hljs-built_in, pre .hljs-literal { color: var(--syn-kw); }
+pre .hljs-literal { font-weight: bold; }
+pre .ow, pre .hljs-operator { color: var(--syn-op); font-weight: bold; }
+pre .o { color: var(--syn-opr); }
+pre .m, pre .mi, pre .mf, pre .hljs-number, pre .hljs-symbol { color: var(--syn-num); }
+pre .s, pre .hljs-string, pre .hljs-regexp, pre .hljs-addition { color: var(--syn-str); }
+pre .c, pre .c1, pre .cm, pre .hljs-comment, pre .hljs-quote { color: var(--syn-com); font-style: italic; }
+pre .nf, pre .hljs-title.function_, pre .hljs-title { color: var(--syn-fn); }
+pre .nc, pre .nn, pre .hljs-title.class_ { color: var(--syn-fn); font-weight: bold; }
+pre .nd, pre .hljs-meta, pre .hljs-attr, pre .hljs-section { color: var(--syn-meta); }
+pre .ne { color: var(--syn-exc); font-weight: bold; }
+pre .kt, pre .hljs-type { color: var(--syn-type); }
+pre .hljs-variable, pre .hljs-template-variable { color: var(--nb-text); }
+pre .hljs-deletion { color: var(--a-red); }
 
 /* Settings dialog */
 dialog {
@@ -424,7 +455,7 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
   #settings-btn { font-size: 12px; padding: 0.35rem 0.55rem; }
   main { padding: 1.25rem 0.9rem 4rem; }
   .row { grid-template-columns: minmax(0, 1fr); }
-  .prompt { text-align: left; padding: 0 0 0.3rem; }
+  .prompt { text-align: left; padding: 0 0 0.2rem; }
   .prompt:empty { display: none; }
   .page-head, .nb-head { grid-template-columns: minmax(0, 1fr); }
   .toolbar { justify-content: flex-start; }
