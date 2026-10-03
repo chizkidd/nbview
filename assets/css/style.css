@@ -25,7 +25,7 @@
 
   --syn-kw: light-dark(#008000, #6FD07A);
   --syn-op: light-dark(#AA22FF, #C99BFF);
-  --syn-opr: light-dark(#666666, #B0B8C4);
+  --syn-opr: light-dark(#AA22FF, #C99BFF);
   --syn-str: light-dark(#BA2121, #FF8C73);
   --syn-num: light-dark(#008800, #7EE787);
   --syn-com: light-dark(#408080, #7FB5B5);
@@ -415,7 +415,7 @@ pre .k, pre .kn, pre .kd, pre .kc, pre .kr, pre .hljs-keyword, pre .hljs-selecto
 pre .kp, pre .nb, pre .bp, pre .hljs-built_in, pre .hljs-literal { color: var(--syn-kw); }
 pre .hljs-literal { font-weight: bold; }
 pre .ow, pre .hljs-operator { color: var(--syn-op); font-weight: bold; }
-pre .o { color: var(--syn-opr); }
+pre .o { color: var(--syn-opr); font-weight: bold; }
 pre .m, pre .mi, pre .mf, pre .hljs-number, pre .hljs-symbol { color: var(--syn-num); }
 pre .s, pre .hljs-string, pre .hljs-regexp, pre .hljs-addition { color: var(--syn-str); }
 pre .c, pre .c1, pre .cm, pre .hljs-comment, pre .hljs-quote { color: var(--syn-com); font-style: italic; }
