@@ -500,7 +500,7 @@
       <article class="nb">
         <nav class="crumbs">${info.crumbs || ''}</nav>
         <header class="nb-head">
-          <h1 class="nb-title">${esc(info.name)}</h1>
+          <h1 class="nb-title">${esc(info.name).replace(/([_.-])/g, '$1<wbr>')}</h1>
           <div class="toolbar">
             <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
             <a class="btn" id="dl">Download</a>
@@ -628,7 +628,39 @@
     return l.split('\r').filter(Boolean).pop() || '';
   }).join('\n');
 
+  // Outputs bigger than this wait behind a button so one heavy cell can't freeze the tab.
+  const BIG_OUT = 1024 * 1024;
+
+  function outputSize(out) {
+    if (out.output_type === 'stream') return join(out.text).length;
+    if (out.output_type === 'error') return join(out.traceback).length;
+    let n = 0;
+    for (const v of Object.values(out.data || {})) n += typeof v === 'string' || Array.isArray(v) ? join(v).length : JSON.stringify(v).length;
+    return n;
+  }
+
   function renderOutput(out, ctx) {
+    const size = outputSize(out);
+    if (size <= BIG_OUT) return renderOutputNow(out, ctx);
+    const wrap = document.createElement('div');
+    wrap.className = 'output output-big';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn';
+    btn.textContent = `Show output (${fmtSize(size)})`;
+    btn.addEventListener('click', () => {
+      btn.disabled = true;
+      btn.textContent = 'Rendering...';
+      requestAnimationFrame(() => setTimeout(() => {
+        const real = renderOutputNow(out, ctx);
+        if (real) wrap.replaceWith(real); else wrap.remove();
+      }, 0));
+    });
+    wrap.append(btn);
+    return wrap;
+  }
+
+  function renderOutputNow(out, ctx) {
     const wrap = document.createElement('div');
     wrap.className = 'output';
 

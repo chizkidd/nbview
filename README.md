@@ -26,13 +26,14 @@ nbview/
 │   │   └── style.css
 │   ├── js/
 │   │   └── app.js
-│   └── og.png
+│   ├── og-light.png
+│   └── og-dark.png
 ├── LICENSE
 └── README.md
 ```
 
 - `_redirects`: sends `/github/*` to `/#/github/*`, which is what makes the nbviewer domain swap work.
-- `assets/og.png`: the 1200x630 preview image used for link cards on Slack, Discourse and similar.
+- `assets/og-light.png`: the 1200x630 preview image used for link cards on X, Slack, Discourse and similar (`og-dark.png` is the dark variant).
 
 ## Deployment
 
