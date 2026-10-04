@@ -695,6 +695,26 @@
     'text/markdown', 'text/latex', 'application/json', 'text/plain',
   ];
 
+  // Reads the pixel size from the first bytes of a PNG, GIF or JPEG so the browser can reserve space.
+  function imageSize(type, b64) {
+    try {
+      const bin = atob(b64.slice(0, type === 'image/jpeg' ? 87380 : 44));
+      const u16 = i => (bin.charCodeAt(i) << 8) | bin.charCodeAt(i + 1);
+      const u32 = i => u16(i) * 65536 + u16(i + 2);
+      if (type === 'image/png' && bin.startsWith('\x89PNG')) return [u32(16), u32(20)];
+      if (type === 'image/gif' && bin.startsWith('GIF8')) return [bin.charCodeAt(6) | (bin.charCodeAt(7) << 8), bin.charCodeAt(8) | (bin.charCodeAt(9) << 8)];
+      if (type === 'image/jpeg' && u16(0) === 0xFFD8) {
+        for (let i = 2; i + 9 < bin.length;) {
+          if (bin.charCodeAt(i) !== 0xFF) return null;
+          const marker = bin.charCodeAt(i + 1);
+          if (marker >= 0xC0 && marker <= 0xCF && ![0xC4, 0xC8, 0xCC].includes(marker)) return [u16(i + 7), u16(i + 5)];
+          i += 2 + u16(i + 2);
+        }
+      }
+    } catch { /* unknown size: fine */ }
+    return null;
+  }
+
   function renderMime(wrap, data, meta, ctx) {
     let skippedScript = false;
 
@@ -725,14 +745,19 @@
       if (type.startsWith('image/')) {
         const img = new Image();
         img.alt = 'Cell output';
-        img.loading = 'lazy';
         img.decoding = 'async';
+        const b64 = type === 'image/svg+xml' ? '' : v.replace(/\s/g, '');
         img.src = type === 'image/svg+xml'
           ? 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(v)
-          : `data:${type};base64,${v.replace(/\s/g, '')}`;
+          : `data:${type};base64,${b64}`;
         const m = meta[type] || meta;
-        if (m && m.width) img.width = m.width;
-        if (m && m.height) img.height = m.height;
+        const size = imageSize(type, b64);
+        const w = (m && m.width) || (size && size[0]);
+        const h = (m && m.height) || (size && size[1]);
+        if (w) img.width = w;
+        if (h) img.height = h;
+        // Lazy loading only when the size is known, so the page doesn't jump as images arrive.
+        if (w && h) img.loading = 'lazy';
         wrap.append(img);
         return true;
       }
