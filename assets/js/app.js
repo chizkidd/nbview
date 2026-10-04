@@ -361,6 +361,9 @@
   async function viewNotebook(src, id) {
     showLoading('Fetching notebook');
     const isGh = !src.url;
+    if (!isGh && !/^https?:\/\//i.test(src.url)) {
+      throw new ViewError('Unsupported link', 'Only http and https notebook links can be opened.');
+    }
     const url = isGh
       ? `${RAW}/${enc(src.owner)}/${enc(src.repo)}/${enc(src.ref)}/${enc(src.path)}`
       : src.url;
@@ -701,7 +704,8 @@
       const v = type === 'application/json' ? raw : join(raw);
 
       if (type === 'text/html') {
-        const clean = DOMPurify.sanitize(v);
+        const scope = newScope();
+        const clean = sanitizeHtml(v, scope);
         const probe = document.createElement('div');
         probe.innerHTML = clean;
         const visible = probe.textContent.trim() || probe.querySelector('img,svg,table,video,canvas');
@@ -711,7 +715,7 @@
           continue;
         }
         const d = document.createElement('div');
-        d.className = 'html-out';
+        d.className = `html-out ${scope}`;
         d.innerHTML = clean;
         d.querySelectorAll('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
         wrap.append(d);
@@ -768,6 +772,58 @@
     n.className = 'note';
     n.textContent = 'Interactive output that needs JavaScript is not run here. Open in Colab to see it.';
     return n;
+  }
+
+  /* ---------- HTML sanitizing ---------- */
+
+  // Notebook HTML is untrusted. Forms and form controls are removed (no fake sign-in boxes), and author CSS
+  // keeps colors, borders and fonts but loses anything that can position, cover or restyle the page.
+  const SAFE_HTML = {
+    FORBID_TAGS: ['form', 'input', 'button', 'textarea', 'select', 'option', 'optgroup', 'fieldset', 'link', 'meta', 'base'],
+    FORBID_ATTR: ['formaction', 'form', 'ping'],
+    FORCE_BODY: true, // keep a leading <style> (pandas Styler starts with one) instead of dropping it
+  };
+  const BAD_PROP = /^(position|z-index|inset(-.*)?|top|left|right|bottom)$/;
+  const BAD_VALUE = /url\s*\(|image-set\s*\(|expression\s*\(|@import|javascript:|-moz-binding|behavior\s*:/i;
+  let scopeSeq = 0;
+  let activeScope = '';
+
+  const newScope = () => `nbv-s${++scopeSeq}`;
+
+  function cleanDecls(style) {
+    for (const p of [...style]) {
+      if (BAD_PROP.test(p) || BAD_VALUE.test(style.getPropertyValue(p))) style.removeProperty(p);
+    }
+  }
+
+  // Keeps plain style rules, filters their declarations, and confines every selector to one cell.
+  function scopeCss(text, scope) {
+    let sheet;
+    try { sheet = new CSSStyleSheet(); sheet.replaceSync(text); } catch { return ''; }
+    let out = '';
+    for (const rule of sheet.cssRules) {
+      if (!(rule instanceof CSSStyleRule)) continue;
+      cleanDecls(rule.style);
+      if (rule.style.length) out += `.${scope} :is(${rule.selectorText}) { ${rule.style.cssText} }\n`;
+    }
+    return out;
+  }
+
+  if (window.DOMPurify) {
+    DOMPurify.addHook('uponSanitizeElement', (node, data) => {
+      if (data.tagName === 'style') node.textContent = scopeCss(node.textContent || '', activeScope);
+    });
+    DOMPurify.addHook('afterSanitizeAttributes', node => {
+      if (!node.hasAttribute || !node.hasAttribute('style') || !node.style) return;
+      cleanDecls(node.style);
+      if (!node.style.length) node.removeAttribute('style');
+    });
+  }
+
+  // Returns sanitized HTML; the caller adds the same `scope` class to the element that receives it.
+  function sanitizeHtml(html, scope) {
+    activeScope = scope;
+    return DOMPurify.sanitize(html, SAFE_HTML);
   }
 
   /* ---------- markdown + math ---------- */
@@ -882,7 +938,9 @@
     const { text, math } = protectMath(src);
     let html = marked.parse(text);
     html = html.replace(/XMATHX(\d+)X/g, (_, i) => esc(math[+i]));
-    el.innerHTML = DOMPurify.sanitize(html);
+    const scope = newScope();
+    el.classList.add(scope);
+    el.innerHTML = sanitizeHtml(html, scope);
     fixLinks(el, ctx);
     typeset(el);
   }
