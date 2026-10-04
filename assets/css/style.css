@@ -310,7 +310,7 @@ main { padding: 1.75rem 1.25rem 5rem; }
   border-left: 4px solid var(--out);
   border-radius: 4px;
 }
-.error-box h2 { margin: 0 0 0.4rem; font-size: 1.3rem; }
+.error-box h1, .error-box h2 { margin: 0 0 0.4rem; font-size: 1.3rem; }
 .error-box p { margin: 0 0 1.1rem; color: var(--muted); }
 .error-box .toolbar { justify-content: flex-start; }
 
@@ -471,3 +471,8 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
   .hero-cell .prompt { grid-column: 1 / -1; }
   .entry .desc { white-space: normal; }
 }
+/* Cells and equations that could not be shown */
+.cell-error, .output-failed { padding: 0.5em 0.7em; border: 1px dashed var(--rule); border-radius: 2px; color: var(--muted); font-size: 13px; }
+.cell-error details { margin-top: 0.4em; }
+.cell-error pre { max-height: 20rem; overflow: auto; margin: 0.4em 0 0; font: 12px/1.4 var(--nb-mono); white-space: pre-wrap; }
+.math-skipped { font-family: var(--nb-mono); font-size: 0.9em; color: var(--muted); }

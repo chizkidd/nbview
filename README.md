@@ -28,6 +28,7 @@ nbview/
 │   ├── js/
 │   │   ├── app.js
 │   │   └── theme.js
+│   ├── vendor/
 │   ├── og-light.png
 │   └── og-dark.png
 ├── LICENSE
@@ -35,7 +36,8 @@ nbview/
 ```
 
 - `_redirects`: sends `/github/*` to `/#/github/*`, which is what makes the nbviewer domain swap work.
-- `_headers`: security headers for Cloudflare Pages: a strict Content-Security-Policy (no form submissions, no framing, scripts only from this site and cdnjs), plus `X-Frame-Options` and `Permissions-Policy`.
+- `_headers`: security headers for Cloudflare Pages: a strict Content-Security-Policy (no form submissions, no framing, scripts only from this site), plus `X-Frame-Options` and `Permissions-Policy`.
+- `assets/vendor/`: the libraries (marked, DOMPurify, highlight.js, KaTeX), served from this site rather than a CDN. Versions and licenses are listed in `assets/vendor/README.md`.
 - `assets/js/theme.js`: restores the saved light or dark theme before the first paint.
 - `assets/og-light.png`: the 1200x630 preview image used for link cards on X, Slack, Discourse and similar (`og-dark.png` is the dark variant).
 
@@ -51,4 +53,5 @@ To run locally: `python -m http.server` in this folder, then open http://localho
 - API responses are cached for 5 minutes in the tab (sessionStorage), so going back to a folder you just viewed doesn't use up the limit.
 - JavaScript-based outputs (Plotly, Bokeh, ipywidgets) aren't executed, for safety. Static images, tables and text render normally.
 - HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.
+- Size limits keep one cell from freezing the tab: notebooks over 10 MB (including local files) ask before opening, outputs over 1 MB sit behind a "Show output" button, code cells over 200 KB are shown without syntax colors, and equations over 4,000 characters or 40 levels of nesting, or beyond the first 2,000 in a notebook, are shown as plain TeX. A cell that fails to render is replaced by a notice with its raw source.
 - Public repos only.
