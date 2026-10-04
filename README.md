@@ -21,11 +21,13 @@ A client-side Jupyter notebook viewer for public GitHub repos. No server: the br
 nbview/
 ├── index.html
 ├── _redirects
+├── _headers
 ├── assets/
 │   ├── css/
 │   │   └── style.css
 │   ├── js/
-│   │   └── app.js
+│   │   ├── app.js
+│   │   └── theme.js
 │   ├── og-light.png
 │   └── og-dark.png
 ├── LICENSE
@@ -33,6 +35,8 @@ nbview/
 ```
 
 - `_redirects`: sends `/github/*` to `/#/github/*`, which is what makes the nbviewer domain swap work.
+- `_headers`: security headers for Cloudflare Pages: a strict Content-Security-Policy (no form submissions, no framing, scripts only from this site and cdnjs), plus `X-Frame-Options` and `Permissions-Policy`.
+- `assets/js/theme.js`: restores the saved light or dark theme before the first paint.
 - `assets/og-light.png`: the 1200x630 preview image used for link cards on X, Slack, Discourse and similar (`og-dark.png` is the dark variant).
 
 ## Deployment
@@ -46,4 +50,5 @@ To run locally: `python -m http.server` in this folder, then open http://localho
 - Folder browsing and gists use the GitHub API: 60 requests/hour per IP without a token. Add a no-scope token via the "GitHub token" button for 5,000/hour. Opening notebooks uses raw.githubusercontent.com and doesn't count.
 - API responses are cached for 5 minutes in the tab (sessionStorage), so going back to a folder you just viewed doesn't use up the limit.
 - JavaScript-based outputs (Plotly, Bokeh, ipywidgets) aren't executed, for safety. Static images, tables and text render normally.
+- HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.
 - Public repos only.
