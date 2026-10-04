@@ -198,7 +198,7 @@
     const detail = e.detail || e.message || 'An unexpected error occurred.';
     app.innerHTML = `
       <div class="error-box" role="alert">
-        <h2>${esc(title)}</h2>
+        <h1>${esc(title)}</h1>
         <p>${esc(detail)}</p>
         <div class="toolbar">
           ${e.opts && e.opts.token ? '<button class="btn primary" id="err-token" type="button">Add GitHub token</button>' : ''}
@@ -358,6 +358,23 @@
     location.replace('#/url/' + encodeURIComponent(file.raw_url));
   }
 
+  function showBigWarning(name, text, onOpen) {
+    if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+    downloadUrl = URL.createObjectURL(new Blob([text], { type: 'application/x-ipynb+json' }));
+    app.innerHTML = `
+      <div class="error-box" role="alert">
+        <h1>This notebook is large (${esc(fmtSize(text.length))})</h1>
+        <p>Big embedded outputs, such as images and tables, can make this tab slow or freeze it while the notebook renders. You can open it anyway or download the file instead.</p>
+        <div class="toolbar">
+          <button class="btn primary" id="big-open" type="button">Open anyway</button>
+          <a class="btn" id="big-dl" download="${esc(name)}">Download</a>
+          <a class="btn" href="#/">Back to start</a>
+        </div>
+      </div>`;
+    document.getElementById('big-dl').href = downloadUrl;
+    document.getElementById('big-open').addEventListener('click', onOpen);
+  }
+
   async function viewNotebook(src, id) {
     showLoading('Fetching notebook');
     const isGh = !src.url;
@@ -389,20 +406,7 @@
 
     if (text.length > BIG_NB && !bigOk.has(location.hash)) {
       const name = isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb');
-      if (downloadUrl) URL.revokeObjectURL(downloadUrl);
-      downloadUrl = URL.createObjectURL(new Blob([text], { type: 'application/x-ipynb+json' }));
-      app.innerHTML = `
-        <div class="error-box" role="alert">
-          <h2>This notebook is large (${esc(fmtSize(text.length))})</h2>
-          <p>Big embedded outputs, such as images and tables, can make this tab slow or freeze it while the notebook renders. You can open it anyway or download the file instead.</p>
-          <div class="toolbar">
-            <button class="btn primary" id="big-open" type="button">Open anyway</button>
-            <a class="btn" id="big-dl" download="${esc(name)}">Download</a>
-            <a class="btn" href="#/">Back to start</a>
-          </div>
-        </div>`;
-      document.getElementById('big-dl').href = downloadUrl;
-      document.getElementById('big-open').addEventListener('click', () => { bigOk.add(location.hash); route(); });
+      showBigWarning(name, text, () => { bigOk.add(location.hash); route(); });
       return;
     }
 
@@ -436,22 +440,27 @@
   function openLocal(file) {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = async () => {
+    reader.onload = () => {
       const id = ++routeId;
       document.body.classList.remove('is-home');
-      try {
-        let nb;
-        try { nb = JSON.parse(reader.result); } catch {
-          throw new ViewError('Not a readable notebook', `${file.name} isn't valid JSON, so it can't be opened as .ipynb.`);
+      const text = reader.result;
+      const open = async () => {
+        try {
+          let nb;
+          try { nb = JSON.parse(text); } catch {
+            throw new ViewError('Not a readable notebook', `${file.name} isn't valid JSON, so it can't be opened as .ipynb.`);
+          }
+          await showNotebook(nb, {}, {
+            name: file.name,
+            text,
+            crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Local file</span>',
+          }, id);
+        } catch (e) {
+          if (!stale(id)) renderError(e);
         }
-        await showNotebook(nb, {}, {
-          name: file.name,
-          text: reader.result,
-          crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Local file</span>',
-        }, id);
-      } catch (e) {
-        if (!stale(id)) renderError(e);
-      }
+      };
+      if (text.length > BIG_NB) showBigWarning(file.name, text, open);
+      else open();
     };
     reader.readAsText(file);
   }
@@ -496,6 +505,8 @@
     const kernel = ks.display_name || li.name || '';
 
     katexMacros = {};
+    mathMs = 0;
+    mathCount = 0;
     document.title = `${info.name} | nbview`;
     document.body.classList.remove('hide-code');
 
@@ -548,6 +559,7 @@
         if (el) host.append(el);
       } catch (err) {
         console.error('Cell failed to render', i, err);
+        host.append(failedCell(cells[i]));
       }
       if (i % 20 === 19) await nextFrame();
     }
@@ -564,6 +576,36 @@
     c.className = 'content';
     row.append(p, c);
     return row;
+  }
+
+  // Shown instead of a cell that threw while rendering, with its raw source so nothing is silently lost.
+  function failedCell(cell) {
+    const sec = document.createElement('section');
+    sec.className = 'cell cell-failed';
+    const row = makeRow('', '');
+    const box = row.lastChild;
+    box.classList.add('cell-error');
+    box.append(document.createTextNode("This cell couldn't be displayed."));
+    let src = '';
+    try { src = cell && typeof cell === 'object' ? join(cell.source) : ''; } catch { /* unreadable source */ }
+    if (src) {
+      const det = document.createElement('details');
+      const sum = document.createElement('summary');
+      sum.textContent = 'Show raw source';
+      const pre = document.createElement('pre');
+      pre.textContent = src.length > 20000 ? src.slice(0, 20000) + `\n... (${fmtSize(src.length)} in total, truncated)` : src;
+      det.append(sum, pre);
+      box.append(det);
+    }
+    sec.append(row);
+    return sec;
+  }
+
+  function failedOutput() {
+    const d = document.createElement('div');
+    d.className = 'output output-failed';
+    d.textContent = "This output couldn't be displayed.";
+    return d;
   }
 
   function renderCell(cell, ctx, lang) {
@@ -590,8 +632,13 @@
       input.lastChild.append(pre);
       sec.append(input);
 
-      for (const out of mergeStreams(cell.outputs || [])) {
-        const content = renderOutput(out, ctx);
+      const outs = Array.isArray(cell.outputs) ? cell.outputs.filter(o => o && typeof o === 'object') : [];
+      for (const out of mergeStreams(outs)) {
+        let content;
+        try { content = renderOutput(out, ctx); } catch (err) {
+          console.error('Output failed to render', err);
+          content = failedOutput();
+        }
         if (!content) continue;
         const label = out.output_type === 'execute_result' ? `Out[${out.execution_count ?? ec ?? ' '}]:` : '';
         const row = makeRow(label, 'out');
@@ -685,7 +732,8 @@
     }
 
     if (out.output_type === 'execute_result' || out.output_type === 'display_data') {
-      return renderMime(wrap, out.data || {}, out.metadata || {}, ctx) ? wrap : null;
+      const data = out.data && typeof out.data === 'object' && !Array.isArray(out.data) ? out.data : {};
+      return renderMime(wrap, data, out.metadata || {}, ctx) ? wrap : null;
     }
     return null;
   }
@@ -920,7 +968,11 @@
     return out;
   }
 
+  // Above this size, plain text: the highlighter makes about 350 DOM nodes per KB of source.
+  const MAX_HIGHLIGHT = 200000;
+
   function highlight(code, lang) {
+    if (code.length > MAX_HIGHLIGHT) return esc(code);
     if (/^(python|python3|ipython3?|py)$/.test(lang || '')) return pyHighlight(code);
     if (window.hljs && lang && hljs.getLanguage(lang)) {
       try { return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value; } catch { /* fall through */ }
@@ -929,12 +981,15 @@
   }
 
   if (window.marked) {
-    marked.setOptions({
+    marked.use({
       gfm: true,
-      headerIds: true,
-      mangle: false,
-      langPrefix: 'hljs language-',
-      highlight: (code, lang) => highlight(code, (lang || '').toLowerCase()),
+      renderer: {
+        // Fenced code goes through the same highlighter as code cells.
+        code({ text, lang }) {
+          const l = ((lang || '').match(/\S*/) || [''])[0].toLowerCase();
+          return `<pre><code class="hljs${l ? ' language-' + esc(l) : ''}">${highlight(text, l)}</code></pre>\n`;
+        },
+      },
     });
   }
 
@@ -970,8 +1025,46 @@
     typeset(el);
   }
 
+  // Math limits: one huge or deeply nested equation can freeze the tab, so oversize input is shown as text
+  // and a notebook gets a fixed time budget for all of its equations.
+  const MAX_MATH_CHARS = 4000;
+  const MAX_MATH_DEPTH = 40;
+  const MATH_BUDGET_MS = 4000;
+  const MAX_MATH_COUNT = 2000; // each equation is about 30 DOM nodes, and layout cost is not in the time budget
+  let mathMs = 0;       // time spent on equations so far in this notebook
+  let mathStart = 0;    // start of the typeset call in progress, 0 when idle
+  let mathCount = 0;    // equations rendered so far in this notebook
+
+  function mathTooBig(tex) {
+    if (tex.length > MAX_MATH_CHARS) return true;
+    let depth = 0;
+    for (const c of tex) {
+      if (c === '{') { if (++depth > MAX_MATH_DEPTH) return true; } else if (c === '}') depth--;
+    }
+    return false;
+  }
+
+  if (window.katex && katex.render) {
+    const render = katex.render.bind(katex);
+    katex.render = (tex, el, opts) => {
+      const spent = mathMs + (mathStart ? performance.now() - mathStart : 0);
+      if (spent > MATH_BUDGET_MS || ++mathCount > MAX_MATH_COUNT || mathTooBig(tex)) {
+        el.textContent = tex;
+        el.className = 'math-skipped';
+        el.title = 'Equation too large to render here';
+        return;
+      }
+      render(tex, el, opts);
+    };
+  }
+
   function typeset(el) {
     if (!window.renderMathInElement) return;
+    mathStart = performance.now();
+    try { typesetNow(el); } finally { mathMs += performance.now() - mathStart; mathStart = 0; }
+  }
+
+  function typesetNow(el) {
     renderMathInElement(el, {
       delimiters: [
         { left: '$$', right: '$$', display: true },
@@ -1092,7 +1185,7 @@
     window.scrollTo(0, 0);
 
     if (!window.marked || !window.DOMPurify) {
-      renderError(new ViewError("Couldn't load the rendering libraries", 'A script from cdnjs failed to load. Check your connection or any content blockers, then reload.'));
+      renderError(new ViewError("Couldn't load the rendering libraries", 'A script failed to load. Reload the page, or check for content blockers.'));
       return;
     }
 
