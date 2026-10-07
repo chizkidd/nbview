@@ -22,6 +22,9 @@ nbview/
 ├── index.html
 ├── _redirects
 ├── _headers
+├── robots.txt
+├── .well-known/
+│   └── security.txt
 ├── assets/
 │   ├── css/
 │   │   └── style.css
@@ -37,6 +40,8 @@ nbview/
 
 - `_redirects`: sends `/github/*` to `/#/github/*`, which is what makes the nbviewer domain swap work.
 - `_headers`: security headers for Cloudflare Pages: a strict Content-Security-Policy (no form submissions, no framing, scripts only from this site), plus `X-Frame-Options` and `Permissions-Policy`.
+- `robots.txt`: allows all crawlers. Without it, Cloudflare Pages answers `/robots.txt` with the home page.
+- `.well-known/security.txt`: how to report a security problem (GitHub private vulnerability reporting). Its `Expires` date is one year out, so renew it yearly by editing that line (next: 2027-10-07).
 - `assets/vendor/`: the libraries (marked, DOMPurify, highlight.js, KaTeX), served from this site rather than a CDN. Versions and licenses are listed in `assets/vendor/README.md`.
 - `assets/js/theme.js`: restores the saved light or dark theme before the first paint.
 - `assets/og-light.png`: the 1200x630 preview image used for link cards on X, Slack, Discourse and similar (`og-dark.png` is the dark variant).
