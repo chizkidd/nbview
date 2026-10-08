@@ -433,6 +433,8 @@
         : `<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">${esc(host)}</span>`,
       github: isGh ? `https://github.com/${ghPath}` : null,
       colab: isGh ? `https://colab.research.google.com/github/${ghPath}` : null,
+      // Binder runs the notebook in standard JupyterLab; a ref with slashes must be encoded as one segment.
+      binder: isGh ? `https://mybinder.org/v2/gh/${enc(src.owner)}/${enc(src.repo)}/${encodeURIComponent(src.ref)}?urlpath=${encodeURIComponent('lab/tree/' + src.path)}` : null,
       source: isGh ? null : url,
     }, id);
   }
@@ -519,6 +521,7 @@
             <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
             <a class="btn" id="dl">Download</a>
             ${info.shareable ? '<button class="btn" id="copy-link" type="button">Copy link</button>' : ''}
+            ${info.binder ? `<a class="btn" href="${esc(info.binder)}" target="_blank" rel="noopener">Open in Binder</a>` : ''}
             ${info.colab ? `<a class="btn" href="${esc(info.colab)}" target="_blank" rel="noopener">Open in Colab</a>` : ''}
             ${info.github ? `<a class="btn" href="${esc(info.github)}" target="_blank" rel="noopener">View on GitHub</a>` : ''}
             ${info.source ? `<a class="btn" href="${esc(info.source)}" target="_blank" rel="noopener">Source</a>` : ''}
@@ -843,7 +846,7 @@
   function scriptNote() {
     const n = document.createElement('div');
     n.className = 'note';
-    n.textContent = 'Interactive output that needs JavaScript is not run here. Open in Colab to see it.';
+    n.textContent = 'Interactive output that needs JavaScript is not run here. Open in Binder or Colab to run it.';
     return n;
   }
 
