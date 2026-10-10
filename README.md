@@ -38,7 +38,7 @@ nbview/
 └── README.md
 ```
 
-- `_redirects`: sends `/github/*` to `/#/github/*`, which is what makes the nbviewer domain swap work.
+- `_redirects`: sends nbviewer-style `/github/*`, `/gist/*`, `/url/*` and `/urls/*` paths to their `/#/...` routes, which is what makes the nbviewer domain swap work.
 - `_headers`: security headers for Cloudflare Pages: a strict Content-Security-Policy (no form submissions, no framing, scripts only from this site), plus `X-Frame-Options` and `Permissions-Policy`.
 - `robots.txt`: allows all crawlers. Without it, Cloudflare Pages answers `/robots.txt` with the home page.
 - `.well-known/security.txt`: how to report a security problem (GitHub private vulnerability reporting). Its `Expires` date is one year out, so renew it yearly by editing that line (next: 2027-10-07).
