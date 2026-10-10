@@ -15,6 +15,8 @@ A client-side Jupyter notebook viewer for public GitHub repos. No server: the br
 - Hide code, download, open in Binder (standard JupyterLab, so widgets work) or Colab
 - Light and dark mode, following your system until you pick one
 
+nbview is an independent project and is not affiliated with Project Jupyter or nbviewer.
+
 ## Folder structure
 
 ```

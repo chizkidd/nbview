@@ -7,6 +7,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ### Added
 - nbviewer `/gist/...`, `/url/...` and `/urls/...` links now work by swapping the domain, not just `/github/...`. The same forms can be pasted into the box.
 - `sitemap.xml`, referenced from `robots.txt`.
+- A note on the home page and in the README that nbview is independent and not affiliated with Project Jupyter or nbviewer.
 
 ## [0.4.0] - 2026-10-08
 
