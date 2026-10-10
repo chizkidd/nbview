@@ -21,7 +21,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 
 ```
 nbview/
-├── index.html           page shell and static home text
+├── index.html           
 ├── _redirects           nbviewer-style /github, /gist, /url, /urls paths -> /#/... routes (the domain swap)
 ├── _headers             security headers: strict CSP (no forms, no framing, scripts from this site only)
 ├── robots.txt           allow all crawlers, points to the sitemap
