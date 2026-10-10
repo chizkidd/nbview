@@ -21,32 +21,31 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 
 ```
 nbview/
-├── index.html
-├── _redirects
-├── _headers
-├── robots.txt
+├── index.html           page shell and static home text
+├── _redirects           nbviewer-style /github, /gist, /url, /urls paths -> /#/... routes (the domain swap)
+├── _headers             security headers: strict CSP (no forms, no framing, scripts from this site only)
+├── robots.txt           allow all crawlers, points to the sitemap
+├── sitemap.xml          the home page
 ├── .well-known/
-│   └── security.txt
+│   └── security.txt     how to report a security problem
 ├── assets/
-│   ├── css/
-│   │   └── style.css
+│   ├── css/style.css
 │   ├── js/
-│   │   ├── app.js
-│   │   └── theme.js
-│   ├── vendor/
-│   ├── og-light.png
+│   │   ├── app.js       routing, GitHub fetching, notebook rendering
+│   │   └── theme.js     restores light/dark theme before first paint
+│   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
+│   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
+├── CHANGELOG.md
 ├── LICENSE
 └── README.md
 ```
 
-- `_redirects`: sends nbviewer-style `/github/*`, `/gist/*`, `/url/*` and `/urls/*` paths to their `/#/...` routes, which is what makes the nbviewer domain swap work.
-- `_headers`: security headers for Cloudflare Pages: a strict Content-Security-Policy (no form submissions, no framing, scripts only from this site), plus `X-Frame-Options` and `Permissions-Policy`.
-- `robots.txt`: allows all crawlers. Without it, Cloudflare Pages answers `/robots.txt` with the home page.
-- `.well-known/security.txt`: how to report a security problem (GitHub private vulnerability reporting). Its `Expires` date is one year out, so renew it yearly by editing that line (next: 2027-10-07).
-- `assets/vendor/`: the libraries (marked, DOMPurify, highlight.js, KaTeX), served from this site rather than a CDN. Versions and licenses are listed in `assets/vendor/README.md`.
-- `assets/js/theme.js`: restores the saved light or dark theme before the first paint.
-- `assets/og-light.png`: the 1200x630 preview image used for link cards on X, Slack, Discourse and similar (`og-dark.png` is the dark variant).
+## Maintenance
+
+- `.well-known/security.txt` has an `Expires` date one year out. Renew it by editing that line (next: 2027-10-07).
+- Library versions and licenses are listed in `assets/vendor/README.md`. Update them by replacing the files there, not by adding a CDN.
+- Without `robots.txt`, Cloudflare Pages answers `/robots.txt` with the home page, so keep the file.
 
 ## Deployment
 
