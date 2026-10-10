@@ -1,2 +1,4 @@
 User-agent: *
 Allow: /
+
+Sitemap: https://nbview.org/sitemap.xml

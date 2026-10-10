@@ -76,6 +76,13 @@
     return h;
   }
 
+  // nbviewer writes /url/host/path (http) and /urls/host/path (https) with no scheme.
+  function nbviewerUrl(kind, rest) {
+    rest = rest.trim();
+    if (/^https?:\/+/i.test(rest)) return rest.replace(/^(https?:)\/+/i, '$1//');
+    return (kind.toLowerCase() === 'urls' ? 'https://' : 'http://') + rest;
+  }
+
   // Turns whatever the user pastes into a route.
   function parseInput(input) {
     let s = input.trim();
@@ -92,6 +99,10 @@
       s = m[1];
     } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/github\/(.+)$/i))) {
       s = m[1];
+    } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/gist\/(?:[^/]+\/)?([0-9a-f]+)(?:[/?#].*)?$/i))) {
+      return '#/gist/' + m[1];
+    } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/(urls?)\/(.+)$/i))) {
+      return '#/url/' + encodeURIComponent(nbviewerUrl(m[1], m[2]));
     } else if (/^https?:\/\//i.test(s)) {
       return '#/url/' + encodeURIComponent(s);
     }
@@ -1195,8 +1206,8 @@
     try {
       if (!parts.length) return renderHome();
 
-      if (parts[0] === 'url' && parts[1]) {
-        return await viewNotebook({ url: parts.slice(1).join('/') }, id);
+      if ((parts[0] === 'url' || parts[0] === 'urls') && parts[1]) {
+        return await viewNotebook({ url: nbviewerUrl(parts[0], parts.slice(1).join('/')) }, id);
       }
 
       if (parts[0] === 'gist' && parts[1]) return await viewGist(parts[1], id);
