@@ -19,6 +19,12 @@
   let routeId = 0;
   let katexMacros = {};
   let downloadUrl = null;
+  let current = null; // the notebook on screen: { name, cells, lang, rendered } for exports
+
+  const pref = {
+    get(k) { try { return localStorage.getItem('nbv.' + k) === '1'; } catch { return false; } },
+    set(k, v) { try { localStorage.setItem('nbv.' + k, v ? '1' : '0'); } catch { /* storage unavailable */ } },
+  };
   const BIG_NB = 10 * 1024 * 1024;
   const bigOk = new Set();
 
@@ -530,7 +536,18 @@
           <h1 class="nb-title">${esc(info.name).replace(/([_.-])/g, '$1<wbr>')}</h1>
           <div class="toolbar">
             <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
+            <button class="btn" id="toggle-lines" type="button" aria-pressed="false">Line numbers</button>
+            <button class="btn" id="toggle-wrap" type="button" aria-pressed="false">Wrap lines</button>
             <a class="btn" id="dl">Download</a>
+            <details class="menu" id="export-menu">
+              <summary class="btn">Export</summary>
+              <div class="menu-list">
+                ${lang === 'python' ? '<button type="button" data-export="py">Python script (.py)</button>' : ''}
+                <button type="button" data-export="md">Markdown (.md)</button>
+                <button type="button" data-export="html">HTML page (.html)</button>
+                <button type="button" data-export="print">Print / Save as PDF</button>
+              </div>
+            </details>
             ${info.shareable ? '<button class="btn" id="copy-link" type="button">Copy link</button>' : ''}
             ${info.binder ? `<a class="btn" href="${esc(info.binder)}" target="_blank" rel="noopener">Open in Binder</a>` : ''}
             ${info.colab ? `<a class="btn" href="${esc(info.colab)}" target="_blank" rel="noopener">Open in Colab</a>` : ''}
@@ -564,18 +581,84 @@
       toggle.textContent = hidden ? 'Show code' : 'Hide code';
     });
 
+    for (const [btnId, cls, key] of [['toggle-lines', 'line-numbers', 'lines'], ['toggle-wrap', 'wrap-code', 'wrap']]) {
+      const btn = document.getElementById(btnId);
+      const apply = on => { document.body.classList.toggle(cls, on); btn.setAttribute('aria-pressed', String(on)); };
+      apply(pref.get(key));
+      btn.addEventListener('click', () => { const on = !document.body.classList.contains(cls); apply(on); pref.set(key, on); });
+    }
+
+    let done;
+    current = { name: info.name, cells, lang, rendered: new Promise(r => { done = r; }) };
+    document.getElementById('export-menu').addEventListener('click', e => {
+      const item = e.target.closest('[data-export]');
+      if (!item) return;
+      e.currentTarget.open = false;
+      runExport(item.dataset.export, current).catch(err => console.error('Export failed', err));
+    });
+
     // Render in batches so huge notebooks stay responsive.
     const host = document.getElementById('cells');
-    for (let i = 0; i < cells.length; i++) {
-      if (stale(id)) return;
-      try {
-        const el = renderCell(cells[i], ctx, lang);
-        if (el) host.append(el);
-      } catch (err) {
-        console.error('Cell failed to render', i, err);
-        host.append(failedCell(cells[i]));
+    try {
+      for (let i = 0; i < cells.length; i++) {
+        if (stale(id)) return;
+        try {
+          const el = renderCell(cells[i], ctx, lang);
+          if (el) host.append(el);
+        } catch (err) {
+          console.error('Cell failed to render', i, err);
+          host.append(failedCell(cells[i]));
+        }
+        if (i % 20 === 19) await nextFrame();
       }
-      if (i % 20 === 19) await nextFrame();
+    } finally { done(); }
+  }
+
+  /* ---------- export ---------- */
+
+  function saveFile(filename, text, mime) {
+    const url = URL.createObjectURL(new Blob([text], { type: mime + ';charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  // Styles of the page itself (same-origin sheets only), with relative url() paths made absolute.
+  function pageCss() {
+    let css = '';
+    for (const sheet of document.styleSheets) {
+      if (!sheet.href || !sheet.href.startsWith(location.origin)) continue;
+      const base = sheet.href;
+      try {
+        for (const rule of sheet.cssRules) {
+          css += rule.cssText.replace(/url\((["']?)(?!https?:|data:)([^)"']+)\1\)/g, (m, q, u) => 'url("' + new URL(u, base).href + '")') + '\n';
+        }
+      } catch { /* unreadable sheet */ }
+    }
+    return css;
+  }
+
+  async function runExport(kind, nbState) {
+    if (!nbState) return;
+    if (kind === 'print') { await nbState.rendered; window.print(); return; }
+    const base = nbState.name.replace(/\.ipynb$/i, '').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_') || 'notebook';
+    if (kind === 'py') return saveFile(base + '.py', window.nbvExport.toPython(nbState.cells, nbState.name), 'text/x-python');
+    if (kind === 'md') return saveFile(base + '.md', window.nbvExport.toMarkdown(nbState.cells, nbState.lang), 'text/markdown');
+    if (kind === 'html') {
+      await nbState.rendered;
+      const host = document.getElementById('cells').cloneNode(true);
+      for (const big of host.querySelectorAll('.output-big')) {
+        const note = document.createElement('div');
+        note.className = 'output note';
+        note.textContent = 'Large output omitted.';
+        big.replaceWith(note);
+      }
+      const keep = ['hide-code', 'line-numbers', 'wrap-code'].filter(c => document.body.classList.contains(c)).join(' ');
+      return saveFile(base + '.html', window.nbvExport.toHtml({ name: nbState.name, cellsHtml: host.innerHTML, css: pageCss(), origin: location.origin, bodyClass: keep }), 'text/html');
     }
   }
 
@@ -641,7 +724,15 @@
       const pre = document.createElement('pre');
       const code = document.createElement('code');
       code.className = 'hljs';
-      code.innerHTML = highlight(join(cell.source), lang);
+      const source = join(cell.source);
+      code.innerHTML = highlight(source, lang);
+      if (source.length <= MAX_HIGHLIGHT) {
+        const gutter = document.createElement('span');
+        gutter.className = 'gutter';
+        gutter.setAttribute('aria-hidden', 'true');
+        gutter.textContent = Array.from({ length: source.replace(/\n$/, '').split('\n').length }, (_, i) => i + 1).join('\n');
+        pre.append(gutter);
+      }
       pre.append(code);
       input.lastChild.append(pre);
       sec.append(input);
@@ -1304,6 +1395,16 @@
     }
     if (app.querySelector('.error-box')) route();
   });
+  // The Export menu closes on an outside click or Escape.
+  document.addEventListener('click', e => {
+    const m = document.getElementById('export-menu');
+    if (m && m.open && !m.contains(e.target)) m.open = false;
+  });
+  document.addEventListener('keydown', e => {
+    const m = document.getElementById('export-menu');
+    if (e.key === 'Escape' && m && m.open) { m.open = false; m.querySelector('summary').focus(); }
+  });
+
   // Theme toggle: follows the system until the user picks one, then remembers it.
   const themeBtn = document.getElementById('theme-btn');
   const systemDark = matchMedia('(prefers-color-scheme: dark)');
