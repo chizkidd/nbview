@@ -476,3 +476,76 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .cell-error details { margin-top: 0.4em; }
 .cell-error pre { max-height: 20rem; overflow: auto; margin: 0.4em 0 0; font: 12px/1.4 var(--nb-mono); white-space: pre-wrap; }
 .math-skipped { font-family: var(--nb-mono); font-size: 0.9em; color: var(--muted); }
+
+/* Code cell options: line numbers and wrapping */
+.gutter {
+  display: none;
+  flex: none;
+  position: sticky;
+  left: 0;
+  margin: -0.4em 0.6em -0.4em -0.4em;
+  padding: 0.4em 0.6em 0.4em 0.4em;
+  text-align: right;
+  white-space: pre;
+  color: var(--muted);
+  background: var(--nb-input-bg);
+  border-right: 1px solid var(--nb-input-bd);
+  user-select: none;
+}
+.line-numbers .input pre { display: flex; }
+.line-numbers .gutter { display: block; }
+.line-numbers .input pre code { flex: 1 0 auto; }
+.wrap-code .input pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wrap-code .gutter { display: none; }
+
+/* Export menu */
+.menu { position: relative; }
+.menu > summary { list-style: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary::after { content: ""; border: 4px solid transparent; border-top-color: currentColor; border-bottom: 0; margin-left: 0.2rem; }
+.menu[open] > summary { border-color: var(--in); }
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 12.5rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.25rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.menu-list button {
+  font: 13px var(--mono);
+  color: var(--ink);
+  background: none;
+  border: 0;
+  border-radius: 3px;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.menu-list button:hover, .menu-list button:focus-visible { background: var(--code-bg); }
+
+/* Printing and Save as PDF */
+@media print {
+  :root { color-scheme: light; }
+  .bar, .toolbar, .crumbs { display: none !important; }
+  body { background: #fff; }
+  main { padding: 0; }
+  .nb { max-width: none; }
+  .row { break-inside: avoid; }
+  .input pre { overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .gutter { display: none !important; }
+  .output pre.stream { max-height: none; overflow: visible; }
+  .output-row .content { overflow: visible; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* With the extra toolbar buttons the title gets its own row so it can never be squeezed */
+.nb-head { grid-template-columns: minmax(0, 1fr); align-items: start; }
+.nb-head .toolbar { justify-content: flex-start; }

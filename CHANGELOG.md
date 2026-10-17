@@ -5,6 +5,9 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ## [Unreleased]
 
 ### Added
+- **Export** menu on every notebook: Python script (`.py`, Python notebooks only; IPython magics and shell commands become comments), Markdown (`.md`, with code fences, text outputs and images), a self-contained HTML page (`.html`, with a strict Content-Security-Policy so it carries no scripts), and Print / Save as PDF. Everything is built in the browser, nothing is uploaded.
+- **Line numbers** and **Wrap lines** toggles for code cells. Both are remembered in this browser.
+- Print styles: header and buttons are hidden, code wraps, colors print as light mode.
 - nbviewer `/gist/...`, `/url/...` and `/urls/...` links now work by swapping the domain, not just `/github/...`. The same forms can be pasted into the box.
 - `sitemap.xml`, referenced from `robots.txt`.
 - A note on the home page and in the README that nbview is independent and not affiliated with Project Jupyter or nbviewer.

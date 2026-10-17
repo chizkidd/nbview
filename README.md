@@ -12,7 +12,8 @@ A client-side Jupyter notebook viewer for public GitHub repos. No server: the br
 - Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a gist link, or from a local file
 - nbviewer links work too: paste one into the box, or just change `nbviewer.org` to `nbview.org` in the address bar
 - Shareable URLs, e.g. `nbview.org/#/github/owner/repo/blob/main/path/to/notebook.ipynb`, plus a "Copy link" button on every notebook
-- Hide code, download, open in Binder (standard JupyterLab, so widgets work) or Colab
+- Hide code, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
+- Export a notebook as a Python script, Markdown, a standalone HTML page, or a PDF (via your browser's print dialog), all built locally in your browser
 - Light and dark mode, following your system until you pick one
 
 nbview is an independent project and is not affiliated with Project Jupyter or nbviewer.
@@ -32,6 +33,7 @@ nbview/
 │   ├── css/style.css
 │   ├── js/
 │   │   ├── app.js       routing, GitHub fetching, notebook rendering
+│   │   ├── export.js    builds the .py, .md and .html exports
 │   │   └── theme.js     restores light/dark theme before first paint
 │   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
