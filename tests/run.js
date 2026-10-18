@@ -169,6 +169,11 @@ test('input parsing: where each pasted string goes', async () => {
   });
 });
 
+test('a blob link to a file that is not a notebook opens its folder', () => run({ hash: '#/github/o/r/blob/main/dir/README.md', api: [{ name: 'a.ipynb', path: 'dir/a.ipynb', type: 'file', size: 10 }], settle: 500 }, async ({ page }) => {
+  const r = await page.evaluate(() => ({ hash: location.hash, rows: document.querySelectorAll('.listing li').length }));
+  assert(r.hash === '#/github/o/r/tree/main/dir' && r.rows >= 1, r);
+}));
+
 test('Google Drive and Colab Drive links explain themselves', () => run({ hash: '#/url/' + encodeURIComponent('https://colab.research.google.com/drive/1abc'), settle: 300 }, async ({ page, requests }) => {
   const s = await state(page);
   assert(/Drive and Colab/.test(s.err) && !requests.length, s);
@@ -232,6 +237,13 @@ test('export menu: no .py item for non-Python notebooks; print styles hide the t
   assert(await page.evaluate(() => !document.querySelector('[data-export="py"]') && !!document.querySelector('[data-export="md"]')), 'menu items');
   await page.emulateMedia({ media: 'print' });
   assert(await page.evaluate(() => getComputedStyle(document.querySelector('.toolbar')).display === 'none' && getComputedStyle(document.querySelector('.bar')).display === 'none'), 'print styles');
+}));
+
+test('fonts are self-hosted: nothing leaves the site except GitHub', () => run({ hash: H, raw: good, settle: 600 }, async ({ page, requests }) => {
+  const external = requests.filter(u => !/raw\.githubusercontent\.com/.test(u));
+  assert(!external.length, external);
+  const loaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family); });
+  assert(loaded.some(f => /JetBrains/.test(f)) && loaded.some(f => /Source Serif/.test(f)), loaded);
 }));
 
 /* ---------- runner ---------- */

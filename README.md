@@ -35,6 +35,7 @@ nbview/
 │   │   ├── app.js       routing, GitHub fetching, notebook rendering
 │   │   ├── export.js    builds the .py, .md and .html exports
 │   │   └── theme.js     restores light/dark theme before first paint
+│   ├── fonts/           JetBrains Mono and Source Serif 4 (self-hosted, Latin)
 │   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
@@ -67,12 +68,12 @@ npx playwright install chromium
 npm test
 ```
 
-Set `CHROMIUM_PATH` to use a Chromium you already have. `npm test -- <text>` runs only the tests whose name contains that text.
+`node tests/live.js` is an optional smoke test against the real GitHub (it needs network access). Set `CHROMIUM_PATH` to use a Chromium you already have. `npm test -- <text>` runs only the tests whose name contains that text.
 
 ## Privacy
 
 - Notebooks are fetched and rendered in your browser. There is no nbview server that sees them.
-- Remote images in a notebook load from whatever host the notebook points at, so that host can see your IP address. The page also asks Google Fonts for its typefaces on each visit.
+- Remote images in a notebook load from whatever host the notebook points at, so that host can see your IP address. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
 - The optional GitHub token and your recently opened list stay in this browser's local storage. The token is sent only to api.github.com.
 - nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies).
 

@@ -1365,7 +1365,11 @@
           return;
         }
         if (kind === 'tree') return await viewTree(owner, repo, ref, path, id);
-        if (kind === 'blob') return await viewNotebook({ owner, repo, ref, path }, id);
+        if (kind === 'blob') {
+          // A link to some other file (README.md, a script) shows its folder instead of a JSON error.
+          if (!isNbName(path)) { location.replace(hashFor(owner, repo, 'tree', ref, path.split('/').slice(0, -1).join('/'))); return; }
+          return await viewNotebook({ owner, repo, ref, path }, id);
+        }
       }
 
       throw new ViewError('Unknown address', 'Paste a repo or notebook link into the box at the top.');
