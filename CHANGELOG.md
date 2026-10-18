@@ -2,6 +2,28 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+Hardening pass from the adversarial QA report.
+
+### Fixed
+- Very large notebooks render much faster: 5,000 cells went from about 19 s to about 3 s, and the first cell appears in half a second.
+- A corrupted "recently opened" list in the browser no longer breaks the home page, and a huge link is no longer saved there (it could fill the browser's storage and put a megabyte-long name in the tab title). File names are capped at 120 characters.
+- A GitHub token with an invisible or other disallowed character is now refused when saved, with an explanation, and an already saved one gets a clear message instead of "couldn't reach GitHub".
+- nbformat 3 notebooks with odd heading levels or empty entries open instead of failing, and a JSON file that is not a notebook says so.
+- Odd answers from the GitHub API (no default branch, a repo list that is not a list, folder entries without names) give a clear message instead of a stuck spinner or the word "undefined". GitHub and notebook requests now time out after 20 and 60 seconds.
+- Links of the form `data:`, `javascript:` and `file:` are refused clearly instead of being treated as a host name.
+- Colab GitHub links open the notebook, `git@github.com:owner/repo.git` is understood, and Google Drive and Colab Drive links explain why they can't be opened.
+- Long file names no longer push the page sideways on phones.
+- Accessibility: code blocks that scroll sideways can be reached with the keyboard and show a focus ring, and two colors (the `Out[n]` prompt and code comments) are slightly darker to reach the 4.5:1 contrast ratio.
+
+### Changed
+- A link to a non-notebook file in a repo (for example a README or script) now opens its folder instead of showing a JSON error.
+- Page fonts (JetBrains Mono and Source Serif 4) are now served from nbview.org instead of Google Fonts, so visiting no longer sends anything to Google. The Content-Security-Policy no longer lists Google.
+
+### Added
+- Regression tests (`npm test`, also in Firefox and Safari's engine via `BROWSER=firefox` or `BROWSER=webkit`), plus an optional smoke test against the real GitHub (`node tests/live.js`) and a Privacy section in the README.
+
 ## [0.5.0] - 2026-10-17
 
 Export a notebook as a script, Markdown, HTML or PDF, and nbviewer's gist and URL links now work too.

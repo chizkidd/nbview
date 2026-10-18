@@ -35,9 +35,12 @@ nbview/
 │   │   ├── app.js       routing, GitHub fetching, notebook rendering
 │   │   ├── export.js    builds the .py, .md and .html exports
 │   │   └── theme.js     restores light/dark theme before first paint
+│   ├── fonts/           JetBrains Mono and Source Serif 4 (self-hosted, Latin)
 │   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
+├── tests/               regression tests (Playwright), see Tests below
+├── package.json         dev dependencies for the tests only
 ├── CHANGELOG.md
 ├── LICENSE
 └── README.md
@@ -55,6 +58,25 @@ nbview/
 
 To run locally: `python -m http.server` in this folder, then open http://localhost:8000. The `_redirects` rule only applies on Cloudflare Pages, not locally.
 
+## Tests
+
+The site has no build step, but it has regression tests for the sanitizer, size limits, input parsing, accessibility and exports. They run offline against a local server with GitHub stubbed:
+
+```
+npm install
+npx playwright install chromium
+npm test
+```
+
+`node tests/live.js` is an optional smoke test against the real GitHub (it needs network access). The suite also runs in Firefox and Safari's engine: `BROWSER=firefox npm test`, `BROWSER=webkit npm test`. Set `CHROMIUM_PATH` to use a Chromium you already have. `npm test -- <text>` runs only the tests whose name contains that text.
+
+## Privacy
+
+- Notebooks are fetched and rendered in your browser. There is no nbview server that sees them.
+- Remote images in a notebook load from whatever host the notebook points at, so that host can see your IP address. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
+- The optional GitHub token and your recently opened list stay in this browser's local storage. The token is sent only to api.github.com.
+- nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies).
+
 ## Limits
 
 - Folder browsing and gists use the GitHub API: 60 requests/hour per IP without a token. Add a no-scope token via the "GitHub token" button for 5,000/hour. Opening notebooks uses raw.githubusercontent.com and doesn't count.
@@ -62,6 +84,7 @@ To run locally: `python -m http.server` in this folder, then open http://localho
 - JavaScript-based outputs (Plotly, Bokeh, ipywidgets) aren't executed, for safety. Static images, tables and text render normally.
 - HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.
 - Size limits keep one cell from freezing the tab: notebooks over 10 MB (including local files) ask before opening, outputs over 1 MB sit behind a "Show output" button, code cells over 200 KB are shown without syntax colors, and equations over 4,000 characters or 40 levels of nesting, or beyond the first 2,000 in a notebook, are shown as plain TeX. A cell that fails to render is replaced by a notice with its raw source.
+- Safari is slower than Chrome and Firefox on very large notebooks: about 3x slower for thousands of cells, and a single markdown cell with over 1 MB of text and no spaces or line breaks can freeze the tab for many seconds.
 - Public repos only.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
