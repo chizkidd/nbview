@@ -1,0 +1,12 @@
+{
+  "name": "nbview-tests",
+  "private": true,
+  "description": "Regression tests for nbview. The site itself has no build step; this is only for tests.",
+  "scripts": {
+    "test": "node tests/run.js"
+  },
+  "devDependencies": {
+    "axe-core": "4.13.0",
+    "playwright": "1.56.1"
+  }
+}

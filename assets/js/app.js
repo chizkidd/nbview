@@ -86,6 +86,8 @@
   function nbviewerUrl(kind, rest) {
     rest = rest.trim();
     if (/^https?:\/+/i.test(rest)) return rest.replace(/^(https?:)\/+/i, '$1//');
+    // Another scheme (data:, javascript:, file:) stays as written so it is refused, not turned into a host name.
+    if (/^[a-z][a-z0-9+.-]*:(?!\d+(\/|$))/i.test(rest)) return rest;
     return (kind.toLowerCase() === 'urls' ? 'https://' : 'http://') + rest;
   }
 
@@ -105,6 +107,12 @@
       s = m[1];
     } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/github\/(.+)$/i))) {
       s = m[1];
+    } else if ((m = s.match(/^(?:https?:\/\/)?colab\.research\.google\.com\/github\/(.+)$/i))) {
+      s = m[1];
+    } else if ((m = s.match(/^git@github\.com:(.+)$/i))) {
+      s = m[1];
+    } else if (/^(?:https?:\/\/)?(?:www\.)?github\.com\/?(?:[?#].*)?$/i.test(s)) {
+      return null;
     } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/gist\/(?:[^/]+\/)?([0-9a-f]+)(?:[/?#].*)?$/i))) {
       return '#/gist/' + m[1];
     } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/(urls?)\/(.+)$/i))) {
@@ -130,6 +138,7 @@
   /* ---------- GitHub ---------- */
 
   const CACHE_MS = 5 * 60 * 1000;
+  const TOKEN_OK = /^[\x21-\x7e]+$/;
 
   function cacheGet(path) {
     try {
@@ -147,13 +156,18 @@
     if (cached) return cached;
     const headers = { Accept: 'application/vnd.github+json' };
     const token = store.get('nbv.token');
+    if (token && !TOKEN_OK.test(String(token))) {
+      throw new ViewError('The saved GitHub token looks wrong', 'It contains a character a token cannot have, often an invisible space picked up when copying. Enter it again.', { token: true });
+    }
     if (token) headers.Authorization = `Bearer ${token}`;
 
     let res;
     try {
-      res = await fetch(API + path, { headers });
-    } catch {
-      throw new ViewError("Couldn't reach GitHub", 'The network request failed. Check your connection and try again.');
+      res = await fetch(API + path, { headers, signal: AbortSignal.timeout(20000) });
+    } catch (e) {
+      throw e && e.name === 'TimeoutError'
+        ? new ViewError('GitHub took too long to answer', 'Try again in a moment.')
+        : new ViewError("Couldn't reach GitHub", 'The network request failed. Check your connection and try again.');
     }
     if (res.ok) {
       const data = await res.json();
@@ -198,9 +212,23 @@
       `<span class="ref" title="Branch, tag or commit">${esc(ref)}</span>`;
   }
 
+  // Recents live in localStorage, which anything on this origin can edit, so every read is checked.
+  const MAX_RECENT_HASH = 2000;
+  const clip = (v, n) => { const t = String(v == null ? '' : v); return t.length > n ? t.slice(0, n - 3) + '...' : t; };
+
+  function getRecents() {
+    const list = store.get('nbv.recent', []);
+    if (!Array.isArray(list)) return [];
+    return list
+      .filter(r => r && typeof r === 'object' && typeof r.hash === 'string' && r.hash.startsWith('#/') && r.hash.length <= MAX_RECENT_HASH && typeof r.title === 'string')
+      .map(r => ({ kind: r.kind === 'nb' ? 'nb' : 'repo', hash: r.hash, title: clip(r.title, 120), sub: clip(r.sub, 120) }))
+      .slice(0, 8);
+  }
+
   function addRecent(entry) {
-    const list = store.get('nbv.recent', []).filter(r => r.hash !== entry.hash);
-    list.unshift(entry);
+    if (entry.hash.length > MAX_RECENT_HASH) return; // a huge link would eat the storage quota
+    const list = getRecents().filter(r => r.hash !== entry.hash);
+    list.unshift({ ...entry, title: clip(entry.title, 120), sub: clip(entry.sub, 120) });
     store.set('nbv.recent', list.slice(0, 8));
   }
 
@@ -229,7 +257,7 @@
 
   function renderHome() {
     document.title = 'nbview: Jupyter notebook viewer for GitHub';
-    const recents = store.get('nbv.recent', []);
+    const recents = getRecents();
     app.innerHTML = `
       <div class="home">
         <h1 class="home-title">Read Jupyter notebooks from any public GitHub repo.</h1>
@@ -268,8 +296,10 @@
 
   async function viewUser(owner, id) {
     showLoading(`Loading repositories for ${owner}`);
-    const repos = await gh(`/users/${encodeURIComponent(owner)}/repos?per_page=100&sort=updated`);
+    let repos = await gh(`/users/${encodeURIComponent(owner)}/repos?per_page=100&sort=updated`);
     if (stale(id)) return;
+    if (!Array.isArray(repos)) throw new ViewError('Unexpected answer from GitHub', 'The repository list was not in the expected format. Try again later.');
+    repos = repos.filter(r => r && typeof r.name === 'string' && r.owner && typeof r.owner.login === 'string');
     document.title = `${owner} | nbview`;
     app.innerHTML = `
       <div class="page">
@@ -291,7 +321,7 @@
 
   async function viewTree(owner, repo, ref, path, id) {
     showLoading('Loading files');
-    const items = await gh(
+    let items = await gh(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents${path ? '/' + enc(path) : ''}?ref=${encodeURIComponent(ref)}`
     );
     if (stale(id)) return;
@@ -305,6 +335,7 @@
       return;
     }
 
+    items = items.filter(it => it && typeof it.name === 'string' && typeof it.type === 'string' && typeof it.path === 'string');
     items.sort((a, b) =>
       (a.type === 'dir' ? 0 : 1) - (b.type === 'dir' ? 0 : 1) ||
       a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
@@ -402,10 +433,19 @@
       ? `${RAW}/${enc(src.owner)}/${enc(src.repo)}/${enc(src.ref)}/${enc(src.path)}`
       : src.url;
 
+    if (!isGh) {
+      let h = '';
+      try { h = new URL(src.url).hostname; } catch { /* the fetch below reports it */ }
+      if (/^(colab\.research\.google\.com|drive\.google\.com|docs\.google\.com)$/i.test(h)) {
+        throw new ViewError("Google Drive and Colab files can't be opened", 'Those links need a Google sign-in, so nbview cannot read them. Download the .ipynb and drop it on the home page, or use a link to the notebook on GitHub.');
+      }
+    }
+
     let res;
     try {
-      res = await fetch(url);
-    } catch {
+      res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+    } catch (e) {
+      if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
       throw new ViewError(
         "Couldn't load the file",
         isGh
@@ -422,7 +462,7 @@
     if (stale(id)) return;
 
     if (text.length > BIG_NB && !bigOk.has(location.hash)) {
-      const name = isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb');
+      const name = clip(isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
       showBigWarning(name, text, () => { bigOk.add(location.hash); route(); });
       return;
     }
@@ -433,7 +473,7 @@
     }
 
     const host = isGh ? null : new URL(url).host;
-    const name = isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb');
+    const name = clip(isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
     const ghPath = isGh ? `${enc(src.owner)}/${enc(src.repo)}/blob/${enc(src.ref)}/${enc(src.path)}` : null;
     const ctx = isGh
       ? { owner: src.owner, repo: src.repo, ref: src.ref, dir: src.path.split('/').slice(0, -1).join('/'), rawBase: url }
@@ -487,15 +527,21 @@
   /* ---------- notebook rendering ---------- */
 
   function normalize(nb) {
+    if (!nb || typeof nb !== 'object' || Array.isArray(nb)) {
+      throw new ViewError('Not a notebook', "The file is valid JSON, but it doesn't look like a Jupyter notebook.");
+    }
     if (Array.isArray(nb.cells)) return { cells: nb.cells, meta: nb.metadata || {} };
     if (Array.isArray(nb.worksheets)) {
       // nbformat 3
-      const cells = ((nb.worksheets[0] || {}).cells || []).map(c => {
+      const ws = nb.worksheets[0] || {};
+      const cells = (Array.isArray(ws.cells) ? ws.cells : []).filter(c => c && typeof c === 'object').map(c => {
         if (c.cell_type === 'code') {
-          return { cell_type: 'code', source: c.input, execution_count: c.prompt_number, outputs: (c.outputs || []).map(v3Output) };
+          const outs = (Array.isArray(c.outputs) ? c.outputs : []).filter(o => o && typeof o === 'object');
+          return { cell_type: 'code', source: c.input, execution_count: c.prompt_number, outputs: outs.map(v3Output) };
         }
         if (c.cell_type === 'heading') {
-          return { cell_type: 'markdown', source: '#'.repeat(c.level || 1) + ' ' + join(c.source) };
+          const level = Math.min(6, Math.max(1, Math.trunc(Number(c.level)) || 1));
+          return { cell_type: 'markdown', source: '#'.repeat(level) + ' ' + join(c.source) };
         }
         return c;
       });
@@ -600,6 +646,7 @@
     // Render in batches so huge notebooks stay responsive.
     const host = document.getElementById('cells');
     try {
+      let frameStart = performance.now();
       for (let i = 0; i < cells.length; i++) {
         if (stale(id)) return;
         try {
@@ -609,7 +656,7 @@
           console.error('Cell failed to render', i, err);
           host.append(failedCell(cells[i]));
         }
-        if (i % 20 === 19) await nextFrame();
+        if (performance.now() - frameStart > 12) { await nextFrame(); frameStart = performance.now(); }
       }
     } finally { done(); }
   }
@@ -722,6 +769,7 @@
       const input = makeRow(`In [${ec ?? ' '}]:`, 'in');
       input.classList.add('input');
       const pre = document.createElement('pre');
+      pre.tabIndex = 0; // long lines scroll sideways, so keyboard users need to reach it
       const code = document.createElement('code');
       code.className = 'hljs';
       const source = join(cell.source);
@@ -1310,6 +1358,9 @@
         if (!kind || !ref) {
           showLoading('Finding the default branch');
           const info = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+          if (!info || typeof info.default_branch !== 'string' || !info.default_branch) {
+            throw new ViewError("Couldn't find the default branch", 'GitHub gave an unexpected answer for this repo. Try again later.');
+          }
           if (!stale(id)) location.replace(hashFor(owner, repo, 'tree', info.default_branch, ''));
           return;
         }
@@ -1373,15 +1424,26 @@
   const dlg = document.getElementById('settings');
   const tokInput = document.getElementById('token-input');
 
+  const tokError = document.getElementById('token-error');
+  const saveBtn = dlg.querySelector('button[value="save"]');
+
   function openSettings() {
     tokInput.value = store.get('nbv.token') || '';
+    tokError.hidden = true;
     dlg.showModal();
     tokInput.focus();
   }
 
   document.getElementById('settings-btn').addEventListener('click', openSettings);
+  saveBtn.addEventListener('click', e => {
+    const t = tokInput.value.trim();
+    if (!t || TOKEN_OK.test(t)) { tokError.hidden = true; return; }
+    e.preventDefault(); // keep the dialog open and say why
+    tokError.hidden = false;
+    tokInput.focus();
+  });
   tokInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); dlg.close('save'); }
+    if (e.key === 'Enter') { e.preventDefault(); saveBtn.click(); }
   });
   dlg.addEventListener('close', () => {
     const v = dlg.returnValue;

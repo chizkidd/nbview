@@ -51,6 +51,7 @@
       <h2>GitHub token</h2>
       <p>Opening notebooks never counts against GitHub's limits. Browsing folders does: 60 listings an hour without a token, 5,000 with one. A classic token with no scopes is enough. It's stored in this browser only.</p>
       <input id="token-input" type="password" placeholder="ghp_..." autocomplete="off" spellcheck="false" aria-label="GitHub token">
+      <p id="token-error" class="form-error" role="alert" hidden>That doesn't look like a token. It has a space or a character a token can't have, often picked up when copying. Paste it again.</p>
       <div class="dialog-actions">
         <button class="btn" value="clear">Remove token</button>
         <button class="btn" value="cancel">Cancel</button>

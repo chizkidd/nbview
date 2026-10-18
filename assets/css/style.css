@@ -21,7 +21,7 @@
   --nb-input-bd: light-dark(#CFCFCF, #2A3341);
   --nb-code: light-dark(#EFF0F1, #202A37);
   --nb-in: light-dark(#303F9F, #8FA8FF);
-  --nb-out: light-dark(#D84315, #FF8C73);
+  --nb-out: light-dark(#CF3E11, #FF8C73);
   --nb-out-bg: light-dark(#F5F5F5, #161C25);
   --nb-bar: light-dark(#EEEEEE, #2A3341);
 
@@ -30,7 +30,7 @@
   --syn-opr: light-dark(#AA22FF, #C99BFF);
   --syn-str: light-dark(#BA2121, #FF8C73);
   --syn-num: light-dark(#008800, #7EE787);
-  --syn-com: light-dark(#408080, #7FB5B5);
+  --syn-com: light-dark(#3A7878, #7FB5B5);
   --syn-fn: light-dark(#0000FF, #8FA8FF);
   --syn-exc: light-dark(#D2413A, #FF7B72);
   --syn-type: light-dark(#B00040, #FF9FB5);
@@ -549,3 +549,9 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 /* With the extra toolbar buttons the title gets its own row so it can never be squeezed */
 .nb-head { grid-template-columns: minmax(0, 1fr); align-items: start; }
 .nb-head .toolbar { justify-content: flex-start; }
+
+/* Robustness and accessibility polish */
+.crumbs { overflow-wrap: anywhere; }
+.input pre:focus-visible, .output pre:focus-visible { outline: 2px solid var(--in); outline-offset: 1px; }
+.form-error { color: var(--out); font-size: 0.9rem; margin: 0.5rem 0 0; }
+.cell { content-visibility: auto; contain-intrinsic-size: auto 5rem; }
