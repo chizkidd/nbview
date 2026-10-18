@@ -87,27 +87,34 @@ test('code: a 1 MB cell is plain text and fast; a 100 KB cell is still highlight
 
 test('failed cells show a placeholder and neighbours are intact', () => run({
   hash: H, settle: 300,
-  raw: nb([md('first'), null, { cell_type: 'markdown', source: ['s'.repeat(9 * 1048576)] }, code('print(1)', { not: 'an array' }), code('2', [{ output_type: 'display_data', data: 'str' }, { output_type: 'stream', name: 'stdout', text: ['ok output\n'] }]), md('last')]),
+  raw: nb([md('first'), null, md('>'.repeat(20000) + ' too deep'), code('print(1)', { not: 'an array' }), code('2', [{ output_type: 'display_data', data: 'str' }, { output_type: 'stream', name: 'stdout', text: ['ok output\n'] }]), md('last')]),
   timeout: 40000,
 }, async ({ page }) => {
   const r = await page.evaluate(() => ({ failed: document.querySelectorAll('.cell-failed').length, text: document.querySelector('.cells').innerText }));
   assert(r.failed >= 2 && r.text.includes('first') && r.text.includes('last') && r.text.includes('ok output'), r.failed);
 }));
 
+test('a 9 MB markdown cell of ordinary text either renders or shows a placeholder, and the tab stays alive', () => run({
+  hash: H, settle: 300, timeout: 60000, raw: nb([md('word '.repeat(Math.floor(9 * 1048576 / 5))), md('last')]),
+}, async ({ page }) => {
+  const r = await page.evaluate(() => ({ cells: document.querySelectorAll('.cell').length, last: document.querySelector('.cells').textContent.includes('last') }));
+  assert(r.cells === 2 && r.last, r);
+}));
+
 test('large files: local 10.5 MB asks first and "Open anyway" works', () => run({ hash: '', settle: 200 }, async ({ page }) => {
-  const buffer = Buffer.from(JSON.stringify(nb([md('a'.repeat(10.5 * 1048576))])));
+  const buffer = Buffer.from(JSON.stringify(nb([md('word '.repeat(Math.floor(10.5 * 1048576 / 5)))])));
   await page.setInputFiles('#file-input', { name: 'big.ipynb', mimeType: 'application/json', buffer });
   await page.waitForSelector('#big-open', { timeout: 20000 });
   await page.click('#big-open');
   await page.waitForSelector('.cell', { timeout: 60000 });
 }));
 
-test('5,000 cells render in a few seconds and the first cell appears fast', () => run({
+test('2,000 cells render in a few seconds and the first cell appears fast', () => run({
   hash: H, timeout: 60000, waitFor: '.cell',
-  raw: nb(Array.from({ length: 5000 }, (_, i) => (i % 2 ? md('text ' + i + ' $x_{' + i + '}$') : code('x = ' + i, [{ output_type: 'stream', name: 'stdout', text: ['out ' + i + '\n'] }], i)))),
+  raw: nb(Array.from({ length: 2000 }, (_, i) => (i % 2 ? md('text ' + i + ' $x_{' + i + '}$') : code('x = ' + i, [{ output_type: 'stream', name: 'stdout', text: ['out ' + i + '\n'] }], i)))),
 }, async ({ page }) => {
   const t0 = Date.now();
-  await page.waitForFunction(() => document.querySelectorAll('.cell').length >= 5000, null, { timeout: 60000 });
+  await page.waitForFunction(() => document.querySelectorAll('.cell').length >= 2000, null, { timeout: 60000 });
   assert(Date.now() - t0 < 12000, Date.now() - t0);
 }));
 

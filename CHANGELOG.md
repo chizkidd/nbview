@@ -22,7 +22,7 @@ Hardening pass from the adversarial QA report.
 - Page fonts (JetBrains Mono and Source Serif 4) are now served from nbview.org instead of Google Fonts, so visiting no longer sends anything to Google. The Content-Security-Policy no longer lists Google.
 
 ### Added
-- Regression tests (`npm test`), plus an optional smoke test against the real GitHub (`node tests/live.js`) and a Privacy section in the README.
+- Regression tests (`npm test`, also in Firefox and Safari's engine via `BROWSER=firefox` or `BROWSER=webkit`), plus an optional smoke test against the real GitHub (`node tests/live.js`) and a Privacy section in the README.
 
 ## [0.5.0] - 2026-10-17
 

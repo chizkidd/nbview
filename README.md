@@ -68,7 +68,7 @@ npx playwright install chromium
 npm test
 ```
 
-`node tests/live.js` is an optional smoke test against the real GitHub (it needs network access). Set `CHROMIUM_PATH` to use a Chromium you already have. `npm test -- <text>` runs only the tests whose name contains that text.
+`node tests/live.js` is an optional smoke test against the real GitHub (it needs network access). The suite also runs in Firefox and Safari's engine: `BROWSER=firefox npm test`, `BROWSER=webkit npm test`. Set `CHROMIUM_PATH` to use a Chromium you already have. `npm test -- <text>` runs only the tests whose name contains that text.
 
 ## Privacy
 
@@ -84,6 +84,7 @@ npm test
 - JavaScript-based outputs (Plotly, Bokeh, ipywidgets) aren't executed, for safety. Static images, tables and text render normally.
 - HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.
 - Size limits keep one cell from freezing the tab: notebooks over 10 MB (including local files) ask before opening, outputs over 1 MB sit behind a "Show output" button, code cells over 200 KB are shown without syntax colors, and equations over 4,000 characters or 40 levels of nesting, or beyond the first 2,000 in a notebook, are shown as plain TeX. A cell that fails to render is replaced by a notice with its raw source.
+- Safari is slower than Chrome and Firefox on very large notebooks: about 3x slower for thousands of cells, and a single markdown cell with over 1 MB of text and no spaces or line breaks can freeze the tab for many seconds.
 - Public repos only.
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
