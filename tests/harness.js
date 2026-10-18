@@ -2,7 +2,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const pw = require('playwright');
+const engine = pw[process.env.BROWSER || 'chromium'];
 
 const ROOT = path.join(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.woff2': 'font/woff2', '.json': 'application/json', '.txt': 'text/plain', '.xml': 'application/xml' };
@@ -24,7 +25,7 @@ async function start() {
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+  browser = await engine.launch(process.env.CHROMIUM_PATH && !process.env.BROWSER ? { executablePath: process.env.CHROMIUM_PATH } : {});
   return base;
 }
 

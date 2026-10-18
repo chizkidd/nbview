@@ -1,5 +1,5 @@
 // Regression tests. Run: npm install && npx playwright install chromium && npm test
-// (set CHROMIUM_PATH to use an existing Chromium). Everything runs offline against a local server.
+// (set CHROMIUM_PATH to use an existing Chromium; set BROWSER=firefox or BROWSER=webkit to test another engine). Everything runs offline against a local server.
 const fs = require('fs');
 const path = require('path');
 const { start, stop, open, state, nb, md, code } = require('./harness');
