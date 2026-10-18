@@ -60,9 +60,10 @@ nbview/
 │   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
-├── tests/               regression tests (Playwright), see Tests below
+├── tests/               regression tests (Playwright)
 ├── package.json         dev dependencies for the tests only
 ├── CHANGELOG.md
+├── MAINTENANCE.md       yearly and per-release chores
 ├── LICENSE
 └── README.md
 ```
@@ -73,20 +74,10 @@ nbview/
 
 ### Tests
 
-Regression tests cover the sanitizer, size limits, input parsing, accessibility and exports. They run offline against a local server with GitHub stubbed:
-
-```
-npm install
-npx playwright install chromium
-npm test
-```
-
-`BROWSER=firefox npm test` and `BROWSER=webkit npm test` run them in Firefox and Safari's engine, `npm test -- <text>` runs only matching tests, and `CHROMIUM_PATH` points at a Chromium you already have. `node tests/live.js` is an optional smoke test against the real GitHub and needs network access.
+`npm install && npx playwright install chromium && npm test`. More options (other browsers, a single test, the live smoke test) are in [tests/README.md](tests/README.md).
 
 ### Upkeep
 
-- `.well-known/security.txt` has an `Expires` date one year out. Renew it by editing that line (next: 2027-10-07).
-- Library versions and licenses are in `assets/vendor/README.md`, and the fonts are in `assets/fonts/README.md`. Update them by replacing the files, not by adding a CDN.
-- Keep `robots.txt`: without it Cloudflare Pages answers `/robots.txt` with the home page.
+Yearly and per-release chores are in [MAINTENANCE.md](MAINTENANCE.md).
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each release.
