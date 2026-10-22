@@ -2,9 +2,9 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
-## [Unreleased]
+## [0.5.1] - 2026-10-22
 
-Hardening pass from the adversarial QA report.
+Hardening pass from the adversarial QA report, self-hosted fonts, and cross-browser tests.
 
 ### Fixed
 - Very large notebooks render much faster: 5,000 cells went from about 19 s to about 3 s, and the first cell appears in half a second.
@@ -23,6 +23,7 @@ Hardening pass from the adversarial QA report.
 
 ### Added
 - Regression tests (`npm test`, also in Firefox and Safari's engine via `BROWSER=firefox` or `BROWSER=webkit`), plus an optional smoke test against the real GitHub (`node tests/live.js`) and a Privacy section in the README.
+- `MAINTENANCE.md` (yearly and per-release chores) and `tests/README.md`; the README now puts users first and keeps developer notes in one Development section.
 
 ## [0.5.0] - 2026-10-17
 
