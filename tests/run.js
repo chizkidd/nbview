@@ -90,7 +90,7 @@ test('failed cells show a placeholder and neighbours are intact', () => run({
   raw: nb([md('first'), null, md('>'.repeat(20000) + ' too deep'), code('print(1)', { not: 'an array' }), code('2', [{ output_type: 'display_data', data: 'str' }, { output_type: 'stream', name: 'stdout', text: ['ok output\n'] }]), md('last')]),
   timeout: 40000,
 }, async ({ page }) => {
-  const r = await page.evaluate(() => ({ failed: document.querySelectorAll('.cell-failed').length, text: document.querySelector('.cells').innerText }));
+  const r = await page.evaluate(() => ({ failed: document.querySelectorAll('.cell-failed').length, text: document.querySelector('.cells').textContent }));
   assert(r.failed >= 2 && r.text.includes('first') && r.text.includes('last') && r.text.includes('ok output'), r.failed);
 }));
 
@@ -251,6 +251,53 @@ test('fonts are self-hosted: nothing leaves the site except GitHub', () => run({
   assert(!external.length, external);
   const loaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family); });
   assert(loaded.some(f => /JetBrains/.test(f)) && loaded.some(f => /Source Serif/.test(f)), loaded);
+}));
+
+/* ---------- contents and output toggles ---------- */
+
+const tocNb = nb([
+  md('# Intro\n\nSome text.'),
+  code('x = 1', [{ output_type: 'stream', name: 'stdout', text: ['hello output\\n'] }]),
+  md('## Setup\n\n### Install <b>deps</b>\n\ntext'),
+  md('no heading here'),
+  md('#### Deep\n\n' + 'filler\n\n'.repeat(120) + '## Far away section\n\n' + 'filler\n\n'.repeat(120)),
+]);
+
+test('contents menu lists the headings in order and jumps to them', () => run({ hash: H, raw: tocNb, settle: 500 }, async ({ page }) => {
+  const items = await page.evaluate(() => [...document.querySelectorAll('#toc-list .toc-item')].map(b => [b.className.match(/toc-l(\d)/)[1], b.textContent]));
+  assert(JSON.stringify(items) === JSON.stringify([['1', 'Intro'], ['2', 'Setup'], ['3', 'Install deps'], ['4', 'Deep'], ['2', 'Far away section']]), items);
+  await page.click('#toc-menu summary');
+  await page.click('.toc-item:last-child');
+  await page.waitForTimeout(400);
+  const r = await page.evaluate(() => { const h = [...document.querySelectorAll('.cells h2')].find(x => /Far away/.test(x.textContent)); const top = h.getBoundingClientRect().top; return { top, open: document.querySelector('#toc-menu').open, scrolled: window.scrollY > 500 }; });
+  assert(r.scrolled && r.top >= 0 && r.top < 300 && !r.open, r);
+}));
+
+test('contents menu stays hidden without headings and closes on Escape', async () => {
+  await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
+    assert(await page.evaluate(() => document.querySelector('#toc-menu').hidden), 'menu shown without headings');
+  });
+  await run({ hash: H, raw: tocNb, settle: 400 }, async ({ page }) => {
+    await page.click('#toc-menu summary');
+    assert(await page.evaluate(() => document.querySelector('#toc-menu').open), 'did not open');
+    await page.keyboard.press('Escape');
+    assert(await page.evaluate(() => !document.querySelector('#toc-menu').open), 'Escape did not close it');
+  });
+});
+
+test('hide outputs: outputs disappear, code stays, and the HTML export keeps the choice', () => run({ hash: H, raw: tocNb, settle: 400 }, async ({ page }) => {
+  const vis = () => page.evaluate(() => ({ out: getComputedStyle(document.querySelector('.output-row')).display, input: getComputedStyle(document.querySelector('.input')).display, pressed: document.querySelector('#toggle-outputs').getAttribute('aria-pressed') }));
+  assert((await vis()).out !== 'none', 'outputs hidden at start');
+  await page.click('#toggle-outputs');
+  const v = await vis();
+  assert(v.out === 'none' && v.input !== 'none' && v.pressed === 'true', v);
+  fs.mkdirSync(OUT, { recursive: true });
+  await page.click('#export-menu summary');
+  const [d] = await Promise.all([page.waitForEvent('download'), page.click('[data-export="html"]')]);
+  const f = path.join(OUT, 'hide-outputs.html'); await d.saveAs(f);
+  assert(/<body class="[^"]*hide-outputs/.test(fs.readFileSync(f, 'utf8')), 'export lost hide-outputs');
+  await page.click('#toggle-outputs');
+  assert((await vis()).out !== 'none', 'outputs did not come back');
 }));
 
 /* ---------- runner ---------- */

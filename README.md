@@ -12,7 +12,7 @@ A client-side Jupyter notebook viewer for public GitHub repos. No server: the br
 - Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a gist link, or from a local file
 - nbviewer links work too: paste one into the box, or just change `nbviewer.org` to `nbview.org` in the address bar
 - Shareable URLs, e.g. `nbview.org/#/github/owner/repo/blob/main/path/to/notebook.ipynb`, plus a "Copy link" button on every notebook
-- Hide code, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
+- A Contents menu built from the notebook's headings, plus hide code, hide outputs, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
 - Export a notebook as a Python script, Markdown, a standalone HTML page, or a PDF (via your browser's print dialog), all built locally in your browser
 - Light and dark mode, following your system until you pick one
 
