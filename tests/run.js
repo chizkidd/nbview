@@ -300,6 +300,145 @@ test('hide outputs: outputs disappear, code stays, and the HTML export keeps the
   assert((await vis()).out !== 'none', 'outputs did not come back');
 }));
 
+/* ---------- compare ---------- */
+
+const diff = require('../assets/js/diff.js');
+const dcell = (type, text, outputs) => ({ cell_type: type, source: [text], outputs: outputs || [], execution_count: 1, metadata: {} });
+const kinds = entries => entries.map(e => e.kind).join(',');
+
+test('diff engine: identical, added, removed, modified, reordered', () => {
+  assert(kinds(diff.diffCells([dcell('code', 'a')], [dcell('code', 'a')])) === 'same');
+  assert(kinds(diff.diffCells([], [dcell('code', 'a')])) === 'added');
+  assert(kinds(diff.diffCells([dcell('code', 'a')], [])) === 'removed');
+  assert(kinds(diff.diffCells([dcell('code', 'x = 1')], [dcell('code', 'x = 2')])) === 'modified');
+  assert(kinds(diff.diffCells([dcell('markdown', 'note')], [dcell('code', 'totally different code')])) === 'removed,added', 'type change');
+  assert(kinds(diff.diffCells([dcell('code', 'x'), dcell('code', 'y'), dcell('code', 'z')], [dcell('code', 'z'), dcell('code', 'x'), dcell('code', 'y')])) === 'added,same,same,removed', 'move');
+  const lines = diff.diffLines('a\nb\nc', 'a\nB\nc\nd').map(l => l.t + ':' + l.text).join(',');
+  assert(lines === 'eq:a,del:b,add:B,eq:c,add:d', lines);
+});
+
+test('diff engine: output text is compared, execution counts and images are not', () => {
+  const out = text => [{ output_type: 'stream', name: 'stdout', text: [text] }];
+  const a = dcell('code', 'p', out('hello\n')), b = dcell('code', 'p', out('bye\n'));
+  b.execution_count = 7;
+  const [e] = diff.diffCells([a], [b]);
+  assert(e.kind === 'same' && e.outputsChanged && e.outputLines.some(l => l.t === 'add' && l.text === 'bye'), e);
+  const img = d => dcell('code', 'q', [{ output_type: 'display_data', data: { 'image/png': d } }]);
+  assert(!diff.diffCells([img('AAAA')], [img('BBBB')])[0].outputsChanged, 'image bytes should not count');
+});
+
+test('diff engine: thousands of cells stay fast and mostly aligned', () => {
+  const a = Array.from({ length: 4000 }, (_, i) => dcell('code', 'line ' + i)), b = a.map((c, i) => (i % 40 === 0 ? dcell('code', 'other ' + i) : c));
+  const t0 = Date.now();
+  const s = diff.summarize(diff.diffCells(a, b));
+  assert(Date.now() - t0 < 2000 && s.same >= 3800, { s, ms: Date.now() - t0 });
+});
+
+const oldNb = nb([md('# Title\n\nIntro'), code('import numpy as np\nx = np.arange(10)\nprint(x)', [{ output_type: 'stream', name: 'stdout', text: ['[0 1 2]\n'] }]), md('old note'), code('keep')]);
+const newNb = nb([md('# Title\n\nIntro, updated'), code('import numpy as np\nx = np.arange(20)\nprint(x)\nprint(x.sum())', [{ output_type: 'stream', name: 'stdout', text: ['[0 1 2 3]\n6\n'] }]), code('brand new cell'), code('keep')]);
+const byRef = u => ({ body: JSON.stringify(/\/oldref\//.test(u) ? oldNb : newNb) });
+const CMP = '#/compare/github/o/r/oldref...newref/dir/nb.ipynb';
+
+test('compare (GitHub): summary, both layouts, outputs toggle, unchanged cells and change navigation', () => run({ hash: CMP, raw: byRef, settle: 400 }, async ({ page }) => {
+  const sum = await page.evaluate(() => ({ text: document.querySelector('#d-summary').textContent, split: !!document.querySelector('.dsplit'), changes: document.querySelectorAll('[data-change]').length }));
+  assert(/2 modified, 1 added, 1 removed \(1 unchanged\)/.test(sum.text) && sum.split && sum.changes === 4, sum);
+  const del = await page.evaluate(() => [...document.querySelectorAll('.dline.del .dtext')].map(n => n.textContent));
+  assert(del.includes('x = np.arange(10)') && del.includes('Intro'), del);
+  await page.click('#d-unified');
+  assert(await page.evaluate(() => !!document.querySelector('.dunified') && !document.querySelector('.dsplit') && localStorage.getItem('nbv.diffLayout') === '"unified"'), 'unified layout');
+  assert(!(await page.$('.dout-label')), 'outputs shown too early');
+  await page.click('#d-outputs');
+  assert(await page.evaluate(() => document.querySelectorAll('.dout-label').length === 1 && !!document.querySelector('.dline.add .dtext')), 'output diff missing');
+  await page.click('#d-expand');
+  await page.waitForTimeout(100);
+  assert(await page.evaluate(() => document.querySelector('.dgroup .dsame-text').textContent === 'keep'), 'unchanged cell text');
+  await page.click('#d-next'); await page.click('#d-next');
+  assert(await page.evaluate(() => document.querySelector('#d-pos').textContent === 'Change 2 of 4'), 'navigation position');
+  await page.click('#d-prev');
+  assert(await page.evaluate(() => document.querySelector('#d-pos').textContent === 'Change 1 of 4' && document.activeElement.dataset.change === '1'), 'previous change');
+}));
+
+test('compare: notebook text is shown as text, never as HTML', () => run({
+  hash: CMP, settle: 400,
+  raw: u => ({ body: JSON.stringify(/\/oldref\//.test(u) ? nb([md('safe')]) : nb([md('<img src=x onerror="window.__pwn=1"><script>window.__pwn=2</script>'), code('print("<b>x</b>")')])) }),
+}, async ({ page }) => {
+  const r = await page.evaluate(() => ({ pwn: window.__pwn, imgs: document.querySelectorAll('.diff img, .diff script, .diff b').length, text: document.querySelector('.diff').textContent }));
+  assert(r.pwn === undefined && r.imgs === 0 && r.text.includes('<img src=x'), r);
+}));
+
+test('compare: a long unchanged run of lines folds and expands', () => run({
+  hash: CMP, settle: 400,
+  raw: u => ({ body: JSON.stringify(nb([code(Array.from({ length: 40 }, (_, i) => 'line ' + i).join('\n') + (/\/oldref\//.test(u) ? '\nold end' : '\nnew end'))])) }),
+}, async ({ page }) => {
+  const before = await page.evaluate(() => document.querySelectorAll('.dline').length);
+  await page.click('.dfold');
+  const after = await page.evaluate(() => document.querySelectorAll('.dline').length);
+  assert(before < 25 && after > before + 20, { before, after });
+}));
+
+test('compare: a file missing at one version, an unknown ref and a bad link explain themselves', async () => {
+  await run({ hash: CMP, raw: u => (/\/oldref\//.test(u) ? { status: 404, body: 'Not Found', type: 'text/plain' } : { body: JSON.stringify(newNb) }), settle: 300 }, async ({ page }) => {
+    const s = await state(page);
+    assert(/Not found at oldref/.test(s.err) && /dir\/nb\.ipynb/.test(s.errText), s);
+  });
+  await run({ hash: '#/compare/github/o/r/justone/dir/nb.ipynb', raw: good, settle: 300 }, async ({ page }) => {
+    assert((await state(page)).err, 'no message for a link without two refs');
+  });
+});
+
+test('compare dialog: pick a recent commit, submit, and land on the diff', () => {
+  const sha = 'a'.repeat(40);
+  return run({
+    hash: H, settle: 400,
+    raw: u => ({ body: JSON.stringify(u.includes(sha) ? oldNb : newNb) }),
+    api: u => (/\/commits\?/.test(u) ? { body: JSON.stringify([{ sha, commit: { message: 'Tidy the intro\n\nlong body', author: { date: '2026-01-02T03:04:05Z' } } }, { sha: 'bad', commit: {} }]) } : null),
+  }, async ({ page }) => {
+    await page.click('#compare-btn');
+    assert(await page.evaluate(() => document.querySelector('#compare-dialog').open), 'dialog did not open');
+    await page.fill('#compare-base', 'two words');
+    await page.click('#compare-form button[type="submit"]');
+    assert(await page.evaluate(() => document.querySelector('#compare-dialog').open && !document.querySelector('#compare-error').hidden), 'bad ref accepted');
+    await page.click('#compare-load');
+    await page.waitForSelector('.commit-item');
+    assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 1 && /Tidy the intro/.test(document.querySelector('.commit-item').textContent)), 'commit list');
+    await page.click('.commit-item');
+    await page.click('#compare-form button[type="submit"]');
+    await page.waitForSelector('.diffview');
+    const r = await page.evaluate(() => ({ hash: decodeURIComponent(location.hash), sum: document.querySelector('#d-summary').textContent }));
+    assert(r.hash === `#/compare/github/o/r/${sha}...main/t.ipynb` && /modified/.test(r.sum), r);
+  });
+});
+
+test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+  assert(await page.evaluate(() => document.querySelector('#compare-go').disabled), 'button should start disabled');
+  const file = (name, body) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(body)) });
+  await page.setInputFiles('#file-a', file('before.ipynb', oldNb));
+  await page.setInputFiles('#file-b', file('after.ipynb', newNb));
+  await page.click('#compare-go');
+  await page.waitForSelector('.diffview');
+  const r = await page.evaluate(() => ({ sum: document.querySelector('#d-summary').textContent, labels: document.querySelector('.dlabels').textContent }));
+  assert(/2 modified, 1 added, 1 removed/.test(r.sum) && r.labels === 'before.ipynb to after.ipynb', r);
+}));
+
+test('compare: a file that is not a notebook is reported, not crashed on', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+  await page.setInputFiles('#file-a', { name: 'a.ipynb', mimeType: 'application/json', buffer: Buffer.from('not json') });
+  await page.setInputFiles('#file-b', { name: 'b.ipynb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(good)) });
+  await page.click('#compare-go');
+  await page.waitForTimeout(200);
+  assert(await page.evaluate(() => !document.querySelector('#compare-msg').hidden && /isn't valid JSON/.test(document.querySelector('#compare-msg').textContent)), 'no message');
+}));
+
+test('compare pages pass axe', async () => {
+  const axeFile = require.resolve('axe-core/axe.min.js');
+  for (const [name, opts] of [['pick', { hash: '#/compare' }], ['diff', { hash: CMP, raw: byRef }]]) {
+    await run({ ...opts, settle: 400 }, async ({ page }) => {
+      await page.addScriptTag({ path: axeFile });
+      const v = await page.evaluate(() => axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'best-practice'] }).then(r => r.violations.map(x => `${x.id} (${x.nodes.length})`)));
+      assert(!v.length, { name, v });
+    });
+  }
+});
+
 /* ---------- runner ---------- */
 
 (async () => {

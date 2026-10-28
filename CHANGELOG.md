@@ -2,6 +2,11 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+### Added
+- **Compare**: see what changed between two versions of a notebook. On any GitHub notebook, Compare lets you pick a branch, tag or commit (or one of the file's recent commits) to compare with; on the home page, "Compare two notebooks" takes two local `.ipynb` files. Changed cells show as a line-by-line diff, side by side or in one column (your choice is remembered, and phones get the one-column view). Unchanged cells collapse, long unchanged runs of lines fold, and Previous and Next change buttons jump between changes. Output changes are optional (Show output changes). Compare links are shareable: `nbview.org/#/compare/github/owner/repo/old...new/path/to/notebook.ipynb`.
+
 ## [0.6.0] - 2026-10-28
 
 Find your way around long notebooks, and hide outputs when you only want the code.
