@@ -12,6 +12,9 @@ const nb = (cells, meta = {}) => ({ nbformat: 4, nbformat_minor: 5, metadata: { 
 const md = s => ({ cell_type: 'markdown', metadata: {}, source: [s] });
 const code = (s, outputs = [], n = 1) => ({ cell_type: 'code', execution_count: n, metadata: {}, source: [s], outputs });
 
+// The host of a URL, parsed (never a substring match).
+const hostOf = u => { try { return new URL(u).hostname; } catch { return ''; } };
+
 let server, browser, base;
 
 async function start() {
@@ -43,12 +46,13 @@ async function open(opts = {}) {
   await ctx.route('**/*', route => {
     const u = route.request().url();
     if (u.startsWith(base)) return route.continue();
-    if (/fonts\.(googleapis|gstatic)\.com/.test(u)) return route.fulfill({ body: '', contentType: 'text/css' });
+    const host = hostOf(u);
+    if (host === 'fonts.googleapis.com' || host === 'fonts.gstatic.com') return route.fulfill({ body: '', contentType: 'text/css' });
     requests.push(u);
     const pick = (src) => (typeof src === 'function' ? src(u, route.request()) : src === undefined ? null : { body: typeof src === 'string' || Buffer.isBuffer(src) ? src : JSON.stringify(src) });
     let h = null;
-    if (u.includes('raw.githubusercontent.com')) h = pick(opts.raw);
-    else if (u.includes('api.github.com')) h = pick(opts.api);
+    if (host === 'raw.githubusercontent.com') h = pick(opts.raw);
+    else if (host === 'api.github.com') h = pick(opts.api);
     if (!h && opts.other) h = pick(opts.other);
     if (!h || h.abort) return route.abort();
     return route.fulfill({ status: h.status || 200, body: h.body === undefined ? '' : h.body, contentType: h.type || 'application/json', headers: { 'access-control-allow-origin': '*' } });
@@ -70,4 +74,4 @@ const state = page => page.evaluate(() => ({
   title: document.title,
 }));
 
-module.exports = { start, stop, open, state, nb, md, code, get base() { return base; } };
+module.exports = { start, stop, open, state, nb, md, code, hostOf, get base() { return base; } };
