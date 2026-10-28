@@ -340,12 +340,14 @@ const byRef = u => ({ body: JSON.stringify(/\/oldref\//.test(u) ? oldNb : newNb)
 const CMP = '#/compare/github/o/r/oldref...newref/dir/nb.ipynb';
 
 test('compare (GitHub): summary, both layouts, outputs toggle, unchanged cells and change navigation', () => run({ hash: CMP, raw: byRef, settle: 400 }, async ({ page }) => {
-  const sum = await page.evaluate(() => ({ text: document.querySelector('#d-summary').textContent, split: !!document.querySelector('.dsplit'), changes: document.querySelectorAll('[data-change]').length }));
-  assert(/2 modified, 1 added, 1 removed \(1 unchanged\)/.test(sum.text) && sum.split && sum.changes === 4, sum);
+  const sum = await page.evaluate(() => ({ text: document.querySelector('#d-summary').textContent, unified: !!document.querySelector('.dunified') && !document.querySelector('.dsplit'), order: [...document.querySelectorAll('.toolbar button')].slice(0, 2).map(b => b.textContent), pressed: document.querySelector('#d-unified').getAttribute('aria-pressed'), changes: document.querySelectorAll('[data-change]').length }));
+  assert(/2 modified, 1 added, 1 removed \(1 unchanged\)/.test(sum.text) && sum.unified && sum.changes === 4 && sum.pressed === 'true' && sum.order.join('|') === 'Unified|Side by side', sum);
   const del = await page.evaluate(() => [...document.querySelectorAll('.dline.del .dtext')].map(n => n.textContent));
   assert(del.includes('x = np.arange(10)') && del.includes('Intro'), del);
+  await page.click('#d-split');
+  assert(await page.evaluate(() => !!document.querySelector('.dsplit') && !document.querySelector('.dunified') && localStorage.getItem('nbv.diffLayout') === '"split"'), 'side by side layout');
   await page.click('#d-unified');
-  assert(await page.evaluate(() => !!document.querySelector('.dunified') && !document.querySelector('.dsplit') && localStorage.getItem('nbv.diffLayout') === '"unified"'), 'unified layout');
+  assert(await page.evaluate(() => !!document.querySelector('.dunified') && localStorage.getItem('nbv.diffLayout') === '"unified"'), 'back to unified');
   assert(!(await page.$('.dout-label')), 'outputs shown too early');
   await page.click('#d-outputs');
   assert(await page.evaluate(() => document.querySelectorAll('.dout-label').length === 1 && !!document.querySelector('.dline.add .dtext')), 'output diff missing');
@@ -357,6 +359,17 @@ test('compare (GitHub): summary, both layouts, outputs toggle, unchanged cells a
   await page.click('#d-prev');
   assert(await page.evaluate(() => document.querySelector('#d-pos').textContent === 'Change 1 of 4' && document.activeElement.dataset.change === '1'), 'previous change');
 }));
+
+test('compare: opens unified on any screen size, and remembers a chosen side-by-side layout', async () => {
+  for (const viewport of [{ width: 1400, height: 800 }, { width: 360, height: 800 }]) {
+    await run({ hash: CMP, raw: byRef, viewport, settle: 300 }, async ({ page }) => {
+      assert(await page.evaluate(() => !!document.querySelector('.dunified') && !document.querySelector('.dsplit')), { viewport });
+    });
+  }
+  await run({ hash: CMP, raw: byRef, init: `localStorage.setItem('nbv.diffLayout', '"split"')`, settle: 300 }, async ({ page }) => {
+    assert(await page.evaluate(() => !!document.querySelector('.dsplit')), 'saved side-by-side choice ignored');
+  });
+});
 
 test('compare: notebook text is shown as text, never as HTML', () => run({
   hash: CMP, settle: 400,

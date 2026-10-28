@@ -2,6 +2,11 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+### Changed
+- Compare always opens in the unified (one column) view, on any screen size. The toolbar now reads Unified, then Side by side, and a side-by-side choice is still remembered.
+
 ## [0.7.0] - 2026-10-28
 
 See exactly what changed between two versions of a notebook.

@@ -1566,7 +1566,7 @@
     const entries = d.entries;
     const sum = nbvDiff.summarize(entries);
     const saved = store.get('nbv.diffLayout');
-    const state = { layout: saved === 'split' || saved === 'unified' ? saved : (matchMedia('(min-width: 900px)').matches ? 'split' : 'unified'), outputs: false };
+    const state = { layout: saved === 'split' ? 'split' : 'unified', outputs: false };
 
     document.title = `Compare ${d.title} | nbview`;
     app.innerHTML = `
@@ -1575,8 +1575,8 @@
         <header class="nb-head">
           <h1 class="nb-title">${esc(d.title).replace(/([_.-])/g, '$1<wbr>')}</h1>
           <div class="toolbar">
-            <button class="btn" id="d-split" type="button" aria-pressed="false">Side by side</button>
             <button class="btn" id="d-unified" type="button" aria-pressed="false">Unified</button>
+            <button class="btn" id="d-split" type="button" aria-pressed="false">Side by side</button>
             <button class="btn" id="d-outputs" type="button" aria-pressed="false">Show output changes</button>
             <button class="btn" id="d-expand" type="button">Expand unchanged</button>
             <button class="btn" id="d-prev" type="button">Previous change</button>
