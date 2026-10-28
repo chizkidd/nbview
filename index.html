@@ -59,13 +59,15 @@
 
   <dialog id="compare-dialog">
     <form id="compare-form" class="settings-form">
-      <h2>Compare versions</h2>
-      <p>Compare <code id="compare-file"></code> at <code id="compare-head"></code> with another version of the same file.</p>
-      <label for="compare-base">Compare with (branch, tag or commit)</label>
+      <h2>Compare</h2>
+      <p>Compare <code id="compare-file"></code> at <code id="compare-head"></code> with another version of it, or with a different notebook.</p>
+      <label for="compare-base">Another version (branch, tag or commit)</label>
       <input id="compare-base" type="text" placeholder="main, v1.0 or a commit" autocomplete="off" spellcheck="false">
-      <p id="compare-error" class="form-error" role="alert" hidden></p>
       <button class="btn" id="compare-load" type="button">Show recent commits of this file</button>
       <div id="compare-commits" class="commit-list"></div>
+      <label for="compare-other" class="compare-or">Or a different notebook (link or owner/repo/path.ipynb)</label>
+      <input id="compare-other" type="text" placeholder="https://github.com/owner/repo/blob/main/other.ipynb" autocomplete="off" spellcheck="false">
+      <p id="compare-error" class="form-error" role="alert" hidden></p>
       <div class="dialog-actions">
         <button class="btn" id="compare-cancel" type="button">Cancel</button>
         <button class="btn primary" type="submit">Compare</button>

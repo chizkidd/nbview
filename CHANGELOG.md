@@ -4,6 +4,10 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ## [Unreleased]
 
+### Added
+- **Compare two different notebooks.** The Compare page has a new **Two links** tab: paste a GitHub notebook link, a raw link, `owner/repo/path/to/notebook.ipynb` (uses the default branch) or any direct `.ipynb` URL for each side, in the same repo or different repos. On a GitHub notebook, the Compare dialog also accepts "a different notebook". Shareable as `nbview.org/#/compare/links/<first>/<second>`. Gist links are not supported in Compare yet.
+- **Swap sides** (for two notebooks) and **Swap versions** (for two versions of one notebook) buttons.
+
 ### Changed
 - Compare always opens in the unified (one column) view, on any screen size. The toolbar now reads Unified, then Side by side, and a side-by-side choice is still remembered.
 

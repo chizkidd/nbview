@@ -646,3 +646,10 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 }
 @media print { .diffview .toolbar { display: none !important; } }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.compare-modes { justify-content: flex-start; margin: 0 0 1rem; }
+.compare-links { display: flex; flex-direction: column; gap: 0.4rem; max-width: 42rem; }
+.compare-links label, .compare-or { font: 13px var(--mono); }
+.compare-links input { font: 14px var(--mono); padding: 0.55rem 0.7rem; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; width: 100%; }
+.compare-or { margin-top: 1rem; }
+.compare-go { margin-top: 0.6rem; }

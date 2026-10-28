@@ -423,6 +423,7 @@ test('compare dialog: pick a recent commit, submit, and land on the diff', () =>
 });
 
 test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+  await page.click('#mode-files');
   assert(await page.evaluate(() => document.querySelector('#compare-go').disabled), 'button should start disabled');
   const file = (name, body) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(body)) });
   await page.setInputFiles('#file-a', file('before.ipynb', oldNb));
@@ -434,11 +435,80 @@ test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, as
 }));
 
 test('compare: a file that is not a notebook is reported, not crashed on', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+  await page.click('#mode-files');
   await page.setInputFiles('#file-a', { name: 'a.ipynb', mimeType: 'application/json', buffer: Buffer.from('not json') });
   await page.setInputFiles('#file-b', { name: 'b.ipynb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(good)) });
   await page.click('#compare-go');
   await page.waitForTimeout(200);
   assert(await page.evaluate(() => !document.querySelector('#compare-msg').hidden && /isn't valid JSON/.test(document.querySelector('#compare-msg').textContent)), 'no message');
+}));
+
+const rawOf = (o, r, ref, path) => `https://raw.githubusercontent.com/${o}/${r}/${ref}/${path}`;
+const twoRepos = u => ({ body: JSON.stringify(u.includes('/alice/') ? oldNb : newNb) });
+
+test('compare two notebooks by link: different repos, shorthand and swap', () => run({
+  hash: '#/compare/links/' + encodeURIComponent(rawOf('alice', 'one', 'main', 'a/nb.ipynb')) + '/' + encodeURIComponent(rawOf('bob', 'two', 'dev', 'b/nb.ipynb')),
+  raw: twoRepos, settle: 400,
+}, async ({ page }) => {
+  const r = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent, title: document.querySelector('.nb-title').textContent, links: [...document.querySelectorAll('.toolbar a')].map(a => [a.textContent, a.getAttribute('href')]) }));
+  assert(r.labels === 'alice/one@main to bob/two@dev' && /2 modified, 1 added, 1 removed/.test(r.sum) && r.title === 'nb.ipynb', r);
+  const openA = r.links.find(l => l[0] === 'Open original'), openB = r.links.find(l => l[0] === 'Open modified'), swap = r.links.find(l => l[0] === 'Swap sides');
+  assert(openA[1] === '#/github/alice/one/blob/main/a/nb.ipynb' && openB[1] === '#/github/bob/two/blob/dev/b/nb.ipynb', r.links);
+  assert(decodeURIComponent(swap[1]).startsWith('#/compare/links/' + rawOf('bob', 'two', 'dev', 'b/nb.ipynb')), swap);
+}));
+
+test('compare by link: the form accepts GitHub links, raw links, shorthand and plain URLs', async () => {
+  const cases = [
+    ['https://github.com/alice/one/blob/main/a/nb.ipynb', 'alice/one/a/nb.ipynb', rawOf('alice', 'one', 'main', 'a/nb.ipynb'), rawOf('alice', 'one', 'HEAD', 'a/nb.ipynb')],
+    ['https://raw.githubusercontent.com/alice/one/v1/nb.ipynb', 'https://example.com/x/nb.ipynb', rawOf('alice', 'one', 'v1', 'nb.ipynb'), 'https://example.com/x/nb.ipynb'],
+    ['https://nbviewer.org/github/alice/one/blob/main/nb.ipynb', 'github.com/bob/two/blob/dev/nb.ipynb', rawOf('alice', 'one', 'main', 'nb.ipynb'), rawOf('bob', 'two', 'dev', 'nb.ipynb')],
+  ];
+  for (const [a, b, wantA, wantB] of cases) {
+    await run({ hash: '#/compare', settle: 300, raw: twoRepos, other: u => (u.includes('example.com') ? { body: JSON.stringify(newNb) } : null) }, async ({ page }) => {
+      await page.fill('#link-a', a); await page.fill('#link-b', b);
+      await page.click('#links-form button[type="submit"]');
+      await page.waitForSelector('.diffview');
+      const hash = await page.evaluate(() => decodeURIComponent(location.hash));
+      assert(hash === `#/compare/links/${wantA}/${wantB}`, { a, b, hash });
+    });
+  }
+});
+
+test('compare by link: unusable input is explained on the form', async () => {
+  const bad = [['', 'alice/one/a.ipynb', /Enter a notebook link/i], ['https://github.com/alice/one', 'alice/one/a.ipynb', /repo or folder/], ['https://gist.github.com/someone/0123abcd', 'alice/one/a.ipynb', /notebook file on GitHub/], ['ftp://example.com/a.ipynb', 'alice/one/a.ipynb', /isn't a GitHub notebook link/], ['javascript:alert(1)', 'alice/one/a.ipynb', /isn't a GitHub notebook link/]];
+  for (const [a, b, re] of bad) {
+    await run({ hash: '#/compare', settle: 300 }, async ({ page, requests }) => {
+      await page.fill('#link-a', a); await page.fill('#link-b', b);
+      await page.click('#links-form button[type="submit"]');
+      const r = await page.evaluate(() => ({ msg: document.querySelector('#compare-msg').textContent, shown: !document.querySelector('#compare-msg').hidden, hash: location.hash }));
+      assert(r.shown && re.test(r.msg) && r.hash === '#/compare' && !requests.length, { a, r });
+    });
+  }
+});
+
+test('compare by link: unreachable and missing notebooks give clear messages', async () => {
+  const l = (a, b) => `#/compare/links/${encodeURIComponent(a)}/${encodeURIComponent(b)}`;
+  await run({ hash: l(rawOf('alice', 'one', 'main', 'nb.ipynb'), rawOf('bob', 'two', 'main', 'gone.ipynb')), raw: u => (u.includes('/bob/') ? { status: 404, body: 'Not Found', type: 'text/plain' } : twoRepos(u)), settle: 300 }, async ({ page }) => {
+    const s = await state(page); assert(/Not found: bob\/two@main/.test(s.err), s);
+  });
+  await run({ hash: l(rawOf('alice', 'one', 'main', 'nb.ipynb'), 'https://blocked.example/nb.ipynb'), raw: twoRepos, other: () => ({ abort: true }), settle: 300 }, async ({ page }) => {
+    const s = await state(page); assert(/Couldn't load blocked\.example/.test(s.err) && /CORS/.test(s.errText), s);
+  });
+  await run({ hash: l('javascript:alert(1)', rawOf('alice', 'one', 'main', 'nb.ipynb')), raw: twoRepos, settle: 300 }, async ({ page, requests }) => {
+    const s = await state(page); assert(/Unsupported link/.test(s.err) && !requests.some(u => /^javascript:/i.test(u)), s);
+  });
+});
+
+test('compare dialog: a different notebook (and not both fields at once)', () => run({ hash: '#/github/alice/one/blob/main/t.ipynb', raw: twoRepos, settle: 400 }, async ({ page }) => {
+  await page.click('#compare-btn');
+  await page.fill('#compare-base', 'dev'); await page.fill('#compare-other', 'bob/two/b/nb.ipynb');
+  await page.click('#compare-form button[type="submit"]');
+  assert(await page.evaluate(() => document.querySelector('#compare-dialog').open && /only one/.test(document.querySelector('#compare-error').textContent)), 'both fields accepted');
+  await page.fill('#compare-base', '');
+  await page.click('#compare-form button[type="submit"]');
+  await page.waitForSelector('.diffview');
+  const hash = await page.evaluate(() => decodeURIComponent(location.hash));
+  assert(hash === `#/compare/links/${rawOf('bob', 'two', 'HEAD', 'b/nb.ipynb')}/${rawOf('alice', 'one', 'main', 't.ipynb')}`, hash);
 }));
 
 test('compare pages pass axe', async () => {

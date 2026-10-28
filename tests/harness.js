@@ -57,7 +57,7 @@ async function open(opts = {}) {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e.message)));
   await page.goto(base + '/' + (opts.hash || ''), { waitUntil: 'load' });
-  await page.waitForSelector(opts.waitFor || '.cell, .error-box, #big-open, .home, .listing, .diffview, .compare-slots', { timeout: opts.timeout || 20000 }).catch(() => {});
+  await page.waitForSelector(opts.waitFor || '.cell, .error-box, #big-open, .home, .listing, .diffview, .compare-slots, .compare-links', { timeout: opts.timeout || 20000 }).catch(() => {});
   if (opts.settle) await page.waitForTimeout(opts.settle);
   return { page, ctx, requests, errors, base };
 }

@@ -16,6 +16,7 @@ const CASES = [
   ['notebook', '#/github/jakevdp/PythonDataScienceHandbook/blob/master/notebooks/04.02-Simple-Scatter-Plots.ipynb', s => s.cells > 10 && !s.err],
   ['missing notebook', '#/github/jakevdp/PythonDataScienceHandbook/blob/master/notebooks/nope.ipynb', s => /not found/i.test(s.err || '')],
   ['compare a real notebook with itself', '#/compare/github/jakevdp/PythonDataScienceHandbook/master...master/notebooks/00.00-Preface.ipynb', s => /No differences/.test(s.text) || /unchanged/.test(s.text)],
+  ['compare two real notebooks from different repos', '#/compare/links/' + encodeURIComponent('https://raw.githubusercontent.com/jakevdp/PythonDataScienceHandbook/master/notebooks/00.00-Preface.ipynb') + '/' + encodeURIComponent('https://raw.githubusercontent.com/jupyter-widgets/ipywidgets/main/docs/source/examples/Widget%20Basics.ipynb'), s => /removed|added/.test(s.text)],
   ['nbviewer-style /urls/', '#/urls/raw.githubusercontent.com/jakevdp/PythonDataScienceHandbook/master/notebooks/00.00-Preface.ipynb', s => s.cells > 3],
 ];
 (async () => {
