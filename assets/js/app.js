@@ -270,6 +270,7 @@
         </form>
         <p class="hint">Takes a username, <code>owner/repo</code>, any GitHub or nbviewer link, or a direct URL to an <code>.ipynb</code> file.
           Try <a href="#/github/jakevdp/PythonDataScienceHandbook">jakevdp/PythonDataScienceHandbook</a>.</p>
+        <p class="hint">Want to see what changed? <a href="#/compare">Compare two notebooks</a>, or use Compare on any GitHub notebook.</p>
         <div class="drop" id="drop">
           Have the file already? Drop an .ipynb here or <label>choose one<input type="file" id="file-input" accept=".ipynb,application/json" hidden></label>.
         </div>
@@ -494,6 +495,7 @@
       // Binder runs the notebook in standard JupyterLab; a ref with slashes must be encoded as one segment.
       binder: isGh ? `https://mybinder.org/v2/gh/${enc(src.owner)}/${enc(src.repo)}/${encodeURIComponent(src.ref)}?urlpath=${encodeURIComponent('lab/tree/' + src.path)}` : null,
       source: isGh ? null : url,
+      compare: isGh ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path } : null,
     }, id);
   }
 
@@ -600,6 +602,7 @@
                 <button type="button" data-export="print">Print / Save as PDF</button>
               </div>
             </details>
+            ${info.compare ? '<button class="btn" id="compare-btn" type="button">Compare</button>' : ''}
             ${info.shareable ? '<button class="btn" id="copy-link" type="button">Copy link</button>' : ''}
             ${info.binder ? `<a class="btn" href="${esc(info.binder)}" target="_blank" rel="noopener">Open in Binder</a>` : ''}
             ${info.colab ? `<a class="btn" href="${esc(info.colab)}" target="_blank" rel="noopener">Open in Colab</a>` : ''}
@@ -632,6 +635,9 @@
       toggle.setAttribute('aria-pressed', String(hidden));
       toggle.textContent = hidden ? 'Show code' : 'Hide code';
     });
+
+    const cmpBtn = document.getElementById('compare-btn');
+    if (cmpBtn) cmpBtn.addEventListener('click', () => openCompare(info.compare));
 
     const toggleOut = document.getElementById('toggle-outputs');
     toggleOut.addEventListener('click', () => {
@@ -1363,6 +1369,319 @@
     return out;
   }
 
+  /* ---------- compare ---------- */
+
+  const compareHash = (owner, repo, base, head, path) =>
+    `#/compare/github/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(base)}...${encodeURIComponent(head)}/${enc(path)}`;
+  const shortRef = r => (/^[0-9a-f]{40}$/i.test(r) ? r.slice(0, 7) : r);
+
+  function parseCells(text, label) {
+    if (text.length > BIG_NB) throw new ViewError('Too large to compare', `${label} is over ${fmtSize(BIG_NB)}. Open it on its own instead.`);
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { throw new ViewError('Not a readable notebook', `${label} isn't valid JSON, so it can't be compared.`); }
+    return normalize(parsed).cells;
+  }
+
+  async function fetchCells(owner, repo, ref, path) {
+    let res;
+    try {
+      res = await fetch(`${RAW}/${enc(owner)}/${enc(repo)}/${enc(ref)}/${enc(path)}`, { signal: AbortSignal.timeout(60000) });
+    } catch (e) {
+      throw new ViewError("Couldn't load a version", e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
+    }
+    if (res.status === 404) {
+      throw new ViewError(`Not found at ${shortRef(ref)}`, `The file ${path} doesn't exist at "${ref}", or that branch, tag or commit doesn't exist. Only public repos can be compared.`);
+    }
+    if (!res.ok) throw new ViewError(`Request failed (${res.status})`, 'The server refused the request. Try again in a moment.');
+    return parseCells(await res.text(), shortRef(ref));
+  }
+
+  async function viewCompareGh(owner, repo, base, head, path, id) {
+    if (!base || !head || !path) throw new ViewError('Incomplete compare link', 'A compare link needs two versions and a notebook path.');
+    showLoading('Fetching both versions');
+    const [a, b] = await Promise.all([fetchCells(owner, repo, base, path), fetchCells(owner, repo, head, path)]);
+    if (stale(id)) return;
+    const name = path.split('/').pop();
+    renderDiff({
+      title: name,
+      crumbs: `<a href="#/">Home</a><span class="sep">/</span><a href="${hashFor(owner, repo, 'blob', head, path)}">${esc(name)}</a><span class="sep">/</span><span aria-current="page">Compare</span>`,
+      labelA: shortRef(base),
+      labelB: shortRef(head),
+      entries: nbvDiff.diffCells(a, b),
+      links: `<a class="btn" href="${hashFor(owner, repo, 'blob', head, path)}">Back to notebook</a>` +
+        `<a class="btn" href="https://github.com/${enc(owner)}/${enc(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}" target="_blank" rel="noopener">Commits on GitHub</a>`,
+    });
+  }
+
+  // Two local files, picked or dropped; nothing leaves the browser.
+  function viewComparePick() {
+    document.title = 'Compare notebooks | nbview';
+    const picks = { a: null, b: null };
+    const slot = (key, label) => `
+      <label class="drop compare-slot" id="slot-${key}">
+        <strong>${label}</strong>
+        <span class="muted" id="name-${key}">Choose or drop an .ipynb file</span>
+        <input type="file" id="file-${key}" accept=".ipynb,application/json" hidden>
+      </label>`;
+    app.innerHTML = `
+      <div class="page">
+        <nav class="crumbs"><a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span></nav>
+        <header class="page-head"><h1>Compare two notebooks</h1></header>
+        <p class="hint">Pick or drop two <code>.ipynb</code> files to see which cells were added, removed or changed. The files stay in your browser.</p>
+        <div class="compare-slots">${slot('a', 'Original')}${slot('b', 'Modified')}</div>
+        <div class="toolbar compare-go"><button class="btn primary" id="compare-go" type="button" disabled>Compare</button></div>
+        <p class="hint" id="compare-msg" role="alert" hidden></p>
+      </div>`;
+    const go = document.getElementById('compare-go');
+    const msg = document.getElementById('compare-msg');
+    const take = (key, file) => {
+      if (!file) return;
+      picks[key] = file;
+      document.getElementById(`name-${key}`).textContent = `${file.name} (${fmtSize(file.size)})`;
+      go.disabled = !(picks.a && picks.b);
+    };
+    for (const key of ['a', 'b']) {
+      const slotEl = document.getElementById(`slot-${key}`);
+      document.getElementById(`file-${key}`).addEventListener('change', e => take(key, e.target.files[0]));
+      slotEl.addEventListener('dragover', e => { e.preventDefault(); slotEl.classList.add('over'); });
+      slotEl.addEventListener('dragleave', () => slotEl.classList.remove('over'));
+      slotEl.addEventListener('drop', e => { e.preventDefault(); slotEl.classList.remove('over'); take(key, e.dataTransfer.files[0]); });
+    }
+    go.addEventListener('click', async () => {
+      msg.hidden = true;
+      try {
+        const [a, b] = await Promise.all([picks.a.text(), picks.b.text()]);
+        const cellsA = parseCells(a, picks.a.name), cellsB = parseCells(b, picks.b.name);
+        renderDiff({
+          title: `${picks.a.name} and ${picks.b.name}`,
+          crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span>',
+          labelA: picks.a.name,
+          labelB: picks.b.name,
+          entries: nbvDiff.diffCells(cellsA, cellsB),
+          links: '<a class="btn" href="#/compare">New comparison</a>',
+        });
+      } catch (e) {
+        msg.textContent = e.detail || e.message;
+        msg.hidden = false;
+      }
+    });
+  }
+
+  /* diff rendering: every piece of notebook text goes in with textContent, never as HTML */
+
+  const mk = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+  const KIND_LABEL = { added: 'Added', removed: 'Removed', modified: 'Modified', same: 'Output changed' };
+  const TYPE_LABEL = { code: 'Code cell', markdown: 'Markdown cell', raw: 'Raw cell' };
+  const FOLD_AFTER = 8; // equal lines in a row before the middle is folded away
+  const FOLD_KEEP = 3;
+
+  function diffLine(line) {
+    const row = mk('div', `dline ${line.t}`);
+    row.append(mk('span', 'dsign', line.t === 'add' ? '+' : line.t === 'del' ? '-' : ' '));
+    if (line.t !== 'eq') row.lastChild.setAttribute('aria-hidden', 'true');
+    if (line.t !== 'eq') row.append(mk('span', 'sr-only', line.t === 'add' ? 'added: ' : 'removed: '));
+    row.append(mk('span', 'dtext', line.text === '' ? ' ' : line.text));
+    return row;
+  }
+
+  // Lines for one-column view; long runs of unchanged lines fold into a button.
+  function unifiedBody(lines) {
+    const box = mk('div', 'dunified');
+    for (let i = 0; i < lines.length;) {
+      let j = i;
+      if (lines[i].t === 'eq') {
+        while (j < lines.length && lines[j].t === 'eq') j++;
+        const run = lines.slice(i, j);
+        if (run.length > FOLD_AFTER) {
+          run.slice(0, FOLD_KEEP).forEach(l => box.append(diffLine(l)));
+          const hidden = run.slice(FOLD_KEEP, run.length - FOLD_KEEP);
+          const btn = mk('button', 'dfold', `Show ${hidden.length} unchanged lines`);
+          btn.type = 'button';
+          btn.addEventListener('click', () => { btn.replaceWith(...hidden.map(diffLine)); });
+          box.append(btn);
+          run.slice(run.length - FOLD_KEEP).forEach(l => box.append(diffLine(l)));
+        } else run.forEach(l => box.append(diffLine(l)));
+      } else {
+        while (j < lines.length && lines[j].t !== 'eq') j++;
+        lines.slice(i, j).forEach(l => box.append(diffLine(l)));
+      }
+      i = j;
+    }
+    return box;
+  }
+
+  // Pairs removed and added lines side by side.
+  function splitRows(lines) {
+    const rows = [];
+    for (let i = 0; i < lines.length;) {
+      if (lines[i].t === 'eq') { rows.push({ l: lines[i], r: lines[i] }); i++; continue; }
+      const dels = [], adds = [];
+      while (i < lines.length && lines[i].t === 'del') dels.push(lines[i++]);
+      while (i < lines.length && lines[i].t === 'add') adds.push(lines[i++]);
+      for (let k = 0; k < Math.max(dels.length, adds.length); k++) rows.push({ l: dels[k] || null, r: adds[k] || null });
+    }
+    return rows;
+  }
+
+  function splitBody(lines) {
+    const box = mk('div', 'dsplit');
+    const cell = (line, side) => (line ? diffLine(line) : mk('div', `dline empty ${side}`));
+    const put = row => { box.append(cell(row.l, 'l'), cell(row.r, 'r')); };
+    const all = splitRows(lines);
+    for (let i = 0; i < all.length;) {
+      let j = i;
+      if (all[i].l && all[i].l === all[i].r) {
+        while (j < all.length && all[j].l && all[j].l === all[j].r) j++;
+        const run = all.slice(i, j);
+        if (run.length > FOLD_AFTER) {
+          run.slice(0, FOLD_KEEP).forEach(put);
+          const hidden = run.slice(FOLD_KEEP, run.length - FOLD_KEEP);
+          const btn = mk('button', 'dfold', `Show ${hidden.length} unchanged lines`);
+          btn.type = 'button';
+          btn.addEventListener('click', () => {
+            const frag = document.createDocumentFragment();
+            for (const row of hidden) frag.append(cell(row.l, 'l'), cell(row.r, 'r'));
+            btn.replaceWith(frag);
+          });
+          box.append(btn);
+          run.slice(run.length - FOLD_KEEP).forEach(put);
+        } else run.forEach(put);
+      } else {
+        while (j < all.length && !(all[j].l && all[j].l === all[j].r)) j++;
+        all.slice(i, j).forEach(put);
+      }
+      i = j;
+    }
+    return box;
+  }
+
+  const textLines = (text, t) => (text === '' ? [] : text.split('\n').map(x => ({ t, text: x })));
+
+  function renderDiff(d) {
+    const entries = d.entries;
+    const sum = nbvDiff.summarize(entries);
+    const saved = store.get('nbv.diffLayout');
+    const state = { layout: saved === 'split' || saved === 'unified' ? saved : (matchMedia('(min-width: 900px)').matches ? 'split' : 'unified'), outputs: false };
+
+    document.title = `Compare ${d.title} | nbview`;
+    app.innerHTML = `
+      <article class="nb diffview">
+        <nav class="crumbs">${d.crumbs}</nav>
+        <header class="nb-head">
+          <h1 class="nb-title">${esc(d.title).replace(/([_.-])/g, '$1<wbr>')}</h1>
+          <div class="toolbar">
+            <button class="btn" id="d-split" type="button" aria-pressed="false">Side by side</button>
+            <button class="btn" id="d-unified" type="button" aria-pressed="false">Unified</button>
+            <button class="btn" id="d-outputs" type="button" aria-pressed="false">Show output changes</button>
+            <button class="btn" id="d-expand" type="button">Expand unchanged</button>
+            <button class="btn" id="d-prev" type="button">Previous change</button>
+            <button class="btn" id="d-next" type="button">Next change</button>
+            ${d.links || ''}
+          </div>
+          <p class="nb-meta"><span class="dlabels"></span><span id="d-summary"></span><span id="d-pos" aria-live="polite"></span></p>
+        </header>
+        <div id="d-body" class="diff"></div>
+      </article>`;
+    const labels = app.querySelector('.dlabels');
+    labels.append(mk('span', 'dl-del', d.labelA), document.createTextNode(' to '), mk('span', 'dl-add', d.labelB));
+
+    const body = document.getElementById('d-body');
+    let changes = [], at = -1;
+
+    const isChange = e => e.kind !== 'same' || (state.outputs && e.outputsChanged);
+
+    const sourceLines = e => (e.kind === 'added' ? textLines(e.b.text, 'add') : e.kind === 'removed' ? textLines(e.a.text, 'del') : e.kind === 'modified' ? e.lines : []);
+    const outputLinesOf = e => {
+      if (e.kind === 'added') return textLines(e.b.outputs, 'add');
+      if (e.kind === 'removed') return textLines(e.a.outputs, 'del');
+      return e.outputsChanged ? e.outputLines : [];
+    };
+    const draw = lines => (state.layout === 'split' ? splitBody(lines) : unifiedBody(lines));
+
+    const changeBox = e => {
+      const box = mk('section', `dcell dcell-${e.kind}`);
+      box.dataset.change = '1';
+      box.tabIndex = -1;
+      const head = mk('header', 'dcell-head');
+      const badge = e.kind === 'same' ? KIND_LABEL.same : KIND_LABEL[e.kind];
+      head.append(mk('span', `dbadge ${e.kind}`, badge), mk('span', 'dtype', TYPE_LABEL[(e.b || e.a).type] || 'Cell'));
+      const where = e.kind === 'added' ? `new cell ${e.b.index + 1}` : e.kind === 'removed' ? `old cell ${e.a.index + 1}` : e.a.index === e.b.index ? `cell ${e.a.index + 1}` : `cell ${e.a.index + 1} to ${e.b.index + 1}`;
+      head.append(mk('span', 'muted', where));
+      box.append(head);
+      const src = sourceLines(e);
+      if (src.length) box.append(draw(src));
+      if (state.outputs) {
+        const out = outputLinesOf(e);
+        if (out.length) { box.append(mk('div', 'dout-label', 'Output')); box.append(draw(out)); }
+      }
+      return box;
+    };
+
+    const groupBox = run => {
+      const det = mk('details', 'dgroup');
+      det.append(mk('summary', null, `${run.length} unchanged cell${run.length === 1 ? '' : 's'}`));
+      let built = false;
+      det.addEventListener('toggle', () => {
+        if (!det.open || built) return;
+        built = true;
+        for (const e of run) {
+          const c = mk('div', 'dsame');
+          c.append(mk('div', 'muted dsame-head', `${TYPE_LABEL[e.b.type] || 'Cell'}, cell ${e.b.index + 1}`));
+          c.append(mk('pre', 'dsame-text', e.b.text.length > 20000 ? e.b.text.slice(0, 20000) + '\n...' : e.b.text));
+          det.append(c);
+        }
+      });
+      return det;
+    };
+
+    const paint = () => {
+      body.replaceChildren();
+      let run = [];
+      const flush = () => { if (run.length) { body.append(groupBox(run)); run = []; } };
+      for (const e of entries) {
+        if (isChange(e)) { flush(); body.append(changeBox(e)); } else run.push(e);
+      }
+      flush();
+      changes = [...body.querySelectorAll('[data-change]')];
+      at = -1;
+      document.getElementById('d-pos').textContent = '';
+      document.getElementById('d-split').setAttribute('aria-pressed', String(state.layout === 'split'));
+      document.getElementById('d-unified').setAttribute('aria-pressed', String(state.layout === 'unified'));
+      document.getElementById('d-outputs').setAttribute('aria-pressed', String(state.outputs));
+      const parts = [];
+      if (sum.modified) parts.push(`${sum.modified} modified`);
+      if (sum.added) parts.push(`${sum.added} added`);
+      if (sum.removed) parts.push(`${sum.removed} removed`);
+      let text = parts.length ? parts.join(', ') + ` (${sum.same} unchanged)` : `No differences in cell source (${sum.same} cells)`;
+      if (!state.outputs && sum.outputsChanged) text += `. Outputs differ in ${sum.outputsChanged} cell${sum.outputsChanged === 1 ? '' : 's'}; use Show output changes to see them`;
+      document.getElementById('d-summary').textContent = text;
+      if (!entries.length) body.append(mk('p', 'empty', 'Both notebooks are empty.'));
+    };
+
+    const go = step => {
+      if (!changes.length) return;
+      at = (at + step + changes.length) % changes.length;
+      const target = changes[at];
+      target.scrollIntoView({ block: 'start' });
+      target.focus({ preventScroll: true });
+      document.getElementById('d-pos').textContent = `Change ${at + 1} of ${changes.length}`;
+    };
+
+    const setLayout = l => { state.layout = l; store.set('nbv.diffLayout', l); paint(); };
+    document.getElementById('d-split').addEventListener('click', () => setLayout('split'));
+    document.getElementById('d-unified').addEventListener('click', () => setLayout('unified'));
+    document.getElementById('d-outputs').addEventListener('click', () => { state.outputs = !state.outputs; paint(); });
+    document.getElementById('d-expand').addEventListener('click', () => body.querySelectorAll('details.dgroup').forEach(x => { x.open = true; }));
+    document.getElementById('d-prev').addEventListener('click', () => go(-1));
+    document.getElementById('d-next').addEventListener('click', () => go(1));
+    paint();
+  }
+
   /* ---------- router ---------- */
 
   async function route() {
@@ -1385,6 +1704,14 @@
       }
 
       if (parts[0] === 'gist' && parts[1]) return await viewGist(parts[1], id);
+
+      if (parts[0] === 'compare') {
+        if (!parts[1]) return viewComparePick();
+        if (parts[1] === 'github' && parts[2] && parts[3] && parts[4]) {
+          const cut = parts[4].indexOf('...');
+          return await viewCompareGh(parts[2], parts[3], cut < 0 ? '' : parts[4].slice(0, cut), cut < 0 ? '' : parts[4].slice(cut + 3), parts.slice(5).join('/'), id);
+        }
+      }
 
       if (parts[0] === 'github' && parts[1]) {
         const [, owner, repo, kind, ref, ...rest] = parts;
@@ -1496,6 +1823,69 @@
     }
     if (app.querySelector('.error-box')) route();
   });
+  // Compare dialog: choose the version to compare the open notebook with.
+  const cmpDlg = document.getElementById('compare-dialog');
+  const cmpBase = document.getElementById('compare-base');
+  const cmpList = document.getElementById('compare-commits');
+  const cmpErr = document.getElementById('compare-error');
+  let cmpCtx = null;
+
+  function openCompare(c) {
+    cmpCtx = c;
+    document.getElementById('compare-file').textContent = c.path;
+    document.getElementById('compare-head').textContent = shortRef(c.ref);
+    cmpBase.value = '';
+    cmpList.replaceChildren();
+    cmpErr.hidden = true;
+    document.getElementById('compare-load').disabled = false;
+    cmpDlg.showModal();
+    cmpBase.focus();
+  }
+
+  document.getElementById('compare-load').addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    cmpErr.hidden = true;
+    cmpList.textContent = 'Loading...';
+    try {
+      const { owner, repo, ref, path } = cmpCtx;
+      const items = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(ref)}&per_page=30`);
+      if (!Array.isArray(items)) throw new ViewError('Unexpected answer from GitHub', 'The commit list was not in the expected format.');
+      cmpList.replaceChildren();
+      for (const it of items) {
+        if (!it || typeof it.sha !== 'string' || !/^[0-9a-f]{40}$/i.test(it.sha)) continue;
+        const c = it.commit || {};
+        const when = c.author && typeof c.author.date === 'string' ? c.author.date.slice(0, 10) : '';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'commit-item';
+        b.textContent = `${it.sha.slice(0, 7)}  ${clip(String(c.message || '').split('\n')[0], 70)}  ${when}`;
+        b.addEventListener('click', () => { cmpBase.value = it.sha; cmpBase.focus(); });
+        cmpList.append(b);
+      }
+      if (!cmpList.children.length) cmpList.textContent = 'No earlier commits found for this file.';
+    } catch (err) {
+      cmpList.replaceChildren();
+      cmpErr.textContent = err.detail || err.message || 'Could not load commits.';
+      cmpErr.hidden = false;
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('compare-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const base = cmpBase.value.trim();
+    if (!base || /\s|\.\./.test(base)) {
+      cmpErr.textContent = 'Enter a branch, tag or commit with no spaces.';
+      cmpErr.hidden = false;
+      cmpBase.focus();
+      return;
+    }
+    cmpDlg.close();
+    location.hash = compareHash(cmpCtx.owner, cmpCtx.repo, base, cmpCtx.ref, cmpCtx.path);
+  });
+  document.getElementById('compare-cancel').addEventListener('click', () => cmpDlg.close());
+
   // The toolbar menus (Contents, Export) close on an outside click or Escape.
   document.addEventListener('click', e => {
     for (const m of document.querySelectorAll('.menu[open]')) if (!m.contains(e.target)) m.open = false;

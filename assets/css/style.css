@@ -591,3 +591,58 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .toc-list .toc-l2 { padding-left: 1.2rem; }
 .toc-list .toc-l3 { padding-left: 2rem; }
 .toc-list .toc-l4 { padding-left: 2.8rem; color: var(--muted); }
+
+/* Compare */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.muted { color: var(--muted); }
+#compare-dialog { width: min(34rem, 94vw); }
+#compare-dialog label { display: block; font: 13px var(--mono); margin: 0 0 0.35rem; }
+.commit-list { max-height: 14rem; overflow-y: auto; margin-top: 0.6rem; display: flex; flex-direction: column; }
+.commit-item { font: 12px var(--mono); text-align: left; background: none; color: var(--ink); border: 0; border-radius: 3px; padding: 0.4rem 0.5rem; cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; }
+.commit-item:hover, .commit-item:focus-visible { background: var(--code-bg); }
+#compare-load { margin-top: 0.75rem; }
+
+.compare-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+.compare-slot { display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; text-align: center; }
+.compare-slot.over { border-color: var(--in); }
+.compare-go { justify-content: flex-start; }
+
+.diffview .nb-meta { gap: 0.4rem 1.25rem; }
+.dl-del { color: var(--a-red); font-weight: 600; }
+.dl-add { color: light-dark(#1A7F37, #56D364); font-weight: 600; }
+.diff { margin-top: 1.5rem; font: 13px/1.45 var(--nb-mono); }
+.dcell { border: 1px solid var(--nb-input-bd); border-radius: 3px; margin-bottom: 0.9rem; overflow: hidden; }
+.dcell:focus-visible { outline: 2px solid var(--in); outline-offset: 1px; }
+.dcell-head { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: baseline; padding: 0.35rem 0.6rem; background: var(--nb-input-bg); border-bottom: 1px solid var(--nb-input-bd); font: 12px var(--mono); }
+.dbadge { font-weight: 700; padding: 0 0.4rem; border-radius: 3px; border: 1px solid currentColor; }
+.dbadge.added { color: light-dark(#1A7F37, #56D364); }
+.dbadge.removed { color: light-dark(#CF222E, #FF7B72); }
+.dbadge.modified { color: light-dark(#9A6700, #E3B341); }
+.dbadge.same { color: var(--muted); }
+.dline { display: flex; min-width: 0; white-space: pre; }
+.dline .dsign { flex: none; width: 1.6em; text-align: center; user-select: none; color: var(--muted); }
+.dline .dtext { flex: 1; min-width: 0; overflow-x: auto; padding-right: 0.5rem; }
+.dline.add { background: light-dark(#E6FFEC, #12261A); }
+.dline.add .dsign { color: light-dark(#1A7F37, #56D364); font-weight: 700; }
+.dline.del { background: light-dark(#FFEBE9, #2D1517); }
+.dline.del .dsign { color: light-dark(#CF222E, #FF7B72); font-weight: 700; }
+.dline.empty { background: var(--nb-input-bg); }
+.dsplit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.dsplit > .dline:nth-child(odd) { border-right: 1px solid var(--nb-input-bd); }
+.dfold { grid-column: 1 / -1; font: 12px var(--mono); color: var(--in); background: var(--nb-input-bg); border: 0; border-top: 1px solid var(--nb-input-bd); border-bottom: 1px solid var(--nb-input-bd); padding: 0.25rem; cursor: pointer; width: 100%; }
+.dunified .dfold { display: block; }
+.dout-label { font: 12px var(--mono); color: var(--muted); padding: 0.3rem 0.6rem; border-top: 1px solid var(--nb-input-bd); background: var(--nb-input-bg); }
+.dgroup { margin-bottom: 0.9rem; border: 1px dashed var(--nb-input-bd); border-radius: 3px; }
+.dgroup > summary { cursor: pointer; padding: 0.4rem 0.7rem; font: 12px var(--mono); color: var(--muted); }
+.dsame { padding: 0.3rem 0.7rem 0.6rem; }
+.dsame-head { font: 12px var(--mono); }
+.dsame-text { margin: 0.2rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 var(--nb-mono); color: var(--nb-text); }
+
+@media (max-width: 700px) {
+  .compare-slots { grid-template-columns: 1fr; }
+  .dsplit { display: block; }
+  .dsplit > .dline.empty { display: none; }
+  .dsplit > .dline:nth-child(odd) { border-right: 0; }
+}
+@media print { .diffview .toolbar { display: none !important; } }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }

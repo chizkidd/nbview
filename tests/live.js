@@ -15,6 +15,7 @@ const CASES = [
   ['file that is not a notebook', '#/github/chizkidd/nbview/blob/main/README.md', s => /tree\/main/.test(s.hash) && s.listing > 3],
   ['notebook', '#/github/jakevdp/PythonDataScienceHandbook/blob/master/notebooks/04.02-Simple-Scatter-Plots.ipynb', s => s.cells > 10 && !s.err],
   ['missing notebook', '#/github/jakevdp/PythonDataScienceHandbook/blob/master/notebooks/nope.ipynb', s => /not found/i.test(s.err || '')],
+  ['compare a real notebook with itself', '#/compare/github/jakevdp/PythonDataScienceHandbook/master...master/notebooks/00.00-Preface.ipynb', s => /No differences/.test(s.text) || /unchanged/.test(s.text)],
   ['nbviewer-style /urls/', '#/urls/raw.githubusercontent.com/jakevdp/PythonDataScienceHandbook/master/notebooks/00.00-Preface.ipynb', s => s.cells > 3],
 ];
 (async () => {
@@ -43,7 +44,7 @@ const CASES = [
     await page.goto(base + '/' + hash);
     await page.waitForSelector('.cell, .error-box, .listing, .page h1', { timeout: 25000 }).catch(() => {});
     await page.waitForTimeout(1500);
-    const s = await page.evaluate(() => ({ cells: document.querySelectorAll('.cell').length, listing: document.querySelectorAll('.listing li').length, err: (document.querySelector('.error-box h1') || {}).textContent, errText: (document.querySelector('.error-box p') || {}).textContent, text: document.body.innerText.slice(0, 200), hash: location.hash }));
+    const s = await page.evaluate(() => ({ cells: document.querySelectorAll('.cell').length, listing: document.querySelectorAll('.listing li').length, err: (document.querySelector('.error-box h1') || {}).textContent, errText: (document.querySelector('.error-box p') || {}).textContent, text: document.body.innerText.slice(0, 400), hash: location.hash }));
     const ok = check(s);
     if (!ok) failed++;
     console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}  ${ok ? '' : JSON.stringify({ ...s, text: s.text.slice(0, 100) })}`);
