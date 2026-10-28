@@ -1408,12 +1408,84 @@
       labelA: shortRef(base),
       labelB: shortRef(head),
       entries: nbvDiff.diffCells(a, b),
-      links: `<a class="btn" href="${hashFor(owner, repo, 'blob', head, path)}">Back to notebook</a>` +
+      links: `<a class="btn" href="${compareHash(owner, repo, head, base, path)}">Swap versions</a>` +
+        `<a class="btn" href="${hashFor(owner, repo, 'blob', head, path)}">Back to notebook</a>` +
         `<a class="btn" href="https://github.com/${enc(owner)}/${enc(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}" target="_blank" rel="noopener">Commits on GitHub</a>`,
     });
   }
 
-  // Two local files, picked or dropped; nothing leaves the browser.
+  const GH_OWNER = /^[A-Za-z0-9-]+$/;
+  const GH_REPO = /^[A-Za-z0-9_.-]+$/;
+  const rawUrl = (owner, repo, ref, path) => `${RAW}/${enc(owner)}/${enc(repo)}/${enc(ref)}/${enc(path)}`;
+  const compareLinksHash = (a, b) => `#/compare/links/${encodeURIComponent(a)}/${encodeURIComponent(b)}`;
+  const RAW_GH = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/;
+
+  // Turns what someone typed (GitHub link, raw link, owner/repo/path.ipynb or any notebook URL) into a fetchable http(s) URL.
+  function notebookUrl(input) {
+    const text = String(input || '').trim();
+    if (!text) throw new ViewError('A link is missing', 'Enter a notebook link, or owner/repo/path/to/notebook.ipynb, for both notebooks.');
+    let m = text.match(/^([^/\s:]+)\/([^/\s:]+)\/(.+\.ipynb)$/i);
+    if (m && GH_OWNER.test(m[1]) && GH_REPO.test(m[2]) && !/^(blob|tree)\//.test(m[3])) return rawUrl(m[1], m[2], 'HEAD', safeDecode(m[3]));
+    if ((/^[a-z][a-z0-9+.-]*:\/\//i.test(text) && !/^https?:/i.test(text)) || /^(javascript|data|file|vbscript):/i.test(text)) {
+      throw new ViewError("That link can't be used", `"${clip(text, 80)}" isn't a GitHub notebook link or an http(s) link to an .ipynb file.`);
+    }
+    const hash = parseInput(text);
+    const parts = hash ? hash.replace(/^#\//, '').split('/').map(safeDecode) : [];
+    if (parts[0] === 'github') {
+      const [, owner, repo, kind, ref, ...rest] = parts;
+      const path = rest.join('/');
+      if (kind === 'blob' && ref && isNbName(path)) return rawUrl(owner, repo, ref, path);
+      throw new ViewError('That is not a notebook link', `"${clip(text, 80)}" points to a repo or folder. Use a link to one .ipynb file, or owner/repo/path/to/notebook.ipynb.`);
+    }
+    if (parts[0] === 'gist') throw new ViewError("Gists can't be compared yet", 'Use a link to the notebook file on GitHub (raw or blob), or download it and use Two files.');
+    if (parts[0] === 'url' && /^https?:\/\//i.test(parts[1] || '')) return parts[1];
+    throw new ViewError("That link can't be used", `"${clip(text, 80)}" isn't a GitHub notebook link or an http(s) link to an .ipynb file.`);
+  }
+
+  const labelOf = url => {
+    const m = url.match(RAW_GH);
+    if (m) return `${safeDecode(m[1])}/${safeDecode(m[2])}@${safeDecode(m[3])}`;
+    try { const u = new URL(url); return `${u.host}${u.pathname.length > 40 ? '/...' + u.pathname.slice(-30) : u.pathname}`; } catch { return clip(url, 40); }
+  };
+  const fileNameOf = url => { try { return safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'; } catch { return 'notebook.ipynb'; } };
+  const openLinkOf = url => {
+    const m = url.match(RAW_GH);
+    return m ? hashFor(safeDecode(m[1]), safeDecode(m[2]), 'blob', safeDecode(m[3]), safeDecode(m[4])) : null;
+  };
+
+  async function fetchUrlCells(url) {
+    const label = labelOf(url);
+    if (!/^https?:\/\//i.test(url)) throw new ViewError('Unsupported link', 'Only http and https notebook links can be compared.');
+    let res;
+    try {
+      res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+    } catch (e) {
+      throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.'
+        : RAW_GH.test(url) ? 'The network request failed. Check your connection and try again.'
+        : "The site hosting this file doesn't let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
+    }
+    if (res.status === 404) throw new ViewError(`Not found: ${label}`, 'Check the link, branch and path. Only public repos can be compared.');
+    if (!res.ok) throw new ViewError(`Request failed (${res.status})`, `${label} could not be loaded. Try again in a moment.`);
+    return parseCells(await res.text(), label);
+  }
+
+  async function viewCompareLinks(urlA, urlB, id) {
+    showLoading('Fetching both notebooks');
+    const [a, b] = await Promise.all([fetchUrlCells(urlA), fetchUrlCells(urlB)]);
+    if (stale(id)) return;
+    const nameA = fileNameOf(urlA), nameB = fileNameOf(urlB);
+    const open = (url, word) => { const h = openLinkOf(url); return h ? `<a class="btn" href="${h}">Open ${word}</a>` : `<a class="btn" href="#/url/${encodeURIComponent(url)}">Open ${word}</a>`; };
+    renderDiff({
+      title: nameA === nameB ? nameA : `${nameA} and ${nameB}`,
+      crumbs: '<a href="#/">Home</a><span class="sep">/</span><a href="#/compare">Compare</a><span class="sep">/</span><span aria-current="page">Two notebooks</span>',
+      labelA: labelOf(urlA),
+      labelB: labelOf(urlB),
+      entries: nbvDiff.diffCells(a, b),
+      links: `<a class="btn" href="${compareLinksHash(urlB, urlA)}">Swap sides</a>${open(urlA, 'original')}${open(urlB, 'modified')}<a class="btn" href="#/compare">New comparison</a>`,
+    });
+  }
+
+  // Pick two notebooks: local files (never leave the browser) or two links.
   function viewComparePick() {
     document.title = 'Compare notebooks | nbview';
     const picks = { a: null, b: null };
@@ -1427,11 +1499,48 @@
       <div class="page">
         <nav class="crumbs"><a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span></nav>
         <header class="page-head"><h1>Compare two notebooks</h1></header>
-        <p class="hint">Pick or drop two <code>.ipynb</code> files to see which cells were added, removed or changed. The files stay in your browser.</p>
-        <div class="compare-slots">${slot('a', 'Original')}${slot('b', 'Modified')}</div>
-        <div class="toolbar compare-go"><button class="btn primary" id="compare-go" type="button" disabled>Compare</button></div>
-        <p class="hint" id="compare-msg" role="alert" hidden></p>
+        <div class="toolbar compare-modes">
+          <button class="btn" id="mode-links" type="button" aria-pressed="true">Two links</button>
+          <button class="btn" id="mode-files" type="button" aria-pressed="false">Two files</button>
+        </div>
+        <section id="panel-links">
+          <p class="hint">Paste a link to each notebook, or <code>owner/repo/path/to/notebook.ipynb</code>. They can be in different repos or branches. Public repos only.</p>
+          <form id="links-form" class="compare-links">
+            <label for="link-a">Original</label>
+            <input id="link-a" type="text" placeholder="https://github.com/owner/repo/blob/main/notebook.ipynb" autocomplete="off" spellcheck="false">
+            <label for="link-b">Modified</label>
+            <input id="link-b" type="text" placeholder="owner/other-repo/notebooks/notebook.ipynb" autocomplete="off" spellcheck="false">
+            <div class="toolbar compare-go"><button class="btn primary" type="submit">Compare</button></div>
+          </form>
+        </section>
+        <section id="panel-files" hidden>
+          <p class="hint">Pick or drop two <code>.ipynb</code> files to see which cells were added, removed or changed. The files stay in your browser.</p>
+          <div class="compare-slots">${slot('a', 'Original')}${slot('b', 'Modified')}</div>
+          <div class="toolbar compare-go"><button class="btn primary" id="compare-go" type="button" disabled>Compare</button></div>
+        </section>
+        <p class="hint form-error" id="compare-msg" role="alert" hidden></p>
       </div>`;
+    const setMode = mode => {
+      document.getElementById('panel-links').hidden = mode !== 'links';
+      document.getElementById('panel-files').hidden = mode !== 'files';
+      document.getElementById('mode-links').setAttribute('aria-pressed', String(mode === 'links'));
+      document.getElementById('mode-files').setAttribute('aria-pressed', String(mode === 'files'));
+      document.getElementById('compare-msg').hidden = true;
+    };
+    document.getElementById('mode-links').addEventListener('click', () => setMode('links'));
+    document.getElementById('mode-files').addEventListener('click', () => setMode('files'));
+    document.getElementById('links-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const note = document.getElementById('compare-msg');
+      try {
+        const a = notebookUrl(document.getElementById('link-a').value), b = notebookUrl(document.getElementById('link-b').value);
+        note.hidden = true;
+        location.hash = compareLinksHash(a, b);
+      } catch (err) {
+        note.textContent = err.detail || err.message;
+        note.hidden = false;
+      }
+    });
     const go = document.getElementById('compare-go');
     const msg = document.getElementById('compare-msg');
     const take = (key, file) => {
@@ -1707,6 +1816,7 @@
 
       if (parts[0] === 'compare') {
         if (!parts[1]) return viewComparePick();
+        if (parts[1] === 'links' && parts[2] && parts[3]) return await viewCompareLinks(parts[2], parts[3], id);
         if (parts[1] === 'github' && parts[2] && parts[3] && parts[4]) {
           const cut = parts[4].indexOf('...');
           return await viewCompareGh(parts[2], parts[3], cut < 0 ? '' : parts[4].slice(0, cut), cut < 0 ? '' : parts[4].slice(cut + 3), parts.slice(5).join('/'), id);
@@ -1826,6 +1936,7 @@
   // Compare dialog: choose the version to compare the open notebook with.
   const cmpDlg = document.getElementById('compare-dialog');
   const cmpBase = document.getElementById('compare-base');
+  const cmpOther = document.getElementById('compare-other');
   const cmpList = document.getElementById('compare-commits');
   const cmpErr = document.getElementById('compare-error');
   let cmpCtx = null;
@@ -1835,6 +1946,7 @@
     document.getElementById('compare-file').textContent = c.path;
     document.getElementById('compare-head').textContent = shortRef(c.ref);
     cmpBase.value = '';
+    cmpOther.value = '';
     cmpList.replaceChildren();
     cmpErr.hidden = true;
     document.getElementById('compare-load').disabled = false;
@@ -1875,12 +1987,18 @@
   document.getElementById('compare-form').addEventListener('submit', e => {
     e.preventDefault();
     const base = cmpBase.value.trim();
-    if (!base || /\s|\.\./.test(base)) {
-      cmpErr.textContent = 'Enter a branch, tag or commit with no spaces.';
-      cmpErr.hidden = false;
-      cmpBase.focus();
+    const other = cmpOther.value.trim();
+    const fail = (msg, field) => { cmpErr.textContent = msg; cmpErr.hidden = false; field.focus(); };
+    if (base && other) return fail('Fill in only one of the two fields.', cmpOther);
+    if (other) {
+      try {
+        const url = notebookUrl(other);
+        cmpDlg.close();
+        location.hash = compareLinksHash(url, rawUrl(cmpCtx.owner, cmpCtx.repo, cmpCtx.ref, cmpCtx.path));
+      } catch (err) { fail(err.detail || err.message, cmpOther); }
       return;
     }
+    if (!base || /\s|\.\./.test(base)) return fail('Enter a branch, tag or commit with no spaces, or another notebook.', cmpBase);
     cmpDlg.close();
     location.hash = compareHash(cmpCtx.owner, cmpCtx.repo, base, cmpCtx.ref, cmpCtx.path);
   });
