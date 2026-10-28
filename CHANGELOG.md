@@ -2,6 +2,15 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+### Added
+- **Contents** menu on notebooks that have markdown headings (levels 1 to 4): click an entry to jump to that heading. It fills in as the notebook renders.
+- **Hide outputs** toggle next to Hide code. The HTML export keeps the choice.
+
+### Changed
+- Escape or a click elsewhere closes any open toolbar menu.
+
 ## [0.5.1] - 2026-10-22
 
 Hardening pass from the adversarial QA report, self-hosted fonts, and cross-browser tests.

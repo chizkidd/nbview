@@ -214,6 +214,7 @@
 
   // Recents live in localStorage, which anything on this origin can edit, so every read is checked.
   const MAX_RECENT_HASH = 2000;
+  const MAX_TOC = 500; // entries in the Contents menu
   const clip = (v, n) => { const t = String(v == null ? '' : v); return t.length > n ? t.slice(0, n - 3) + '...' : t; };
 
   function getRecents() {
@@ -573,7 +574,7 @@
     mathMs = 0;
     mathCount = 0;
     document.title = `${info.name} | nbview`;
-    document.body.classList.remove('hide-code');
+    document.body.classList.remove('hide-code', 'hide-outputs');
 
     app.innerHTML = `
       <article class="nb">
@@ -581,7 +582,12 @@
         <header class="nb-head">
           <h1 class="nb-title">${esc(info.name).replace(/([_.-])/g, '$1<wbr>')}</h1>
           <div class="toolbar">
+            <details class="menu menu-left" id="toc-menu" hidden>
+              <summary class="btn">Contents</summary>
+              <div class="menu-list toc-list" id="toc-list"></div>
+            </details>
             <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
+            <button class="btn" id="toggle-outputs" type="button" aria-pressed="false">Hide outputs</button>
             <button class="btn" id="toggle-lines" type="button" aria-pressed="false">Line numbers</button>
             <button class="btn" id="toggle-wrap" type="button" aria-pressed="false">Wrap lines</button>
             <a class="btn" id="dl">Download</a>
@@ -627,6 +633,32 @@
       toggle.textContent = hidden ? 'Show code' : 'Hide code';
     });
 
+    const toggleOut = document.getElementById('toggle-outputs');
+    toggleOut.addEventListener('click', () => {
+      const hidden = document.body.classList.toggle('hide-outputs');
+      toggleOut.setAttribute('aria-pressed', String(hidden));
+      toggleOut.textContent = hidden ? 'Show outputs' : 'Hide outputs';
+    });
+
+    // Contents menu: filled with the markdown headings as cells render.
+    const tocMenu = document.getElementById('toc-menu');
+    const tocList = document.getElementById('toc-list');
+    let tocCount = 0;
+    const addHeadings = el => {
+      for (const h of el.querySelectorAll('h1, h2, h3, h4')) {
+        const text = clip((h.textContent || '').replace(/\s+/g, ' ').trim(), 80);
+        if (!text || tocCount >= MAX_TOC) continue;
+        tocCount++;
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = `toc-item toc-l${h.tagName[1]}`;
+        b.textContent = text;
+        b.addEventListener('click', () => { tocMenu.open = false; h.scrollIntoView({ block: 'start' }); });
+        tocList.append(b);
+      }
+      if (tocCount) tocMenu.hidden = false;
+    };
+
     for (const [btnId, cls, key] of [['toggle-lines', 'line-numbers', 'lines'], ['toggle-wrap', 'wrap-code', 'wrap']]) {
       const btn = document.getElementById(btnId);
       const apply = on => { document.body.classList.toggle(cls, on); btn.setAttribute('aria-pressed', String(on)); };
@@ -651,7 +683,10 @@
         if (stale(id)) return;
         try {
           const el = renderCell(cells[i], ctx, lang);
-          if (el) host.append(el);
+          if (el) {
+            host.append(el);
+            if (cells[i].cell_type === 'markdown') addHeadings(el);
+          }
         } catch (err) {
           console.error('Cell failed to render', i, err);
           host.append(failedCell(cells[i]));
@@ -704,7 +739,7 @@
         note.textContent = 'Large output omitted.';
         big.replaceWith(note);
       }
-      const keep = ['hide-code', 'line-numbers', 'wrap-code'].filter(c => document.body.classList.contains(c)).join(' ');
+      const keep = ['hide-code', 'hide-outputs', 'line-numbers', 'wrap-code'].filter(c => document.body.classList.contains(c)).join(' ');
       return saveFile(base + '.html', window.nbvExport.toHtml({ name: nbState.name, cellsHtml: host.innerHTML, css: pageCss(), origin: location.origin, bodyClass: keep }), 'text/html');
     }
   }
@@ -1461,14 +1496,13 @@
     }
     if (app.querySelector('.error-box')) route();
   });
-  // The Export menu closes on an outside click or Escape.
+  // The toolbar menus (Contents, Export) close on an outside click or Escape.
   document.addEventListener('click', e => {
-    const m = document.getElementById('export-menu');
-    if (m && m.open && !m.contains(e.target)) m.open = false;
+    for (const m of document.querySelectorAll('.menu[open]')) if (!m.contains(e.target)) m.open = false;
   });
   document.addEventListener('keydown', e => {
-    const m = document.getElementById('export-menu');
-    if (e.key === 'Escape' && m && m.open) { m.open = false; m.querySelector('summary').focus(); }
+    if (e.key !== 'Escape') return;
+    for (const m of document.querySelectorAll('.menu[open]')) { m.open = false; m.querySelector('summary').focus(); }
   });
 
   // Theme toggle: follows the system until the user picks one, then remembers it.
