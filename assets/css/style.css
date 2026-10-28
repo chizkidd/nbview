@@ -645,3 +645,4 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
   .dsplit > .dline:nth-child(odd) { border-right: 0; }
 }
 @media print { .diffview .toolbar { display: none !important; } }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
