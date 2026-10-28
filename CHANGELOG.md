@@ -2,7 +2,9 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
-## [Unreleased]
+## [0.6.0] - 2026-10-28
+
+Find your way around long notebooks, and hide outputs when you only want the code.
 
 ### Added
 - **Contents** menu on notebooks that have markdown headings (levels 1 to 4): click an entry to jump to that heading. It fills in as the notebook renders.
