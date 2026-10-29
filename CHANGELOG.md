@@ -2,6 +2,11 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+### Added
+- **Link previews.** Links like `nbview.org/github/owner/repo/blob/main/notebook.ipynb` now show a card with the notebook's file name and repo when pasted into Slack, Reddit, X, Discord and similar. The card is built from the address only: the server never fetches or reads the notebook. "Copy link" and the cell `#` button copy this form for GitHub notebooks. People opening the link are redirected to the viewer as before.
+
 ## [0.10.0] - 2026-10-29
 
 Share a link to one cell, and run Plotly charts safely.
