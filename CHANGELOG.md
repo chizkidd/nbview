@@ -2,7 +2,7 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
-## [Unreleased]
+## [0.10.0] - 2026-10-29
 
 Share a link to one cell, and run Plotly charts safely.
 
