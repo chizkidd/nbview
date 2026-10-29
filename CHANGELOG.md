@@ -2,7 +2,9 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
-## [Unreleased]
+## [0.9.0] - 2026-10-29
+
+More ways into Compare, and word-level highlights.
 
 ### Added
 - **Changed words are highlighted** inside changed lines in Compare, so a one-word edit stands out in a long line.
