@@ -51,6 +51,7 @@ nbview/
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
+├── llms.txt             plain-language summary and link formats for AI agents (llmstxt.org)
 ├── sitemap.xml          the home page
 ├── .well-known/
 │   └── security.txt     how to report a security problem

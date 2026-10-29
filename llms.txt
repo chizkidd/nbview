@@ -1,0 +1,24 @@
+# nbview
+
+> nbview is a free, open-source Jupyter notebook viewer for public GitHub repos, gists and direct .ipynb links. Notebooks are fetched and rendered in the reader's browser; there is no nbview server that sees them. It is an independent alternative to nbviewer, not affiliated with Project Jupyter.
+
+## How to link to a notebook
+
+- GitHub notebook: https://nbview.org/github/{owner}/{repo}/blob/{branch}/{path}.ipynb
+- GitHub repo or folder: https://nbview.org/github/{owner}/{repo}
+- Gist: https://nbview.org/gist/{user}/{id}
+- Any direct .ipynb URL that allows cross-origin reads: https://nbview.org/#/url/{url}
+- Replace nbviewer.org with nbview.org in an existing nbviewer link and it works.
+- Add ?cell=N to a notebook link to open it scrolled to cell N.
+
+## Docs
+
+- [Home page and viewer](https://nbview.org/): paste a repo, notebook link or gist
+- [README](https://github.com/chizkidd/nbview#readme): features, limits and privacy
+- [Changelog](https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md): what changed in each release
+- [Security policy](https://nbview.org/.well-known/security.txt): how to report a problem
+
+## Notes for automated agents
+
+- The viewer is a client-side app. Notebook content only exists after JavaScript runs in a browser, so a plain HTTP fetch of a nbview.org link returns the app shell, not the notebook. To read a notebook's contents, fetch the raw .ipynb from GitHub (raw.githubusercontent.com) instead.
+- Source code (MIT license): https://github.com/chizkidd/nbview
