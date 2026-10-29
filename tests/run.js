@@ -393,6 +393,19 @@ test('interactive chart: a figure that is too large explains itself; export drop
   });
 });
 
+test('startup: scripts do not block parsing, and highlighting and math load only when a notebook opens', async () => {
+  const loaded = page => page.evaluate(() => performance.getEntriesByType('resource').map(e => new URL(e.name).pathname).filter(p => /highlight|katex/.test(p)));
+  await run({ hash: '', settle: 400 }, async ({ page }) => {
+    assert(!(await loaded(page)).length, await loaded(page));
+    assert(await page.evaluate(() => [...document.scripts].filter(s => s.src && !/theme\.js$/.test(s.src)).every(s => s.defer)), 'a script blocks parsing');
+  });
+  await run({ hash: H, raw: nb([md('Euler $e^{i\\pi}+1=0$'), code('print(1)')]), settle: 600 }, async ({ page }) => {
+    const files = await loaded(page);
+    assert(files.some(f => /highlight\.min\.js/.test(f)) && files.some(f => /katex\.min\.js/.test(f)) && files.some(f => /katex\.min\.css/.test(f)), files);
+    assert(await page.evaluate(() => !!document.querySelector('.katex') && !!document.querySelector('.hljs')), 'not rendered');
+  });
+});
+
 test('contents menu stays hidden without headings and closes on Escape', async () => {
   await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
     assert(await page.evaluate(() => document.querySelector('#toc-menu').hidden), 'menu shown without headings');
