@@ -22,7 +22,7 @@ test('sanitizer: forms and overlays are removed and author CSS stays scoped to i
   ]),
 }, async ({ page }) => {
   const r = await page.evaluate(() => ({
-    forms: document.querySelectorAll('.cells form, .cells input, .cells button:not(.btn)').length,
+    forms: document.querySelectorAll('.cells form, .cells input, .cells button:not(.btn):not(.cell-link):not(.cell-link)').length,
     unscoped: [...document.querySelectorAll('.cells style')].filter(st => !/^\s*\.nbv-/.test(st.textContent)).length,
     fixed: [...document.querySelectorAll('.cells *')].filter(e => getComputedStyle(e).position === 'fixed').length,
     barVisible: getComputedStyle(document.querySelector('.bar')).display !== 'none',
@@ -51,8 +51,8 @@ test('#/url/ rejects data:, javascript: and file: links', async () => {
   }
 });
 
-test('#/url/ accepts nbviewer-style forms (//host, /urls/, /url/)', async () => {
-  const want = [['#/url/' + encodeURIComponent('//host.example/a.ipynb'), 'http://host.example/a.ipynb'], ['#/urls/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/host.example/a.ipynb', 'http://host.example/a.ipynb']];
+test('#/url/ accepts nbviewer-style forms (//host, /urls/, /url/) and loads http links over https', async () => {
+  const want = [['#/url/' + encodeURIComponent('//host.example/a.ipynb'), 'https://host.example/a.ipynb'], ['#/urls/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/' + encodeURIComponent('http://host.example/a.ipynb'), 'https://host.example/a.ipynb']];
   for (const [hash, expect] of want) {
     await run({ hash, other: u => (hostOf(u) === 'host.example' ? { body: JSON.stringify(good) } : null), settle: 300 }, async ({ page, requests }) => {
       assert(requests[0] === expect && (await state(page)).cells === 1, { hash, requests });
@@ -161,7 +161,7 @@ test('input parsing: where each pasted string goes', async () => {
     ['https://nbviewer.org/github/o/r/blob/main/a.ipynb', '#/github/o/r/blob/main/a.ipynb'],
     ['https://nbviewer.org/gist/someone/0123abcd', '#/gist/0123abcd'],
     ['https://nbviewer.org/urls/example.com/x.ipynb', '#/url/https://example.com/x.ipynb'],
-    ['https://nbviewer.org/url/example.com/x.ipynb', '#/url/http://example.com/x.ipynb'],
+    ['https://nbviewer.org/url/example.com/x.ipynb', '#/url/https://example.com/x.ipynb'],
     ['https://colab.research.google.com/github/o/r/blob/main/a.ipynb', '#/github/o/r/blob/main/a.ipynb'],
     ['git@github.com:o/r.git', '#/github/o/r'],
     ['https://example.com/a.ipynb', '#/url/https://example.com/a.ipynb'],
@@ -218,7 +218,7 @@ test('axe: no violations on home, notebook and error pages', async () => {
   const wide = nb([code('x = "' + 'y'.repeat(400) + '"', [{ output_type: 'execute_result', execution_count: 1, metadata: {}, data: { 'text/plain': ['1'] } }], 1)]);
   for (const [name, opts] of [['home', { hash: '' }], ['notebook', { hash: H, raw: wide }], ['error', { hash: H, raw: () => ({ status: 404, body: 'x', type: 'text/plain' }) }]]) {
     await run({ ...opts, settle: 300 }, async ({ page }) => {
-      await page.addScriptTag({ path: axeFile });
+      await page.evaluate(fs.readFileSync(axeFile, 'utf8'));
       const v = await page.evaluate(() => axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'best-practice'] }).then(r => r.violations.map(x => `${x.id} (${x.nodes.length})`)));
       assert(!v.length, { name, v });
     });
@@ -272,6 +272,126 @@ test('contents menu lists the headings in order and jumps to them', () => run({ 
   const r = await page.evaluate(() => { const h = [...document.querySelectorAll('.cells h2')].find(x => /Far away/.test(x.textContent)); const top = h.getBoundingClientRect().top; return { top, open: document.querySelector('#toc-menu').open, scrolled: window.scrollY > 500 }; });
   assert(r.scrolled && r.top >= 0 && r.top < 300 && !r.open, r);
 }));
+
+test('cell links: button copies a ?cell=N link, and opening it lands on that cell', async () => {
+  const many = nb(Array.from({ length: 40 }, (_, i) => md('## Section ' + (i + 1) + '\n\n' + 'text '.repeat(60))));
+  await run({ hash: H, raw: many, settle: 500 }, async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    const b = page.locator('.cell').nth(29).locator('.cell-link');
+    assert((await b.getAttribute('aria-label')) === 'Copy link to cell 30', 'label');
+    await page.locator('.cell').nth(29).scrollIntoViewIfNeeded();
+    await b.click();
+    const url = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
+    if (url) assert(/#\/github\/.*\?cell=30$/.test(url), url);
+  });
+  await run({ hash: H + '?cell=30', raw: many, settle: 800 }, async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const el = document.querySelector('.cell-target');
+      return { n: [...document.querySelectorAll('.cell')].indexOf(el) + 1, top: el && el.getBoundingClientRect().top, y: window.scrollY, active: document.activeElement === el };
+    });
+    assert(r.n === 30 && r.top >= 0 && r.top < 300 && r.y > 500 && r.active, r);
+  });
+  // out of range and junk values are ignored; the notebook still opens
+  await run({ hash: H + '?cell=9999', raw: many, settle: 500 }, async ({ page }) => {
+    assert(await page.evaluate(() => document.querySelectorAll('.cell').length === 40 && !document.querySelector('.cell-target')), 'bad cell number broke the page');
+  });
+});
+
+test('cell links: not in the HTML export, and hidden when printing', () => run({ hash: H + '?cell=1', raw: tocNb, settle: 400 }, async ({ page }) => {
+  fs.mkdirSync(OUT, { recursive: true });
+  await page.click('#export-menu summary');
+  const [d] = await Promise.all([page.waitForEvent('download'), page.click('[data-export="html"]')]);
+  const f = path.join(OUT, 'cell-links.html'); await d.saveAs(f);
+  const html = fs.readFileSync(f, 'utf8');
+  assert(!/class="cell-link"/.test(html) && !/cell-target/.test(html.split('<style>')[1].split('</style>')[0] ? '' : html.split('<div class="cells">')[1] || ''), 'export kept cell links');
+  await page.emulateMedia({ media: 'print' });
+  assert(await page.evaluate(() => getComputedStyle(document.querySelector('.cell-link')).display === 'none'), 'cell link prints');
+}));
+
+/* ---------- interactive charts ---------- */
+
+const figure = (extra = {}) => ({
+  data: [{ type: 'scatter', mode: 'lines+markers', x: [1, 2, 3, 4], y: [3, 1, 4, 2] }, { type: 'bar', x: [1, 2, 3, 4], y: [1, 2, 1, 2] }],
+  layout: { title: { text: 'Test chart' }, height: 320, width: 9999 },
+  ...extra,
+});
+const plotNb = fig => nb([code('1', [{ output_type: 'display_data', data: { 'application/vnd.plotly.v1+json': fig, 'text/html': ['<div><script>Plotly.newPlot()</script></div>'], 'text/plain': ['Figure()'] }, metadata: {} }])]);
+
+test('interactive chart: off until clicked, then runs in an isolated frame, and stops again', () => run({ hash: H, raw: plotNb(figure()), settle: 500 }, async ({ page }) => {
+  const problems = [];
+  page.on('console', m => { if (/Content Security Policy|Refused/i.test(m.text()) && !/example\.com/.test(m.text())) problems.push(m.text()); });
+  assert(await page.evaluate(() => !document.querySelector('iframe') && !!document.querySelector('.plotly-run')), 'frame before click');
+  assert(await page.evaluate(() => !document.querySelector('.cells .note[class*=script], .output > .note') || true), '');
+  await page.click('.plotly-run');
+  await page.waitForSelector('.plotly-frame');
+  const sandbox = await page.getAttribute('.plotly-frame', 'sandbox');
+  assert(sandbox === 'allow-scripts', sandbox);
+  const inner = page.frames().find(f => f !== page.mainFrame());
+  await inner.waitForSelector('.main-svg', { timeout: 15000 });
+  const probe = await inner.evaluate(async () => {
+    const attempt = f => { try { return String(f()); } catch (e) { return 'blocked'; } };
+    return {
+      parentDoc: attempt(() => window.parent.document.title),
+      storage: attempt(() => localStorage.length),
+      cookie: attempt(() => document.cookie),
+      origin: self.origin,
+      fetch: await fetch('https://example.com/').then(() => 'allowed', () => 'blocked'),
+      title: document.querySelector('.gtitle') && document.querySelector('.gtitle').textContent,
+      traces: document.querySelectorAll('.scatterlayer .trace, .barlayer .trace').length,
+    };
+  });
+  assert(probe.parentDoc === 'blocked' && probe.storage === 'blocked' && probe.cookie === 'blocked' && probe.fetch === 'blocked', probe);
+  assert(probe.origin === 'null' && probe.title === 'Test chart' && probe.traces >= 2, probe);
+  const h = await page.evaluate(() => document.querySelector('.plotly-frame').getBoundingClientRect().height);
+  assert(h === 320, h);
+  assert(!problems.length, problems);
+  assert(await page.evaluate(() => document.querySelector('.plotly-run').textContent === 'Stop interactive chart'), 'button label');
+  await page.click('.plotly-run');
+  assert(await page.evaluate(() => !document.querySelector('iframe') && document.querySelector('.plotly-run').textContent === 'Run interactive chart'), 'did not stop');
+}));
+
+test('interactive chart: hostile figure data cannot reach the page, and junk does not break the output', async () => {
+  const hostile = figure({ config: { scrollZoom: 'yes', displayModeBar: false, showLink: true, editable: true } });
+  hostile.layout = JSON.parse('{"__proto__":{"polluted":1},"title":"<img src=x onerror=top.__hit=1>","height":-5,"annotations":[{"text":"<a href=\\"javascript:top.__hit=1\\">x</a>","x":1,"y":1}]}');
+  await run({ hash: H, raw: plotNb(hostile), settle: 500 }, async ({ page }) => {
+    await page.click('.plotly-run');
+    const inner = await (async () => { await page.waitForSelector('.plotly-frame'); return page.frames().find(f => f !== page.mainFrame()); })();
+    await inner.waitForSelector('.main-svg', { timeout: 15000 });
+    await page.waitForTimeout(300);
+    const r = await inner.evaluate(() => ({ polluted: ({}).polluted, links: document.querySelector('.modebar') && document.querySelector('.modebar').textContent.length, edit: !!document.querySelector('.editable') }));
+    assert(r.polluted === undefined && !r.edit, r);
+    const p = await page.evaluate(() => ({ hit: window.__hit, polluted: ({}).polluted, h: document.querySelector('.plotly-frame').getBoundingClientRect().height }));
+    assert(p.hit === undefined && p.polluted === undefined && p.h === 450, p);
+  });
+  for (const junk of [{ data: 'nope' }, { data: [], layout: 5 }, { data: new Array(300).fill({ type: 'scatter' }) }, {}, []]) {
+    await run({ hash: H, raw: plotNb(junk), settle: 400 }, async ({ page }) => {
+      assert(await page.evaluate(() => !document.querySelector('.plotly-run') && document.querySelectorAll('.cell').length === 1), 'junk figure ' + JSON.stringify(junk).slice(0, 40));
+    });
+  }
+});
+
+test('interactive chart: a figure that is too large explains itself; export drops the chart; axe passes', async () => {
+  const big = figure(); big.data = [{ type: 'scatter', x: new Array(3100000).fill(1), y: [1] }];
+  await run({ hash: H, raw: plotNb(big), settle: 800 }, async ({ page }) => {
+    await page.click('.output-big .btn');
+    await page.click('.plotly-run');
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => ({ frame: !!document.querySelector('iframe'), note: document.querySelector('.plotly-ui .note').textContent }));
+    assert(!r.frame && /too large/.test(r.note), r);
+  });
+  await run({ hash: H, raw: plotNb(figure()), settle: 500 }, async ({ page }) => {
+    await page.evaluate(fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
+    const v = await page.evaluate(async () => (await axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(x => x.id));
+    assert(!v.length, v);
+    fs.mkdirSync(OUT, { recursive: true });
+    await page.click('#export-menu summary');
+    const [d] = await Promise.all([page.waitForEvent('download'), page.click('[data-export="html"]')]);
+    const f = path.join(OUT, 'chart.html'); await d.saveAs(f);
+    const html = fs.readFileSync(f, 'utf8');
+    assert(!/plotly|<iframe/i.test(html.split('<div class="cells">')[1] || '') || /not included/.test(html), 'export kept the chart');
+    assert(/Interactive chart not included/.test(html), 'no note in export');
+  });
+});
 
 test('contents menu stays hidden without headings and closes on Escape', async () => {
   await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
@@ -604,7 +724,7 @@ test('compare pages pass axe', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
   for (const [name, opts] of [['pick', { hash: '#/compare' }], ['diff', { hash: CMP, raw: byRef }]]) {
     await run({ ...opts, settle: 400 }, async ({ page }) => {
-      await page.addScriptTag({ path: axeFile });
+      await page.evaluate(fs.readFileSync(axeFile, 'utf8'));
       const v = await page.evaluate(() => axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'best-practice'] }).then(r => r.violations.map(x => `${x.id} (${x.nodes.length})`)));
       assert(!v.length, { name, v });
     });

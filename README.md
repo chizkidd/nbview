@@ -11,9 +11,10 @@ A client-side Jupyter notebook viewer for public GitHub repos. No server: the br
 - Inspired by nbviewer: Jupyter classic typography, Pygments-style Python colors, upright math, and long equations that wrap instead of running off the page
 - Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a gist link, or from a local file
 - nbviewer links work too: paste one into the box, or just change `nbviewer.org` to `nbview.org` in the address bar
-- Shareable URLs, e.g. `nbview.org/#/github/owner/repo/blob/main/path/to/notebook.ipynb`, plus a "Copy link" button on every notebook
+- Shareable URLs, e.g. `nbview.org/#/github/owner/repo/blob/main/path/to/notebook.ipynb`, plus a "Copy link" button on every notebook and a `#` button on every cell that copies a link straight to that cell (`...?cell=12`)
 - A Contents menu built from the notebook's headings, plus hide code, hide outputs, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
 - Compare notebooks: use Compare on any GitHub notebook (pick a branch, tag or commit, one of the file's recent commits, or a different notebook), on a gist (earlier revisions), on a local file or a notebook opened by URL; or compare any two notebooks by link, gist link or `owner/repo/path.ipynb` (different repos and branches are fine), or two local files. Changed lines highlight the changed words Changes show cell by cell, in one column (unified) or side by side, with optional output changes
+- Plotly charts can run: a chart that was saved with its data shows a "Run interactive chart" button, and clicking it zooms, pans and hovers inside an isolated frame (off until you click)
 - Export a notebook as a Python script, Markdown, a standalone HTML page, or a PDF (via your browser's print dialog), all built locally in your browser
 - Light and dark mode, following your system until you pick one
 
@@ -23,7 +24,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 
 - Folder browsing and gists use the GitHub API: 60 requests/hour per IP without a token. Add a no-scope token via the "GitHub token" button for 5,000/hour. Opening notebooks uses raw.githubusercontent.com and doesn't count.
 - API responses are cached for 5 minutes in the tab (sessionStorage), so going back to a folder you just viewed doesn't use up the limit.
-- JavaScript-based outputs (Plotly, Bokeh, ipywidgets) aren't executed, for safety. Static images, tables and text render normally.
+- Notebook JavaScript is never executed. Bokeh and ipywidgets outputs are skipped (open the notebook in Binder or Colab to run them); static images, tables and text render normally. The one exception is Plotly figures that were saved as data: they only run after you click "Run interactive chart", inside a frame the browser isolates from this page (no access to your tokens, storage, cookies or the page, and no network), using the Plotly library served from this site. Charts over about 3 million values or with more than 200 traces don't run, and at most 8 run at once.
 - HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.
 - Size limits keep one cell from freezing the tab: notebooks over 10 MB (including local files) ask before opening, outputs over 1 MB sit behind a "Show output" button, code cells over 200 KB are shown without syntax colors, and equations over 4,000 characters or 40 levels of nesting, or beyond the first 2,000 in a notebook, are shown as plain TeX. A cell that fails to render is replaced by a notice with its raw source.
 - Safari is slower than Chrome and Firefox on very large notebooks: about 3x slower for thousands of cells, and a single markdown cell with over 1 MB of text and no spaces or line breaks can freeze the tab for many seconds.
@@ -46,7 +47,8 @@ There is no build step: the repo is served as-is by Cloudflare Pages, and every 
 nbview/
 ├── index.html           page shell and static home text
 ├── _redirects           nbviewer-style /github, /gist, /url, /urls paths -> /#/... routes (the domain swap)
-├── _headers             security headers: strict CSP (no forms, no framing, scripts from this site only)
+├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
+├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
 ├── sitemap.xml          the home page
 ├── .well-known/

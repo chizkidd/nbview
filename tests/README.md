@@ -17,6 +17,6 @@ npm test
 
 ## Files
 
-- `harness.js`: starts the server and browser and stubs GitHub (`open()`), plus small notebook builders.
+- `harness.js`: starts the server (sending the headers from `_headers`, so tests run under the real CSP) and browser and stubs GitHub (`open()`), plus small notebook builders.
 - `run.js`: the tests, one `test(name, fn)` each.
 - `live.js`: the optional real-GitHub smoke test.

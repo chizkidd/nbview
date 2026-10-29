@@ -15,7 +15,8 @@ Chores that are easy to forget. There is no build step, so there is little else 
 ## Files to keep
 
 - `robots.txt`: without it, Cloudflare Pages answers `/robots.txt` with the home page.
-- `_headers`: the Content-Security-Policy and other security headers. If you add a new script, font or image host, the policy has to allow it or the browser will block it.
+- `_headers`: the Content-Security-Policy and other security headers. If you add a new script, font or image host, the policy has to allow it or the browser will block it. `https://nbview.org` appears in `script-src` on purpose: Safari does not match `'self'` inside the sandboxed chart frame. If the domain ever changes, change it there.
+- `sandbox/plotly/index.html` and `assets/sandbox/plotly-frame.js`: the isolated chart frame. Keep `sandbox="allow-scripts"` (never add `allow-same-origin`) on the iframe in `plotlyBox` in `assets/js/app.js`.
 - `_redirects`: makes the nbviewer domain swap work.
 
 ## Cloudflare and GitHub settings (not in the repo)

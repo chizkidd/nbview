@@ -82,13 +82,17 @@
     return h;
   }
 
-  // nbviewer writes /url/host/path (http) and /urls/host/path (https) with no scheme.
+  // This site is https only (its security policy and the browser both refuse plain http requests), so notebook links
+  // written as http:// are fetched over https.
+  const secureUrl = u => String(u).replace(/^http:\/\//i, 'https://');
+
+  // nbviewer writes /url/host/path (http) and /urls/host/path (https) with no scheme; both end up as https here.
   function nbviewerUrl(kind, rest) {
     rest = rest.trim();
     if (/^https?:\/+/i.test(rest)) return rest.replace(/^(https?:)\/+/i, '$1//');
     // Another scheme (data:, javascript:, file:) stays as written so it is refused, not turned into a host name.
     if (/^[a-z][a-z0-9+.-]*:(?!\d+(\/|$))/i.test(rest)) return rest;
-    return (kind.toLowerCase() === 'urls' ? 'https://' : 'http://') + rest;
+    return 'https://' + rest;
   }
 
   // Turns whatever the user pastes into a route.
@@ -451,7 +455,7 @@
 
     let res;
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
     } catch (e) {
       if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
       throw new ViewError(
@@ -695,13 +699,16 @@
     const host = document.getElementById('cells');
     try {
       let frameStart = performance.now();
+      const wanted = targetCell;
       for (let i = 0; i < cells.length; i++) {
         if (stale(id)) return;
         try {
           const el = renderCell(cells[i], ctx, lang);
           if (el) {
+            if (info.shareable) addCellLink(el, i + 1);
             host.append(el);
             if (cells[i].cell_type === 'markdown') addHeadings(el);
+            if (i + 1 === wanted) { el.classList.add('cell-target'); focusCell(el); }
           }
         } catch (err) {
           console.error('Cell failed to render', i, err);
@@ -710,6 +717,36 @@
         if (performance.now() - frameStart > 12) { await nextFrame(); frameStart = performance.now(); }
       }
     } finally { done(); }
+    // Rendering above the target can shift it, so go there once more when everything is in.
+    const hit = host.querySelector('.cell-target');
+    if (hit && !stale(id)) focusCell(hit);
+  }
+
+  // A link to one cell: the notebook's own address plus ?cell=N.
+  function cellUrl(n) {
+    return location.origin + location.pathname + location.search + location.hash.replace(/\?cell=\d+$/, '') + '?cell=' + n;
+  }
+
+  function addCellLink(el, n) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cell-link';
+    b.textContent = '#';
+    b.title = `Copy link to cell ${n}`;
+    b.setAttribute('aria-label', `Copy link to cell ${n}`);
+    b.addEventListener('click', async () => {
+      const url = cellUrl(n);
+      try { await navigator.clipboard.writeText(url); b.textContent = 'Copied'; }
+      catch { window.prompt('Copy this link', url); }
+      setTimeout(() => { b.textContent = '#'; }, 1800);
+    });
+    el.prepend(b);
+  }
+
+  function focusCell(el) {
+    el.tabIndex = -1;
+    el.scrollIntoView({ block: 'start' });
+    el.focus({ preventScroll: true });
   }
 
   /* ---------- export ---------- */
@@ -749,6 +786,14 @@
     if (kind === 'html') {
       await nbState.rendered;
       const host = document.getElementById('cells').cloneNode(true);
+      for (const x of host.querySelectorAll('.cell-link')) x.remove();
+      for (const x of host.querySelectorAll('.plotly-box')) {
+        const n = document.createElement('div');
+        n.className = 'note';
+        n.textContent = 'Interactive chart not included in this file.';
+        x.replaceWith(n);
+      }
+      for (const x of host.querySelectorAll('.cell-target')) x.classList.remove('cell-target');
       for (const big of host.querySelectorAll('.output-big')) {
         const note = document.createElement('div');
         note.className = 'output note';
@@ -969,6 +1014,8 @@
 
   function renderMime(wrap, data, meta, ctx) {
     let skippedScript = false;
+    const fig = plotlyFigure(data);
+    if (fig) wrap.append(plotlyBox(fig));
 
     for (const type of MIME_ORDER) {
       if (!(type in data)) continue;
@@ -1033,15 +1080,112 @@
       const pre = document.createElement('pre');
       pre.innerHTML = type === 'application/json' ? esc(JSON.stringify(v, null, 2)) : ansiToHtml(v);
       wrap.append(pre);
-      if (skippedScript) wrap.append(scriptNote());
+      if (skippedScript && !fig) wrap.append(scriptNote());
       return true;
     }
 
+    if (fig) return true;
     if (skippedScript) {
       wrap.append(scriptNote());
       return true;
     }
     return false;
+  }
+
+  /* ---------- interactive charts (Plotly) ---------- */
+
+  // Only Plotly figures (data, no code) can run, and only in a sandboxed frame after the reader clicks.
+  // The frame has an opaque origin, so it can't reach this page, its storage or the network.
+  const MAX_FIGURE_VALUES = 3000000;
+  const MAX_CHART_FRAMES = 8;
+
+  // A copy made of plain objects, arrays and primitives only, without keys that could tamper with prototypes.
+  function plainCopy(v, budget, depth = 0) {
+    if (--budget.n < 0 || depth > 40) throw new Error('too large');
+    if (Array.isArray(v)) return v.map(x => plainCopy(x, budget, depth + 1));
+    if (v && typeof v === 'object') {
+      const o = {};
+      for (const k of Object.keys(v)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        o[k] = plainCopy(v[k], budget, depth + 1);
+      }
+      return o;
+    }
+    return typeof v === 'function' || typeof v === 'symbol' ? null : v;
+  }
+
+  function plotlyFigure(data) {
+    const f = data['application/vnd.plotly.v1+json'];
+    if (!f || typeof f !== 'object' || Array.isArray(f) || !Array.isArray(f.data) || f.data.length > 200) return null;
+    if (f.layout != null && (typeof f.layout !== 'object' || Array.isArray(f.layout))) return null;
+    return f;
+  }
+
+  function plotlyBox(fig) {
+    const box = document.createElement('div');
+    box.className = 'plotly-box';
+    const bar = document.createElement('div');
+    bar.className = 'plotly-ui';
+    const note = document.createElement('span');
+    note.className = 'note';
+    note.id = `plotly-note-${++scopeSeq}`;
+    note.textContent = 'Interactive chart. It runs in an isolated frame, and no notebook code is executed.';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn plotly-run';
+    btn.textContent = 'Run interactive chart';
+    btn.setAttribute('aria-describedby', note.id);
+    bar.append(btn, note);
+    box.append(bar);
+
+    let frame = null, listener = null, timer = 0;
+    const stop = msg => {
+      clearTimeout(timer);
+      if (listener) window.removeEventListener('message', listener);
+      listener = null;
+      if (frame) frame.remove();
+      frame = null;
+      btn.textContent = 'Run interactive chart';
+      btn.setAttribute('aria-pressed', 'false');
+      if (msg) note.textContent = msg;
+    };
+    btn.addEventListener('click', () => {
+      if (frame) { stop('Interactive chart stopped.'); return; }
+      if (document.querySelectorAll('.plotly-frame').length >= MAX_CHART_FRAMES) {
+        note.textContent = `Only ${MAX_CHART_FRAMES} charts can run at once. Stop another one first.`;
+        return;
+      }
+      let payload;
+      try {
+        const budget = { n: MAX_FIGURE_VALUES };
+        payload = { data: plainCopy(fig.data, budget), layout: plainCopy(fig.layout || {}, budget), config: plainCopy(fig.config || {}, budget) };
+      } catch { note.textContent = 'This chart is too large to run here.'; return; }
+      const lh = Number(payload.layout.height);
+      const height = Math.min(1200, Math.max(120, Number.isFinite(lh) && lh > 0 ? lh : 450));
+
+      frame = document.createElement('iframe');
+      frame.className = 'plotly-frame';
+      frame.title = 'Interactive chart';
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.referrerPolicy = 'no-referrer';
+      frame.style.height = height + 'px';
+      frame.src = '/sandbox/plotly/';
+      listener = e => {
+        if (!frame || e.source !== frame.contentWindow) return;
+        const m = e.data;
+        if (!m || typeof m !== 'object') return;
+        if (m.type === 'ready') frame.contentWindow.postMessage({ type: 'render', ...payload, height }, '*');
+        else if (m.type === 'rendered') { clearTimeout(timer); note.textContent = 'Interactive chart running in an isolated frame.'; }
+        else if (m.type === 'error') stop("This chart couldn't be drawn.");
+      };
+      window.addEventListener('message', listener);
+      timer = setTimeout(() => stop('The chart took too long to start.'), 20000);
+      btn.textContent = 'Stop interactive chart';
+      btn.setAttribute('aria-pressed', 'true');
+      note.textContent = 'Starting the chart...';
+      box.append(frame);
+    });
+    return box;
   }
 
   function scriptNote() {
@@ -1485,7 +1629,7 @@
     if (!/^https?:\/\//i.test(url)) throw new ViewError('Unsupported link', 'Only http and https notebook links can be compared.');
     let res;
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
     } catch (e) {
       throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.'
         : RAW_GH.test(url) ? 'The network request failed. Check your connection and try again.'
@@ -1852,9 +1996,13 @@
 
   /* ---------- router ---------- */
 
+  let targetCell = 0; // cell number from a ?cell=N link, 1-based
+
   async function route() {
     const id = ++routeId;
-    const raw = location.hash.replace(/^#/, '');
+    const cellAt = /\?cell=(\d{1,6})$/.exec(location.hash);
+    targetCell = cellAt ? Number(cellAt[1]) : 0;
+    const raw = location.hash.replace(/^#/, '').replace(/\?cell=\d+$/, '');
     const parts = raw.split('/').filter(Boolean).map(safeDecode);
     document.body.classList.toggle('is-home', parts.length === 0);
     window.scrollTo(0, 0);
