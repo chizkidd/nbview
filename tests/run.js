@@ -22,7 +22,7 @@ test('sanitizer: forms and overlays are removed and author CSS stays scoped to i
   ]),
 }, async ({ page }) => {
   const r = await page.evaluate(() => ({
-    forms: document.querySelectorAll('.cells form, .cells input, .cells button:not(.btn)').length,
+    forms: document.querySelectorAll('.cells form, .cells input, .cells button:not(.btn):not(.cell-link):not(.cell-link)').length,
     unscoped: [...document.querySelectorAll('.cells style')].filter(st => !/^\s*\.nbv-/.test(st.textContent)).length,
     fixed: [...document.querySelectorAll('.cells *')].filter(e => getComputedStyle(e).position === 'fixed').length,
     barVisible: getComputedStyle(document.querySelector('.bar')).display !== 'none',
@@ -271,6 +271,41 @@ test('contents menu lists the headings in order and jumps to them', () => run({ 
   await page.waitForTimeout(400);
   const r = await page.evaluate(() => { const h = [...document.querySelectorAll('.cells h2')].find(x => /Far away/.test(x.textContent)); const top = h.getBoundingClientRect().top; return { top, open: document.querySelector('#toc-menu').open, scrolled: window.scrollY > 500 }; });
   assert(r.scrolled && r.top >= 0 && r.top < 300 && !r.open, r);
+}));
+
+test('cell links: button copies a ?cell=N link, and opening it lands on that cell', async () => {
+  const many = nb(Array.from({ length: 40 }, (_, i) => md('## Section ' + (i + 1) + '\n\n' + 'text '.repeat(60))));
+  await run({ hash: H, raw: many, settle: 500 }, async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    const b = page.locator('.cell').nth(29).locator('.cell-link');
+    assert((await b.getAttribute('aria-label')) === 'Copy link to cell 30', 'label');
+    await page.locator('.cell').nth(29).scrollIntoViewIfNeeded();
+    await b.click();
+    const url = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
+    if (url) assert(/#\/github\/.*\?cell=30$/.test(url), url);
+  });
+  await run({ hash: H + '?cell=30', raw: many, settle: 800 }, async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const el = document.querySelector('.cell-target');
+      return { n: [...document.querySelectorAll('.cell')].indexOf(el) + 1, top: el && el.getBoundingClientRect().top, y: window.scrollY, active: document.activeElement === el };
+    });
+    assert(r.n === 30 && r.top >= 0 && r.top < 300 && r.y > 500 && r.active, r);
+  });
+  // out of range and junk values are ignored; the notebook still opens
+  await run({ hash: H + '?cell=9999', raw: many, settle: 500 }, async ({ page }) => {
+    assert(await page.evaluate(() => document.querySelectorAll('.cell').length === 40 && !document.querySelector('.cell-target')), 'bad cell number broke the page');
+  });
+});
+
+test('cell links: not in the HTML export, and hidden when printing', () => run({ hash: H + '?cell=1', raw: tocNb, settle: 400 }, async ({ page }) => {
+  fs.mkdirSync(OUT, { recursive: true });
+  await page.click('#export-menu summary');
+  const [d] = await Promise.all([page.waitForEvent('download'), page.click('[data-export="html"]')]);
+  const f = path.join(OUT, 'cell-links.html'); await d.saveAs(f);
+  const html = fs.readFileSync(f, 'utf8');
+  assert(!/class="cell-link"/.test(html) && !/cell-target/.test(html.split('<style>')[1].split('</style>')[0] ? '' : html.split('<div class="cells">')[1] || ''), 'export kept cell links');
+  await page.emulateMedia({ media: 'print' });
+  assert(await page.evaluate(() => getComputedStyle(document.querySelector('.cell-link')).display === 'none'), 'cell link prints');
 }));
 
 test('contents menu stays hidden without headings and closes on Escape', async () => {

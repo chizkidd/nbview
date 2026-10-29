@@ -699,13 +699,16 @@
     const host = document.getElementById('cells');
     try {
       let frameStart = performance.now();
+      const wanted = targetCell;
       for (let i = 0; i < cells.length; i++) {
         if (stale(id)) return;
         try {
           const el = renderCell(cells[i], ctx, lang);
           if (el) {
+            if (info.shareable) addCellLink(el, i + 1);
             host.append(el);
             if (cells[i].cell_type === 'markdown') addHeadings(el);
+            if (i + 1 === wanted) { el.classList.add('cell-target'); focusCell(el); }
           }
         } catch (err) {
           console.error('Cell failed to render', i, err);
@@ -714,6 +717,36 @@
         if (performance.now() - frameStart > 12) { await nextFrame(); frameStart = performance.now(); }
       }
     } finally { done(); }
+    // Rendering above the target can shift it, so go there once more when everything is in.
+    const hit = host.querySelector('.cell-target');
+    if (hit && !stale(id)) focusCell(hit);
+  }
+
+  // A link to one cell: the notebook's own address plus ?cell=N.
+  function cellUrl(n) {
+    return location.origin + location.pathname + location.search + location.hash.replace(/\?cell=\d+$/, '') + '?cell=' + n;
+  }
+
+  function addCellLink(el, n) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'cell-link';
+    b.textContent = '#';
+    b.title = `Copy link to cell ${n}`;
+    b.setAttribute('aria-label', `Copy link to cell ${n}`);
+    b.addEventListener('click', async () => {
+      const url = cellUrl(n);
+      try { await navigator.clipboard.writeText(url); b.textContent = 'Copied'; }
+      catch { window.prompt('Copy this link', url); }
+      setTimeout(() => { b.textContent = '#'; }, 1800);
+    });
+    el.prepend(b);
+  }
+
+  function focusCell(el) {
+    el.tabIndex = -1;
+    el.scrollIntoView({ block: 'start' });
+    el.focus({ preventScroll: true });
   }
 
   /* ---------- export ---------- */
@@ -753,6 +786,8 @@
     if (kind === 'html') {
       await nbState.rendered;
       const host = document.getElementById('cells').cloneNode(true);
+      for (const x of host.querySelectorAll('.cell-link')) x.remove();
+      for (const x of host.querySelectorAll('.cell-target')) x.classList.remove('cell-target');
       for (const big of host.querySelectorAll('.output-big')) {
         const note = document.createElement('div');
         note.className = 'output note';
@@ -1856,9 +1891,13 @@
 
   /* ---------- router ---------- */
 
+  let targetCell = 0; // cell number from a ?cell=N link, 1-based
+
   async function route() {
     const id = ++routeId;
-    const raw = location.hash.replace(/^#/, '');
+    const cellAt = /\?cell=(\d{1,6})$/.exec(location.hash);
+    targetCell = cellAt ? Number(cellAt[1]) : 0;
+    const raw = location.hash.replace(/^#/, '').replace(/\?cell=\d+$/, '');
     const parts = raw.split('/').filter(Boolean).map(safeDecode);
     document.body.classList.toggle('is-home', parts.length === 0);
     window.scrollTo(0, 0);
