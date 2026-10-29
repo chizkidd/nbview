@@ -85,6 +85,48 @@
     return out;
   }
 
+  const TOKEN = /\s+|[A-Za-z0-9_]+|[^\sA-Za-z0-9_]/g;
+  const MAX_WORD_LINE = 4000;  // characters per line for the word-level diff
+  const MAX_WORD_PAIRS = 300;  // paired lines per cell
+  const WORD_SIMILAR = 0.4;
+
+  // Which parts of two similar lines differ: segments for the old line and for the new line, as [{ t: 'eq' | 'chg', text }].
+  function diffWords(a, b) {
+    const x = a.match(TOKEN) || [], y = b.match(TOKEN) || [];
+    const pairs = align(x, y);
+    const inX = new Set(pairs.map(p => p[0])), inY = new Set(pairs.map(p => p[1]));
+    const runs = (tokens, kept) => {
+      const out = [];
+      tokens.forEach((tok, i) => {
+        const t = kept.has(i) ? 'eq' : 'chg';
+        if (out.length && out[out.length - 1].t === t) out[out.length - 1].text += tok;
+        else out.push({ t, text: tok });
+      });
+      return out;
+    };
+    let shared = 0;
+    for (const [i] of pairs) shared += x[i].length;
+    return { old: runs(x, inX), new: runs(y, inY), ratio: shared / Math.max(a.length, b.length, 1) };
+  }
+
+  // Marks changed words on removed/added lines that sit next to each other and are mostly alike.
+  function markWords(lines) {
+    let budget = MAX_WORD_PAIRS;
+    for (let i = 0; i < lines.length && budget > 0;) {
+      if (lines[i].t !== 'del') { i++; continue; }
+      const dels = [], adds = [];
+      while (i < lines.length && lines[i].t === 'del') dels.push(lines[i++]);
+      while (i < lines.length && lines[i].t === 'add') adds.push(lines[i++]);
+      for (let k = 0; k < Math.min(dels.length, adds.length) && budget > 0; k++, budget--) {
+        const d = dels[k], a = adds[k];
+        if (d.text.length > MAX_WORD_LINE || a.text.length > MAX_WORD_LINE) continue;
+        const w = diffWords(d.text, a.text);
+        if (w.ratio >= WORD_SIMILAR && w.ratio < 1) { d.parts = w.old; a.parts = w.new; }
+      }
+    }
+    return lines;
+  }
+
   function diffLines(a, b) {
     const x = norm(a) === '' ? [] : norm(a).split('\n');
     const y = norm(b) === '' ? [] : norm(b).split('\n');
@@ -98,7 +140,7 @@
     }
     while (ai < x.length) out.push({ t: 'del', text: x[ai++] });
     while (bi < y.length) out.push({ t: 'add', text: y[bi++] });
-    return out;
+    return markWords(out);
   }
 
   // 0 to 1: how alike two cell sources are (shared lines, or shared start and end for one-liners).
@@ -201,7 +243,7 @@
     return s;
   }
 
-  const api = { diffLines, diffCells, summarize, outputText };
+  const api = { diffLines, diffWords, diffCells, summarize, outputText };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.nbvDiff = api;
 })(typeof window !== 'undefined' ? window : globalThis);

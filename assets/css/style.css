@@ -663,3 +663,7 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .diffview { max-width: 1200px; }
 .diffview.is-split { max-width: none; }
 .dsplit > .dline.empty { min-height: 1.45em; }
+
+/* Changed words inside a changed line */
+.dline.del .dw { background: light-dark(#FFB8B0, #6B2128); border-radius: 2px; }
+.dline.add .dw { background: light-dark(#A6F0B8, #1F5F32); border-radius: 2px; }

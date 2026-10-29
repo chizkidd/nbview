@@ -2,6 +2,13 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+### Added
+- **Changed words are highlighted** inside changed lines in Compare, so a one-word edit stands out in a long line.
+- **Compare works with gists.** Paste a gist link (or `gist.github.com/user/id/revision`) as either notebook, and the Compare button on a gist notebook can pick an earlier revision of that gist.
+- **Compare from the notebook you have open.** A local file or a notebook opened by URL now has a Compare button that carries it over to the Compare page as the first notebook, so you only add the second.
+
 ## [0.8.0] - 2026-10-29
 
 Compare any two notebooks, and diffs that read like GitHub's.
