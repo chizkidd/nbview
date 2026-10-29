@@ -11,7 +11,7 @@ A client-side Jupyter notebook viewer for public GitHub repos. No server: the br
 - Inspired by nbviewer: Jupyter classic typography, Pygments-style Python colors, upright math, and long equations that wrap instead of running off the page
 - Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a gist link, or from a local file
 - nbviewer links work too: paste one into the box, or just change `nbviewer.org` to `nbview.org` in the address bar
-- Shareable URLs, e.g. `nbview.org/github/owner/repo/blob/main/path/to/notebook.ipynb` (the `#/github/...` form works too), with a title and description preview when pasted into Slack, Reddit, X and similar, plus a "Copy link" button on every notebook and a `#` button on every cell that copies a link straight to that cell (`...?cell=12`)
+- Shareable URLs, e.g. `nbview.org/github/owner/repo/blob/main/path/to/notebook.ipynb` (the `#/github/...` form works too), with a preview card (file name and repo) when pasted into Slack, Reddit, X and similar, plus a "Copy link" button on every notebook and a `#` button on every cell that copies a link straight to that cell (`...?cell=12`)
 - A Contents menu built from the notebook's headings, plus hide code, hide outputs, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
 - Compare notebooks: use Compare on any GitHub notebook (pick a branch, tag or commit, one of the file's recent commits, or a different notebook), on a gist (earlier revisions), on a local file or a notebook opened by URL; or compare any two notebooks by link, gist link or `owner/repo/path.ipynb` (different repos and branches are fine), or two local files. Changed lines highlight the changed words Changes show cell by cell, in one column (unified) or side by side, with optional output changes
 - Plotly charts can run: a chart that was saved with its data shows a "Run interactive chart" button, and clicking it zooms, pans and hovers inside an isolated frame (off until you click)
@@ -32,7 +32,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 
 ## Privacy
 
-- Notebooks are fetched and rendered in your browser. The one exception is link previews: when a chat or social site's crawler (not a person) opens a `nbview.org/github/...` or `nbview.org/gist/...` link, a small Cloudflare function fetches that public notebook from GitHub to read its title and first paragraph, and returns only that text. It keeps nothing, and people opening a link are simply redirected to the viewer, which renders in their browser as before.
+- Notebooks are fetched and rendered in your browser. There is no nbview server that sees them. Link previews are built from the address alone (file name and repo), never from the notebook's contents.
 - Remote images in a notebook load from whatever host the notebook points at, so that host can see your IP address. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
 - The optional GitHub token and your recently opened list stay in this browser's local storage. The token is sent only to api.github.com.
 - nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies).
@@ -47,7 +47,7 @@ There is no build step: the repo is served as-is by Cloudflare Pages, and every 
 nbview/
 ├── index.html           page shell and static home text
 ├── _redirects           nbviewer-style /url and /urls paths -> /#/... routes (the domain swap)
-├── functions/           /github and /gist paths: redirect to the viewer, and answer link-preview crawlers with the notebook's title
+├── functions/           /github and /gist paths: redirect to the viewer, and answer link-preview crawlers with a card made from the link
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
