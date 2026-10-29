@@ -685,3 +685,14 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .plotly-ui .note { margin: 0; }
 .plotly-frame { display: block; width: 100%; margin-top: 0.5rem; border: 1px solid var(--rule); border-radius: 3px; background: #fff; }
 @media print { .plotly-run { display: none !important; } }
+
+/* Saved widget state, read-only */
+.widget-box { display: flex; gap: 0.3rem 0.8rem; flex-wrap: wrap; align-items: center; }
+.widget-v { flex-direction: column; align-items: flex-start; }
+.widget-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; font: 13px var(--nb-mono); }
+.widget-label { color: var(--muted); }
+.widget-row progress { width: min(24rem, 60vw); height: 0.9rem; accent-color: var(--in); }
+.widget-row progress.bar-success { accent-color: #2e7d32; }
+.widget-row progress.bar-danger { accent-color: #c62828; }
+.widget-row progress.bar-warning { accent-color: #ed8b00; }
+.widget-button { padding: 0.15rem 0.6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); font: 13px var(--nb-mono); }
