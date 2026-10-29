@@ -696,3 +696,14 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .widget-row progress.bar-danger { accent-color: #c62828; }
 .widget-row progress.bar-warning { accent-color: #ed8b00; }
 .widget-button { padding: 0.15rem 0.6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); font: 13px var(--nb-mono); }
+
+/* Find in notebook */
+.findbar { position: sticky; top: 3.4rem; z-index: 5; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.8rem; padding: 0.5rem; background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; }
+.findbar[hidden] { display: none; }
+.findbar input { flex: 1 1 14rem; min-width: 0; font: 14px var(--mono); padding: 0.4rem 0.6rem; background: var(--bg); color: var(--ink); border: 1px solid var(--rule); border-radius: 3px; }
+.findbar input:focus { border-color: var(--in); outline: none; }
+.find-count { font: 13px var(--mono); color: var(--muted); min-width: 6rem; }
+::highlight(nbv-find) { background-color: rgba(255, 213, 0, 0.45); color: inherit; }
+::highlight(nbv-find-current) { background-color: #ff9632; color: #000; }
+.find-cell { outline: 2px solid #ff9632; outline-offset: 4px; }
+@media print { .findbar { display: none !important; } }

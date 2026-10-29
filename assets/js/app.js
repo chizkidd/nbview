@@ -604,6 +604,7 @@
               <summary class="btn">Contents</summary>
               <div class="menu-list toc-list" id="toc-list"></div>
             </details>
+            <button class="btn" id="find-btn" type="button" aria-expanded="false" aria-controls="findbar" title="Find in this notebook (press / )">Find</button>
             <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
             <button class="btn" id="toggle-outputs" type="button" aria-pressed="false">Hide outputs</button>
             <button class="btn" id="toggle-lines" type="button" aria-pressed="false">Line numbers</button>
@@ -627,6 +628,13 @@
           </div>
           <p class="nb-meta">${kernel ? `<span>${esc(kernel)}</span>` : ''}<span>${cells.length} cells</span></p>
         </header>
+        <div class="findbar" id="findbar" role="search" hidden>
+          <input id="find-input" type="search" aria-label="Find in this notebook" autocomplete="off" spellcheck="false" placeholder="Find in this notebook">
+          <span class="find-count" id="find-count" role="status" aria-live="polite"></span>
+          <button class="btn" id="find-prev" type="button" aria-label="Previous match">&uarr;</button>
+          <button class="btn" id="find-next" type="button" aria-label="Next match">&darr;</button>
+          <button class="btn" id="find-close" type="button">Close</button>
+        </div>
         <div class="cells" id="cells"></div>
       </article>`;
 
@@ -702,6 +710,7 @@
 
     // Render in batches so huge notebooks stay responsive.
     const host = document.getElementById('cells');
+    setupFind(host, () => current.rendered);
     try {
       let frameStart = performance.now();
       const wanted = targetCell;
@@ -761,6 +770,126 @@
     el.scrollIntoView({ block: 'start' });
     el.focus({ preventScroll: true });
   }
+
+  /* ---------- find in notebook ---------- */
+
+  const MAX_FIND = 3000;
+  const HAS_HIGHLIGHTS = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight === 'function';
+  const FIND_SKIP = '.prompt, .gutter, .cell-link, .plotly-ui, script, style, [aria-hidden="true"]';
+
+  function clearFindHighlights() {
+    if (HAS_HIGHLIGHTS) { CSS.highlights.delete('nbv-find'); CSS.highlights.delete('nbv-find-current'); }
+    document.querySelectorAll('.find-cell').forEach(e => e.classList.remove('find-cell'));
+  }
+
+  // Looks through the text that is on the page (so it matches what a reader sees, including rendered markdown and
+  // outputs), skipping hidden parts such as code while "Hide code" is on. Highlights use the CSS Custom Highlight API.
+  function setupFind(host, whenRendered) {
+    const bar = document.getElementById('findbar');
+    const input = document.getElementById('find-input');
+    const count = document.getElementById('find-count');
+    const openBtn = document.getElementById('find-btn');
+    let ranges = [], at = -1, timer = 0, token = 0;
+
+    const show = () => {
+      if (!bar.hidden) { input.focus(); input.select(); return; }
+      bar.hidden = false;
+      openBtn.setAttribute('aria-expanded', 'true');
+      input.focus();
+      if (input.value) search();
+    };
+    const hide = () => {
+      bar.hidden = true;
+      openBtn.setAttribute('aria-expanded', 'false');
+      ranges = []; at = -1;
+      clearFindHighlights();
+      count.textContent = '';
+      openBtn.focus();
+    };
+
+    function collect(query) {
+      const q = query.toLowerCase();
+      const out = [];
+      const seen = new Map();
+      const visible = el => {
+        if (!seen.has(el)) seen.set(el, el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0);
+        return seen.get(el);
+      };
+      const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, {
+        acceptNode: n => (n.parentElement && !n.parentElement.closest(FIND_SKIP) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+      });
+      for (let n = walker.nextNode(); n && out.length < MAX_FIND; n = walker.nextNode()) {
+        const text = n.nodeValue;
+        const lower = text.toLowerCase();
+        if (lower.length !== text.length || !lower.includes(q) || !visible(n.parentElement)) continue;
+        for (let i = lower.indexOf(q); i >= 0 && out.length < MAX_FIND; i = lower.indexOf(q, i + q.length)) {
+          const r = document.createRange();
+          r.setStart(n, i);
+          r.setEnd(n, i + q.length);
+          out.push(r);
+        }
+      }
+      return out;
+    }
+
+    function paint() {
+      clearFindHighlights();
+      if (!ranges.length) return;
+      const r = ranges[at];
+      const el = r.startContainer.parentElement;
+      if (HAS_HIGHLIGHTS) {
+        CSS.highlights.set('nbv-find', new Highlight(...ranges));
+        CSS.highlights.set('nbv-find-current', new Highlight(r));
+      } else if (el) {
+        const cell = el.closest('.cell');
+        if (cell) cell.classList.add('find-cell');
+      }
+      if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      count.textContent = `${at + 1} of ${ranges.length}${ranges.length >= MAX_FIND ? '+' : ''}`;
+    }
+
+    async function search() {
+      const mine = ++token;
+      const q = input.value.trim();
+      if (!q) { ranges = []; at = -1; clearFindHighlights(); count.textContent = ''; return; }
+      await whenRendered();
+      if (mine !== token) return;
+      ranges = collect(q);
+      at = ranges.length ? 0 : -1;
+      if (!ranges.length) { clearFindHighlights(); count.textContent = 'No matches'; return; }
+      paint();
+    }
+
+    const step = d => {
+      if (!ranges.length) return;
+      at = (at + d + ranges.length) % ranges.length;
+      paint();
+    };
+
+    openBtn.addEventListener('click', () => (bar.hidden ? show() : hide()));
+    document.getElementById('find-close').addEventListener('click', hide);
+    document.getElementById('find-next').addEventListener('click', () => step(1));
+    document.getElementById('find-prev').addEventListener('click', () => step(-1));
+    input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(search, 150); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); clearTimeout(timer); if (token && ranges.length && input.value.trim()) step(e.shiftKey ? -1 : 1); else search(); }
+      else if (e.key === 'Escape') { e.preventDefault(); hide(); }
+    });
+    // The page's own buttons that change what is visible make the old matches stale.
+    for (const id of ['toggle-code', 'toggle-outputs']) document.getElementById(id).addEventListener('click', () => { if (!bar.hidden && input.value.trim()) search(); });
+
+    if (findKey) document.removeEventListener('keydown', findKey);
+    findKey = e => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (!document.getElementById('find-btn')) return;
+      e.preventDefault();
+      show();
+    };
+    document.addEventListener('keydown', findKey);
+  }
+  let findKey = null;
 
   /* ---------- export ---------- */
 
@@ -2132,6 +2261,7 @@
     const parts = raw.split('/').filter(Boolean).map(safeDecode);
     document.body.classList.toggle('is-home', parts.length === 0);
     window.scrollTo(0, 0);
+    clearFindHighlights();
 
     if (!window.marked || !window.DOMPurify) {
       renderError(new ViewError("Couldn't load the rendering libraries", 'A script failed to load. Reload the page, or check for content blockers.'));
