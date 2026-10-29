@@ -9,6 +9,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - **Swap sides** (for two notebooks) and **Swap versions** (for two versions of one notebook) buttons.
 
 ### Changed
+- Compare diffs now look like GitHub's: long lines wrap instead of scrolling one by one, each line has its old and new line number, and the side-by-side view uses the full width of the page.
 - Compare always opens in the unified (one column) view, on any screen size. The toolbar now reads Unified, then Side by side, and a side-by-side choice is still remembered.
 
 ## [0.7.0] - 2026-10-28

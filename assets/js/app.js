@@ -1589,8 +1589,26 @@
   const FOLD_AFTER = 8; // equal lines in a row before the middle is folded away
   const FOLD_KEEP = 3;
 
-  function diffLine(line) {
+  // Gives each line its number in the old (o) and new (n) text, like GitHub's diff gutters.
+  function numberLines(lines) {
+    let o = 0, n = 0;
+    for (const l of lines) {
+      l.o = l.t === 'add' ? 0 : ++o;
+      l.n = l.t === 'del' ? 0 : ++n;
+    }
+    return lines;
+  }
+
+  // where: 'u' = one column (both numbers), 'l' / 'r' = left or right side of the side-by-side view.
+  function diffLine(line, where) {
     const row = mk('div', `dline ${line.t}`);
+    const num = where === 'l' ? line.o : where === 'r' ? line.n : null;
+    if (where === 'u') {
+      row.append(mk('span', 'dnum', line.o || ''), mk('span', 'dnum', line.n || ''));
+    } else {
+      row.append(mk('span', 'dnum', num || ''));
+    }
+    for (const n of row.querySelectorAll('.dnum')) n.setAttribute('aria-hidden', 'true');
     row.append(mk('span', 'dsign', line.t === 'add' ? '+' : line.t === 'del' ? '-' : ' '));
     if (line.t !== 'eq') row.lastChild.setAttribute('aria-hidden', 'true');
     if (line.t !== 'eq') row.append(mk('span', 'sr-only', line.t === 'add' ? 'added: ' : 'removed: '));
@@ -1607,17 +1625,17 @@
         while (j < lines.length && lines[j].t === 'eq') j++;
         const run = lines.slice(i, j);
         if (run.length > FOLD_AFTER) {
-          run.slice(0, FOLD_KEEP).forEach(l => box.append(diffLine(l)));
+          run.slice(0, FOLD_KEEP).forEach(l => box.append(diffLine(l, 'u')));
           const hidden = run.slice(FOLD_KEEP, run.length - FOLD_KEEP);
           const btn = mk('button', 'dfold', `Show ${hidden.length} unchanged lines`);
           btn.type = 'button';
-          btn.addEventListener('click', () => { btn.replaceWith(...hidden.map(diffLine)); });
+          btn.addEventListener('click', () => { btn.replaceWith(...hidden.map(l => diffLine(l, 'u'))); });
           box.append(btn);
-          run.slice(run.length - FOLD_KEEP).forEach(l => box.append(diffLine(l)));
-        } else run.forEach(l => box.append(diffLine(l)));
+          run.slice(run.length - FOLD_KEEP).forEach(l => box.append(diffLine(l, 'u')));
+        } else run.forEach(l => box.append(diffLine(l, 'u')));
       } else {
         while (j < lines.length && lines[j].t !== 'eq') j++;
-        lines.slice(i, j).forEach(l => box.append(diffLine(l)));
+        lines.slice(i, j).forEach(l => box.append(diffLine(l, 'u')));
       }
       i = j;
     }
@@ -1639,7 +1657,7 @@
 
   function splitBody(lines) {
     const box = mk('div', 'dsplit');
-    const cell = (line, side) => (line ? diffLine(line) : mk('div', `dline empty ${side}`));
+    const cell = (line, side) => (line ? diffLine(line, side) : mk('div', `dline empty ${side}`));
     const put = row => { box.append(cell(row.l, 'l'), cell(row.r, 'r')); };
     const all = splitRows(lines);
     for (let i = 0; i < all.length;) {
@@ -1669,7 +1687,7 @@
     return box;
   }
 
-  const textLines = (text, t) => (text === '' ? [] : text.split('\n').map(x => ({ t, text: x })));
+  const textLines = (text, t) => (text === '' ? [] : numberLines(text.split('\n').map(x => ({ t, text: x }))));
 
   function renderDiff(d) {
     const entries = d.entries;
@@ -1710,7 +1728,7 @@
       if (e.kind === 'removed') return textLines(e.a.outputs, 'del');
       return e.outputsChanged ? e.outputLines : [];
     };
-    const draw = lines => (state.layout === 'split' ? splitBody(lines) : unifiedBody(lines));
+    const draw = lines => (state.layout === 'split' ? splitBody(numberLines(lines)) : unifiedBody(numberLines(lines)));
 
     const changeBox = e => {
       const box = mk('section', `dcell dcell-${e.kind}`);
@@ -1759,6 +1777,7 @@
       changes = [...body.querySelectorAll('[data-change]')];
       at = -1;
       document.getElementById('d-pos').textContent = '';
+      app.querySelector('.diffview').classList.toggle('is-split', state.layout === 'split');
       document.getElementById('d-split').setAttribute('aria-pressed', String(state.layout === 'split'));
       document.getElementById('d-unified').setAttribute('aria-pressed', String(state.layout === 'unified'));
       document.getElementById('d-outputs').setAttribute('aria-pressed', String(state.outputs));
