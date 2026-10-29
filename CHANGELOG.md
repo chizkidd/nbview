@@ -8,6 +8,11 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - **Saved widgets are shown.** ipywidgets outputs (tqdm progress bars, sliders, dropdowns, labels, HTML, and the boxes holding them) now appear read-only from the widget state saved in the notebook, instead of a bare text description. Passwords are never shown, and widgets with no saved state keep their text fallback or a short note.
 - **Link previews.** Links like `nbview.org/github/owner/repo/blob/main/notebook.ipynb` now show a card with the notebook's file name and repo when pasted into Slack, Reddit, X, Discord and similar. The card is built from the address only: the server never fetches or reads the notebook. "Copy link" and the cell `#` button copy this form for GitHub notebooks. People opening the link are redirected to the viewer as before.
 
+## [Unreleased]
+
+### Changed
+- **Faster first load.** The page's scripts no longer block it from showing, and syntax highlighting and math (about 120 KB) load when a notebook opens instead of with the home page. On a throttled phone profile the home page shows its content in about 0.6 s instead of 1.2 s; opening a notebook takes the same time as before.
+
 ## [0.10.0] - 2026-10-29
 
 Share a link to one cell, and run Plotly charts safely.

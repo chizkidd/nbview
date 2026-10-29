@@ -578,6 +578,8 @@
   }
 
   async function showNotebook(nb, ctx, info, id) {
+    await ensureRenderLibs(); // syntax colors and math load when a notebook opens, not with the home page
+    if (stale(id)) return;
     const { cells, meta } = normalize(nb);
     const wstate = meta.widgets && meta.widgets['application/vnd.jupyter.widget-state+json'];
     ctx.widgets = wstate && wstate.state && typeof wstate.state === 'object' ? wstate.state : null;
@@ -1487,7 +1489,36 @@
     return false;
   }
 
-  if (window.katex && katex.render) {
+  // Syntax highlighting and math are only needed once a notebook is shown, so they load then (and stay cached).
+  const loadedFiles = new Map();
+  function loadFile(tag, attr, url, extra) {
+    if (!loadedFiles.has(url)) {
+      loadedFiles.set(url, new Promise(resolve => {
+        const el = document.createElement(tag);
+        Object.assign(el, extra);
+        el[attr] = url;
+        el.onload = () => resolve(true);
+        el.onerror = () => resolve(false); // the notebook still opens, just without that library
+        document.head.append(el);
+      }));
+    }
+    return loadedFiles.get(url);
+  }
+
+  let renderLibs = null;
+  function ensureRenderLibs() {
+    if (!renderLibs) {
+      renderLibs = Promise.all([
+        loadFile('script', 'src', 'assets/vendor/highlight.min.js'),
+        loadFile('link', 'href', 'assets/vendor/katex/katex.min.css', { rel: 'stylesheet' }),
+        loadFile('script', 'src', 'assets/vendor/katex/katex.min.js').then(ok => ok && loadFile('script', 'src', 'assets/vendor/katex/auto-render.min.js')),
+      ]).then(patchKatex);
+    }
+    return renderLibs;
+  }
+
+  function patchKatex() {
+    if (!(window.katex && katex.render)) return;
     const render = katex.render.bind(katex);
     katex.render = (tex, el, opts) => {
       const spent = mathMs + (mathStart ? performance.now() - mathStart : 0);
@@ -2109,6 +2140,9 @@
 
     try {
       if (!parts.length) return renderHome();
+
+      // Anything that can show a notebook starts loading highlighting and math now, alongside the notebook itself.
+      if (parts[0] !== 'compare') ensureRenderLibs();
 
       if ((parts[0] === 'url' || parts[0] === 'urls') && parts[1]) {
         return await viewNotebook({ url: nbviewerUrl(parts[0], parts.slice(1).join('/')) }, id);
