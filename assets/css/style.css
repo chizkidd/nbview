@@ -678,3 +678,10 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 /* Changed words inside a changed line */
 .dline.del .dw { background: light-dark(#FFB8B0, #6B2128); border-radius: 2px; }
 .dline.add .dw { background: light-dark(#A6F0B8, #1F5F32); border-radius: 2px; }
+
+/* Interactive charts */
+.plotly-box { margin: 0.2rem 0 0.6rem; }
+.plotly-ui { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.8rem; }
+.plotly-ui .note { margin: 0; }
+.plotly-frame { display: block; width: 100%; margin-top: 0.5rem; border: 1px solid var(--rule); border-radius: 3px; background: #fff; }
+@media print { .plotly-run { display: none !important; } }

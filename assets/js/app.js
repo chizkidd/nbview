@@ -787,6 +787,12 @@
       await nbState.rendered;
       const host = document.getElementById('cells').cloneNode(true);
       for (const x of host.querySelectorAll('.cell-link')) x.remove();
+      for (const x of host.querySelectorAll('.plotly-box')) {
+        const n = document.createElement('div');
+        n.className = 'note';
+        n.textContent = 'Interactive chart not included in this file.';
+        x.replaceWith(n);
+      }
       for (const x of host.querySelectorAll('.cell-target')) x.classList.remove('cell-target');
       for (const big of host.querySelectorAll('.output-big')) {
         const note = document.createElement('div');
@@ -1008,6 +1014,8 @@
 
   function renderMime(wrap, data, meta, ctx) {
     let skippedScript = false;
+    const fig = plotlyFigure(data);
+    if (fig) wrap.append(plotlyBox(fig));
 
     for (const type of MIME_ORDER) {
       if (!(type in data)) continue;
@@ -1072,15 +1080,112 @@
       const pre = document.createElement('pre');
       pre.innerHTML = type === 'application/json' ? esc(JSON.stringify(v, null, 2)) : ansiToHtml(v);
       wrap.append(pre);
-      if (skippedScript) wrap.append(scriptNote());
+      if (skippedScript && !fig) wrap.append(scriptNote());
       return true;
     }
 
+    if (fig) return true;
     if (skippedScript) {
       wrap.append(scriptNote());
       return true;
     }
     return false;
+  }
+
+  /* ---------- interactive charts (Plotly) ---------- */
+
+  // Only Plotly figures (data, no code) can run, and only in a sandboxed frame after the reader clicks.
+  // The frame has an opaque origin, so it can't reach this page, its storage or the network.
+  const MAX_FIGURE_VALUES = 3000000;
+  const MAX_CHART_FRAMES = 8;
+
+  // A copy made of plain objects, arrays and primitives only, without keys that could tamper with prototypes.
+  function plainCopy(v, budget, depth = 0) {
+    if (--budget.n < 0 || depth > 40) throw new Error('too large');
+    if (Array.isArray(v)) return v.map(x => plainCopy(x, budget, depth + 1));
+    if (v && typeof v === 'object') {
+      const o = {};
+      for (const k of Object.keys(v)) {
+        if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+        o[k] = plainCopy(v[k], budget, depth + 1);
+      }
+      return o;
+    }
+    return typeof v === 'function' || typeof v === 'symbol' ? null : v;
+  }
+
+  function plotlyFigure(data) {
+    const f = data['application/vnd.plotly.v1+json'];
+    if (!f || typeof f !== 'object' || Array.isArray(f) || !Array.isArray(f.data) || f.data.length > 200) return null;
+    if (f.layout != null && (typeof f.layout !== 'object' || Array.isArray(f.layout))) return null;
+    return f;
+  }
+
+  function plotlyBox(fig) {
+    const box = document.createElement('div');
+    box.className = 'plotly-box';
+    const bar = document.createElement('div');
+    bar.className = 'plotly-ui';
+    const note = document.createElement('span');
+    note.className = 'note';
+    note.id = `plotly-note-${++scopeSeq}`;
+    note.textContent = 'Interactive chart. It runs in an isolated frame, and no notebook code is executed.';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn plotly-run';
+    btn.textContent = 'Run interactive chart';
+    btn.setAttribute('aria-describedby', note.id);
+    bar.append(btn, note);
+    box.append(bar);
+
+    let frame = null, listener = null, timer = 0;
+    const stop = msg => {
+      clearTimeout(timer);
+      if (listener) window.removeEventListener('message', listener);
+      listener = null;
+      if (frame) frame.remove();
+      frame = null;
+      btn.textContent = 'Run interactive chart';
+      btn.setAttribute('aria-pressed', 'false');
+      if (msg) note.textContent = msg;
+    };
+    btn.addEventListener('click', () => {
+      if (frame) { stop('Interactive chart stopped.'); return; }
+      if (document.querySelectorAll('.plotly-frame').length >= MAX_CHART_FRAMES) {
+        note.textContent = `Only ${MAX_CHART_FRAMES} charts can run at once. Stop another one first.`;
+        return;
+      }
+      let payload;
+      try {
+        const budget = { n: MAX_FIGURE_VALUES };
+        payload = { data: plainCopy(fig.data, budget), layout: plainCopy(fig.layout || {}, budget), config: plainCopy(fig.config || {}, budget) };
+      } catch { note.textContent = 'This chart is too large to run here.'; return; }
+      const lh = Number(payload.layout.height);
+      const height = Math.min(1200, Math.max(120, Number.isFinite(lh) && lh > 0 ? lh : 450));
+
+      frame = document.createElement('iframe');
+      frame.className = 'plotly-frame';
+      frame.title = 'Interactive chart';
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.referrerPolicy = 'no-referrer';
+      frame.style.height = height + 'px';
+      frame.src = '/sandbox/plotly/';
+      listener = e => {
+        if (!frame || e.source !== frame.contentWindow) return;
+        const m = e.data;
+        if (!m || typeof m !== 'object') return;
+        if (m.type === 'ready') frame.contentWindow.postMessage({ type: 'render', ...payload, height }, '*');
+        else if (m.type === 'rendered') { clearTimeout(timer); note.textContent = 'Interactive chart running in an isolated frame.'; }
+        else if (m.type === 'error') stop("This chart couldn't be drawn.");
+      };
+      window.addEventListener('message', listener);
+      timer = setTimeout(() => stop('The chart took too long to start.'), 20000);
+      btn.textContent = 'Stop interactive chart';
+      btn.setAttribute('aria-pressed', 'true');
+      note.textContent = 'Starting the chart...';
+      box.append(frame);
+    });
+    return box;
   }
 
   function scriptNote() {

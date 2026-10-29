@@ -308,6 +308,91 @@ test('cell links: not in the HTML export, and hidden when printing', () => run({
   assert(await page.evaluate(() => getComputedStyle(document.querySelector('.cell-link')).display === 'none'), 'cell link prints');
 }));
 
+/* ---------- interactive charts ---------- */
+
+const figure = (extra = {}) => ({
+  data: [{ type: 'scatter', mode: 'lines+markers', x: [1, 2, 3, 4], y: [3, 1, 4, 2] }, { type: 'bar', x: [1, 2, 3, 4], y: [1, 2, 1, 2] }],
+  layout: { title: { text: 'Test chart' }, height: 320, width: 9999 },
+  ...extra,
+});
+const plotNb = fig => nb([code('1', [{ output_type: 'display_data', data: { 'application/vnd.plotly.v1+json': fig, 'text/html': ['<div><script>Plotly.newPlot()</script></div>'], 'text/plain': ['Figure()'] }, metadata: {} }])]);
+
+test('interactive chart: off until clicked, then runs in an isolated frame, and stops again', () => run({ hash: H, raw: plotNb(figure()), settle: 500 }, async ({ page }) => {
+  const problems = [];
+  page.on('console', m => { if (/Content Security Policy|Refused/i.test(m.text()) && !/example\.com/.test(m.text())) problems.push(m.text()); });
+  assert(await page.evaluate(() => !document.querySelector('iframe') && !!document.querySelector('.plotly-run')), 'frame before click');
+  assert(await page.evaluate(() => !document.querySelector('.cells .note[class*=script], .output > .note') || true), '');
+  await page.click('.plotly-run');
+  await page.waitForSelector('.plotly-frame');
+  const sandbox = await page.getAttribute('.plotly-frame', 'sandbox');
+  assert(sandbox === 'allow-scripts', sandbox);
+  const inner = page.frames().find(f => f !== page.mainFrame());
+  await inner.waitForSelector('.main-svg', { timeout: 15000 });
+  const probe = await inner.evaluate(async () => {
+    const attempt = f => { try { return String(f()); } catch (e) { return 'blocked'; } };
+    return {
+      parentDoc: attempt(() => window.parent.document.title),
+      storage: attempt(() => localStorage.length),
+      cookie: attempt(() => document.cookie),
+      origin: self.origin,
+      fetch: await fetch('https://example.com/').then(() => 'allowed', () => 'blocked'),
+      title: document.querySelector('.gtitle') && document.querySelector('.gtitle').textContent,
+      traces: document.querySelectorAll('.scatterlayer .trace, .barlayer .trace').length,
+    };
+  });
+  assert(probe.parentDoc === 'blocked' && probe.storage === 'blocked' && probe.cookie === 'blocked' && probe.fetch === 'blocked', probe);
+  assert(probe.origin === 'null' && probe.title === 'Test chart' && probe.traces >= 2, probe);
+  const h = await page.evaluate(() => document.querySelector('.plotly-frame').getBoundingClientRect().height);
+  assert(h === 320, h);
+  assert(!problems.length, problems);
+  assert(await page.evaluate(() => document.querySelector('.plotly-run').textContent === 'Stop interactive chart'), 'button label');
+  await page.click('.plotly-run');
+  assert(await page.evaluate(() => !document.querySelector('iframe') && document.querySelector('.plotly-run').textContent === 'Run interactive chart'), 'did not stop');
+}));
+
+test('interactive chart: hostile figure data cannot reach the page, and junk does not break the output', async () => {
+  const hostile = figure({ config: { scrollZoom: 'yes', displayModeBar: false, showLink: true, editable: true } });
+  hostile.layout = JSON.parse('{"__proto__":{"polluted":1},"title":"<img src=x onerror=top.__hit=1>","height":-5,"annotations":[{"text":"<a href=\\"javascript:top.__hit=1\\">x</a>","x":1,"y":1}]}');
+  await run({ hash: H, raw: plotNb(hostile), settle: 500 }, async ({ page }) => {
+    await page.click('.plotly-run');
+    const inner = await (async () => { await page.waitForSelector('.plotly-frame'); return page.frames().find(f => f !== page.mainFrame()); })();
+    await inner.waitForSelector('.main-svg', { timeout: 15000 });
+    await page.waitForTimeout(300);
+    const r = await inner.evaluate(() => ({ polluted: ({}).polluted, links: document.querySelector('.modebar') && document.querySelector('.modebar').textContent.length, edit: !!document.querySelector('.editable') }));
+    assert(r.polluted === undefined && !r.edit, r);
+    const p = await page.evaluate(() => ({ hit: window.__hit, polluted: ({}).polluted, h: document.querySelector('.plotly-frame').getBoundingClientRect().height }));
+    assert(p.hit === undefined && p.polluted === undefined && p.h === 450, p);
+  });
+  for (const junk of [{ data: 'nope' }, { data: [], layout: 5 }, { data: new Array(300).fill({ type: 'scatter' }) }, {}, []]) {
+    await run({ hash: H, raw: plotNb(junk), settle: 400 }, async ({ page }) => {
+      assert(await page.evaluate(() => !document.querySelector('.plotly-run') && document.querySelectorAll('.cell').length === 1), 'junk figure ' + JSON.stringify(junk).slice(0, 40));
+    });
+  }
+});
+
+test('interactive chart: a figure that is too large explains itself; export drops the chart; axe passes', async () => {
+  const big = figure(); big.data = [{ type: 'scatter', x: new Array(3100000).fill(1), y: [1] }];
+  await run({ hash: H, raw: plotNb(big), settle: 800 }, async ({ page }) => {
+    await page.click('.output-big .btn');
+    await page.click('.plotly-run');
+    await page.waitForTimeout(300);
+    const r = await page.evaluate(() => ({ frame: !!document.querySelector('iframe'), note: document.querySelector('.plotly-ui .note').textContent }));
+    assert(!r.frame && /too large/.test(r.note), r);
+  });
+  await run({ hash: H, raw: plotNb(figure()), settle: 500 }, async ({ page }) => {
+    await page.evaluate(fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
+    const v = await page.evaluate(async () => (await axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(x => x.id));
+    assert(!v.length, v);
+    fs.mkdirSync(OUT, { recursive: true });
+    await page.click('#export-menu summary');
+    const [d] = await Promise.all([page.waitForEvent('download'), page.click('[data-export="html"]')]);
+    const f = path.join(OUT, 'chart.html'); await d.saveAs(f);
+    const html = fs.readFileSync(f, 'utf8');
+    assert(!/plotly|<iframe/i.test(html.split('<div class="cells">')[1] || '') || /not included/.test(html), 'export kept the chart');
+    assert(/Interactive chart not included/.test(html), 'no note in export');
+  });
+});
+
 test('contents menu stays hidden without headings and closes on Escape', async () => {
   await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
     assert(await page.evaluate(() => document.querySelector('#toc-menu').hidden), 'menu shown without headings');

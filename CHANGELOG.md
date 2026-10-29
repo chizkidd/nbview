@@ -2,6 +2,21 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
+## [Unreleased]
+
+Share a link to one cell, and run Plotly charts safely.
+
+### Added
+- **Link to a single cell.** Every cell has a `#` button that copies a link ending in `?cell=N`. Opening it scrolls to that cell and highlights it. The button doesn't appear in exports or print.
+- **Interactive Plotly charts.** A Plotly figure saved in the notebook as data now shows a **Run interactive chart** button. Nothing runs until you click. The chart then runs in a sandboxed frame that can't touch this page, your storage or cookies, or the network, and it only ever receives the figure's data. Notebook scripts are still never executed. Stop it with the same button. HTML exports leave a note instead of the chart.
+
+### Changed
+- `http://` notebook links (including nbviewer `/url/` links) are now loaded over `https://`, since the site's security policy blocks plain http requests. Before, they failed to load.
+- Pages may now be framed by this site itself (needed for the chart frame); other sites still can't frame them.
+
+### Internal
+- Tests now run under the site's real `_headers` policy, so a change the browser would block in production fails a test.
+
 ## [0.9.0] - 2026-10-29
 
 More ways into Compare, and word-level highlights.

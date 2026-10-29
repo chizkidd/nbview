@@ -41,6 +41,8 @@ async function start() {
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
     const headers = { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' };
     for (const rule of rules) if (matches(rule.pattern, p)) Object.assign(headers, rule.headers);
+    // Safari does not match 'self' inside the sandboxed chart frame, so the policy also names the site; here the site is the test server.
+    for (const k of Object.keys(headers)) headers[k] = headers[k].replace('https://nbview.org', base);
     res.writeHead(200, headers);
     fs.createReadStream(file).pipe(res);
   });

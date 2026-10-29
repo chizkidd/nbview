@@ -9,5 +9,6 @@ These files are served from this site instead of a CDN, so a third-party outage 
 | `highlight.min.js` | [highlight.js](https://github.com/highlightjs/highlight.js) (cdn-assets build) | 11.12.0 | BSD-3-Clause |
 | `katex/katex.min.js`, `katex/katex.min.css`, `katex/fonts/*.woff2` | [KaTeX](https://github.com/KaTeX/KaTeX) | 0.19.0 | MIT |
 | `katex/auto-render.min.js` | KaTeX contrib auto-render | 0.19.0 | MIT |
+| `plotly/plotly-cartesian.min.js` | [plotly.js](https://github.com/plotly/plotly.js) (`plotly.js-cartesian-dist-min` build) | 4.1.2 | MIT |
 
 Only the `.woff2` KaTeX fonts are included (every browser that runs this app supports them). The only edit to upstream files is removing the trailing `sourceMappingURL` comment from `marked.umd.js` and `purify.min.js`, since the maps aren't shipped. License texts are in `licenses/`.
