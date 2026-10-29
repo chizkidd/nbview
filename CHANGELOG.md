@@ -2,7 +2,9 @@
 
 All notable changes to nbview. Dates are when the release's last change landed on `main`. Versions below 1.0 may still change how things work.
 
-## [Unreleased]
+## [0.8.0] - 2026-10-29
+
+Compare any two notebooks, and diffs that read like GitHub's.
 
 ### Added
 - **Compare two different notebooks.** The Compare page has a new **Two links** tab: paste a GitHub notebook link, a raw link, `owner/repo/path/to/notebook.ipynb` (uses the default branch) or any direct `.ipynb` URL for each side, in the same repo or different repos. On a GitHub notebook, the Compare dialog also accepts "a different notebook". Shareable as `nbview.org/#/compare/links/<first>/<second>`. Gist links are not supported in Compare yet.
