@@ -579,6 +579,8 @@
 
   async function showNotebook(nb, ctx, info, id) {
     const { cells, meta } = normalize(nb);
+    const wstate = meta.widgets && meta.widgets['application/vnd.jupyter.widget-state+json'];
+    ctx.widgets = wstate && wstate.state && typeof wstate.state === 'object' ? wstate.state : null;
     const li = meta.language_info || {};
     const ks = meta.kernelspec || {};
     const lang = String(li.name || ks.language || meta.language || 'python').toLowerCase();
@@ -1025,6 +1027,18 @@
     let skippedScript = false;
     const fig = plotlyFigure(data);
     if (fig) wrap.append(plotlyBox(fig));
+    const view = data['application/vnd.jupyter.widget-view+json'];
+    if (view && typeof view === 'object' && !fig) {
+      const w = renderWidget(view.model_id, ctx);
+      if (w) { wrap.append(w); return true; }
+      if (!('text/plain' in data) && !('text/html' in data)) {
+        const n = document.createElement('div');
+        n.className = 'note';
+        n.textContent = 'Interactive widget. It needs a running notebook, so only its saved state can be shown here.';
+        wrap.append(n);
+        return true;
+      }
+    }
 
     for (const type of MIME_ORDER) {
       if (!(type in data)) continue;
@@ -1099,6 +1113,78 @@
       return true;
     }
     return false;
+  }
+
+  /* ---------- widgets (saved state, shown read-only) ---------- */
+
+  const MAX_WIDGETS = 400; // per output, so a huge widget tree can't stall the page
+
+  // A static picture of an ipywidget from the notebook's saved widget state: progress bars, labels, HTML, values and
+  // the boxes that hold them. Nothing is interactive and nothing runs. Returns null for anything unrecognised.
+  function renderWidget(modelId, ctx, budget = { n: MAX_WIDGETS }, depth = 0) {
+    const states = ctx && ctx.widgets;
+    if (!states || typeof modelId !== 'string' || depth > 6 || --budget.n < 0) return null;
+    const m = Object.prototype.hasOwnProperty.call(states, modelId) ? states[modelId] : null;
+    const st = m && m.state && typeof m.state === 'object' ? m.state : null;
+    const kind = m && typeof m.model_name === 'string' ? m.model_name.replace(/Model$/, '') : '';
+    if (!st || !kind) return null;
+    const text = v => (v == null ? '' : String(v));
+    const row = (label, content) => {
+      const d = document.createElement('div');
+      d.className = 'widget-row';
+      if (st.description) {
+        const l = document.createElement('span');
+        l.className = 'widget-label';
+        l.textContent = text(st.description);
+        d.append(l);
+      }
+      d.append(content);
+      return d;
+    };
+    const span = (t, cls) => { const e = document.createElement('span'); e.textContent = t; if (cls) e.className = cls; return e; };
+
+    if (/^(HBox|VBox|Box|GridBox|Accordion|Tab)$/.test(kind)) {
+      const box = document.createElement('div');
+      box.className = `widget-box widget-${kind === 'HBox' ? 'h' : 'v'}`;
+      const kids = Array.isArray(st.children) ? st.children : [];
+      for (const ref of kids) {
+        const child = renderWidget(text(ref).replace(/^IPY_MODEL_/, ''), ctx, budget, depth + 1);
+        if (child) box.append(child);
+      }
+      return box.childNodes.length ? box : null;
+    }
+    if (/^(Float|Int)Progress$/.test(kind)) {
+      const max = Number(st.max) || 100, min = Number(st.min) || 0, val = Number(st.value);
+      if (!Number.isFinite(val)) return null;
+      const bar = document.createElement('progress');
+      bar.max = max - min;
+      bar.value = Math.min(Math.max(val - min, 0), max - min);
+      bar.setAttribute('aria-label', st.description ? text(st.description) : 'Progress');
+      if (st.bar_style) bar.className = `bar-${text(st.bar_style).replace(/[^a-z]/gi, '')}`;
+      const pct = span(`${Math.round(((val - min) / ((max - min) || 1)) * 100)}%`, 'widget-value');
+      const wrapRow = row(st.description, bar);
+      wrapRow.append(pct);
+      return wrapRow;
+    }
+    if (kind === 'HTML' || kind === 'HTMLMath') {
+      const scope = newScope();
+      const d = document.createElement('div');
+      d.className = `widget-html html-out ${scope}`;
+      d.innerHTML = sanitizeHtml(text(st.value), scope);
+      d.querySelectorAll('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+      return row(st.description, d);
+    }
+    if (kind === 'Label') return row(st.description, span(text(st.value)));
+    if (kind === 'Button') return span(text(st.description) || 'Button', 'widget-button');
+    const SIMPLE = /^(Int|Float|BoundedInt|BoundedFloat|IntSlider|FloatSlider|IntRangeSlider|FloatRangeSlider|IntText|FloatText|BoundedIntText|BoundedFloatText|Text|Textarea|Checkbox|ToggleButton|Combobox|Valid|DatePicker|ColorPicker|SelectionSlider|Play)$/;
+    if (SIMPLE.test(kind) && 'value' in st) {
+      return row(st.description, span(Array.isArray(st.value) ? st.value.join(' to ') : text(st.value), 'widget-value'));
+    }
+    // Dropdowns and similar keep the chosen position and the labels, not a value.
+    if (/^(Dropdown|RadioButtons|Select|ToggleButtons)$/.test(kind) && Array.isArray(st._options_labels) && Number.isInteger(st.index)) {
+      return row(st.description, span(text(st._options_labels[st.index]), 'widget-value'));
+    }
+    return null;
   }
 
   /* ---------- interactive charts (Plotly) ---------- */

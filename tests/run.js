@@ -393,6 +393,65 @@ test('interactive chart: a figure that is too large explains itself; export drop
   });
 });
 
+/* ---------- widgets ---------- */
+
+const widgetOut = (id, plain) => ({ output_type: 'display_data', data: { 'application/vnd.jupyter.widget-view+json': { model_id: id, version_major: 2, version_minor: 0 }, ...(plain ? { 'text/plain': [plain] } : {}) }, metadata: {} });
+const widgetState = state => ({ widgets: { 'application/vnd.jupyter.widget-state+json': { version_major: 2, version_minor: 0, state } } });
+const model = (name, state) => ({ model_name: name + 'Model', model_module: '@jupyter-widgets/controls', state });
+
+test('widgets: saved state shows as read-only progress bars, labels and values; unknown ones keep their text', async () => {
+  const state = {
+    box: model('HBox', { children: ['IPY_MODEL_bar', 'IPY_MODEL_html', 'IPY_MODEL_box'] }),
+    bar: model('FloatProgress', { value: 30, max: 120, min: 0, description: '100%', bar_style: 'success' }),
+    html: model('HTML', { value: '<b>done</b> in 3s<script>window.__w=1</script><img src=x onerror="window.__w=2">', description: '' }),
+    slider: model('IntSlider', { value: 7, description: 'n' }),
+    drop: model('Dropdown', { index: 1, _options_labels: ['a', 'b'], description: 'pick' }),
+    weird: model('SomethingNew', { value: 1 }),
+    pw: model('Password', { value: 'hunter2' }),
+  };
+  state.box.state.children.push('IPY_MODEL_slider', 'IPY_MODEL_drop');
+  const raw = nb([
+    code('1', [widgetOut('box', 'HBox(children=(FloatProgress(...),))')]),
+    code('2', [widgetOut('weird', 'SomethingNew(value=1)')]),
+    code('3', [widgetOut('missing')]),
+    code('4', [widgetOut('pw', 'Password()')]),
+  ], widgetState(state));
+  await run({ hash: H, raw, settle: 500 }, async ({ page }) => {
+    const r = await page.evaluate(() => {
+      const outs = [...document.querySelectorAll('.output-row')];
+      return {
+        progress: !!outs[0].querySelector('progress[value="30"][max="120"]'),
+        pct: outs[0].querySelector('.widget-value') && outs[0].querySelector('.widget-value').textContent,
+        html: outs[0].querySelector('.widget-html') && outs[0].querySelector('.widget-html').textContent,
+        slider: [...outs[0].querySelectorAll('.widget-row')].map(x => x.textContent).join('|'),
+        fallbackShown: outs[0].textContent.includes('HBox(children'),
+        weird: outs[1].textContent,
+        missing: outs[2].textContent,
+        pw: outs[3].textContent,
+        hit: window.__w, bad: !!document.querySelector('.widget-html script, .widget-html [onerror]'),
+        interactive: !!document.querySelector('.widget-row input, .widget-row select, .widget-row button'),
+      };
+    });
+    assert(r.progress && r.pct === '25%' && /done in 3s/.test(r.html) && /n7/.test(r.slider) && /pickb/.test(r.slider), r);
+    assert(!r.fallbackShown && r.hit === undefined && !r.bad && !r.interactive, r);
+    assert(/SomethingNew\(value=1\)/.test(r.weird), r.weird);
+    assert(/needs a running notebook/.test(r.missing), r.missing);
+    assert(!/hunter2/.test(r.pw) && /Password\(\)/.test(r.pw), r.pw);
+  });
+});
+
+test('widgets: cyclic and hostile saved state cannot hang or break the page', async () => {
+  const state = {
+    a: model('VBox', { children: ['IPY_MODEL_b'] }), b: model('HBox', { children: ['IPY_MODEL_a', 'IPY_MODEL_b', 'IPY_MODEL___proto__', 7, null] }),
+    big: model('HBox', { children: Array.from({ length: 5000 }, () => 'IPY_MODEL_leaf') }), leaf: model('Label', { value: 'x' }),
+  };
+  const raw = nb([code('1', [widgetOut('a', 'VBox()')]), code('2', [widgetOut('big', 'HBox()')]), code('3', [widgetOut('__proto__', 'p'), widgetOut('constructor', 'c')])], widgetState(state));
+  await run({ hash: H, raw, settle: 600 }, async ({ page }) => {
+    const r = await page.evaluate(() => ({ cells: document.querySelectorAll('.cell').length, leaves: document.querySelectorAll('.widget-row').length, text: document.querySelector('.cells').textContent }));
+    assert(r.cells === 3 && r.leaves <= 400 && /VBox\(\)/.test(r.text) && /pc$/.test(r.text), r);
+  });
+});
+
 test('contents menu stays hidden without headings and closes on Escape', async () => {
   await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
     assert(await page.evaluate(() => document.querySelector('#toc-menu').hidden), 'menu shown without headings');
