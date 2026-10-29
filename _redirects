@@ -1,6 +1,4 @@
 # Redirect nbviewer.org-style links: swap the domain and it just works.
-/github/*       /#/github/:splat  302
-/gist/:user/:id /#/gist/:id       302
-/gist/:id       /#/gist/:id       302
+# /github/* and /gist/* are handled by functions/ (same redirect, plus a link preview for chat and social crawlers).
 /url/*          /#/url/:splat     302
 /urls/*         /#/urls/:splat    302

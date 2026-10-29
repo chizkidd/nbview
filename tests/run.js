@@ -282,7 +282,7 @@ test('cell links: button copies a ?cell=N link, and opening it lands on that cel
     await page.locator('.cell').nth(29).scrollIntoViewIfNeeded();
     await b.click();
     const url = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
-    if (url) assert(/#\/github\/.*\?cell=30$/.test(url), url);
+    if (url) assert(/^http:\/\/127\.0\.0\.1:\d+\/github\/o\/r\/blob\/main\/t\.ipynb\?cell=30$/.test(url), url);
   });
   await run({ hash: H + '?cell=30', raw: many, settle: 800 }, async ({ page }) => {
     const r = await page.evaluate(() => {

@@ -635,8 +635,9 @@
     const copy = document.getElementById('copy-link');
     if (copy) {
       copy.addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(location.href); copy.textContent = 'Copied'; }
-        catch { copy.textContent = 'Press Ctrl+C'; window.prompt('Copy this link', location.href); }
+        const link = shareUrl();
+        try { await navigator.clipboard.writeText(link); copy.textContent = 'Copied'; }
+        catch { copy.textContent = 'Press Ctrl+C'; window.prompt('Copy this link', link); }
         setTimeout(() => { copy.textContent = 'Copy link'; }, 1800);
       });
     }
@@ -724,7 +725,15 @@
 
   // A link to one cell: the notebook's own address plus ?cell=N.
   function cellUrl(n) {
-    return location.origin + location.pathname + location.search + location.hash.replace(/\?cell=\d+$/, '') + '?cell=' + n;
+    return shareUrl().replace(/\?cell=\d+$/, '') + '?cell=' + n;
+  }
+
+  // The address to share. GitHub notebooks use the nbviewer-style path (nbview.org/github/...), which the server
+  // answers with a title and description for link previews and then sends people to the viewer.
+  function shareUrl() {
+    const m = /^#\/(github\/.+)$/.exec(location.hash);
+    if (m && /\/blob\//.test(m[1])) return location.origin + '/' + m[1];
+    return location.origin + location.pathname + location.search + location.hash;
   }
 
   function addCellLink(el, n) {

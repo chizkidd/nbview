@@ -3,7 +3,7 @@
   "private": true,
   "description": "Regression tests for nbview. The site itself has no build step; this is only for tests.",
   "scripts": {
-    "test": "node tests/run.js"
+    "test": "node tests/preview.js && node tests/run.js"
   },
   "devDependencies": {
     "axe-core": "4.13.0",
