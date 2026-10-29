@@ -2,7 +2,7 @@
 // (set CHROMIUM_PATH to use an existing Chromium; set BROWSER=firefox or BROWSER=webkit to test another engine). Everything runs offline against a local server.
 const fs = require('fs');
 const path = require('path');
-const { start, stop, open, state, nb, md, code } = require('./harness');
+const { start, stop, open, state, nb, md, code, hostOf } = require('./harness');
 
 const H = '#/github/o/r/blob/main/t.ipynb';
 const OUT = path.join(__dirname, 'out');
@@ -54,7 +54,7 @@ test('#/url/ rejects data:, javascript: and file: links', async () => {
 test('#/url/ accepts nbviewer-style forms (//host, /urls/, /url/)', async () => {
   const want = [['#/url/' + encodeURIComponent('//host.example/a.ipynb'), 'http://host.example/a.ipynb'], ['#/urls/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/host.example/a.ipynb', 'http://host.example/a.ipynb']];
   for (const [hash, expect] of want) {
-    await run({ hash, other: u => (u.includes('host.example') ? { body: JSON.stringify(good) } : null), settle: 300 }, async ({ page, requests }) => {
+    await run({ hash, other: u => (hostOf(u) === 'host.example' ? { body: JSON.stringify(good) } : null), settle: 300 }, async ({ page, requests }) => {
       assert(requests[0] === expect && (await state(page)).cells === 1, { hash, requests });
     });
   }
@@ -131,7 +131,7 @@ test('corrupt nbv.recent does not break the home page', async () => {
 
 test('a huge link is not saved to recents and keeps the title short', () => run({
   hash: '#/url/' + encodeURIComponent('https://host.example/' + 'a'.repeat(300000) + '.ipynb'),
-  other: u => (u.includes('host.example') ? { body: JSON.stringify(good) } : null), settle: 500, timeout: 30000,
+  other: u => (hostOf(u) === 'host.example' ? { body: JSON.stringify(good) } : null), settle: 500, timeout: 30000,
 }, async ({ page }) => {
   const r = await page.evaluate(() => ({ stored: (localStorage.getItem('nbv.recent') || '').length, title: document.title.length }));
   assert(r.stored < 5000 && r.title < 200, r);
@@ -247,7 +247,7 @@ test('export menu: no .py item for non-Python notebooks; print styles hide the t
 }));
 
 test('fonts are self-hosted: nothing leaves the site except GitHub', () => run({ hash: H, raw: good, settle: 600 }, async ({ page, requests }) => {
-  const external = requests.filter(u => !/raw\.githubusercontent\.com/.test(u));
+  const external = requests.filter(u => hostOf(u) !== 'raw.githubusercontent.com');
   assert(!external.length, external);
   const loaded = await page.evaluate(async () => { await document.fonts.ready; return [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family); });
   assert(loaded.some(f => /JetBrains/.test(f)) && loaded.some(f => /Source Serif/.test(f)), loaded);
@@ -464,7 +464,7 @@ test('compare by link: the form accepts GitHub links, raw links, shorthand and p
     ['https://nbviewer.org/github/alice/one/blob/main/nb.ipynb', 'github.com/bob/two/blob/dev/nb.ipynb', rawOf('alice', 'one', 'main', 'nb.ipynb'), rawOf('bob', 'two', 'dev', 'nb.ipynb')],
   ];
   for (const [a, b, wantA, wantB] of cases) {
-    await run({ hash: '#/compare', settle: 300, raw: twoRepos, other: u => (u.includes('example.com') ? { body: JSON.stringify(newNb) } : null) }, async ({ page }) => {
+    await run({ hash: '#/compare', settle: 300, raw: twoRepos, other: u => (hostOf(u) === 'example.com' ? { body: JSON.stringify(newNb) } : null) }, async ({ page }) => {
       await page.fill('#link-a', a); await page.fill('#link-b', b);
       await page.click('#links-form button[type="submit"]');
       await page.waitForSelector('.diffview');
