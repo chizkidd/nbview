@@ -425,6 +425,12 @@
     document.getElementById('big-open').addEventListener('click', onOpen);
   }
 
+  // A notebook served from a gist's raw URL can be compared with earlier revisions of that gist.
+  function gistInfo(url) {
+    const m = String(url).match(/^https:\/\/gist\.githubusercontent\.com\/([^/]+)\/([0-9a-f]+)\/raw\//i);
+    return m ? { gist: m[2], url } : null;
+  }
+
   async function viewNotebook(src, id) {
     showLoading('Fetching notebook');
     const isGh = !src.url;
@@ -495,7 +501,8 @@
       // Binder runs the notebook in standard JupyterLab; a ref with slashes must be encoded as one segment.
       binder: isGh ? `https://mybinder.org/v2/gh/${enc(src.owner)}/${enc(src.repo)}/${encodeURIComponent(src.ref)}?urlpath=${encodeURIComponent('lab/tree/' + src.path)}` : null,
       source: isGh ? null : url,
-      compare: isGh ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path } : null,
+      compare: isGh ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path } : gistInfo(url),
+      seed: !isGh && !gistInfo(url) ? { link: url } : null,
     }, id);
   }
 
@@ -515,6 +522,7 @@
           await showNotebook(nb, {}, {
             name: file.name,
             text,
+            seed: { file },
             crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Local file</span>',
           }, id);
         } catch (e) {
@@ -602,7 +610,7 @@
                 <button type="button" data-export="print">Print / Save as PDF</button>
               </div>
             </details>
-            ${info.compare ? '<button class="btn" id="compare-btn" type="button">Compare</button>' : ''}
+            ${info.compare ? '<button class="btn" id="compare-btn" type="button">Compare</button>' : info.seed ? '<button class="btn" id="compare-seed-btn" type="button">Compare</button>' : ''}
             ${info.shareable ? '<button class="btn" id="copy-link" type="button">Copy link</button>' : ''}
             ${info.binder ? `<a class="btn" href="${esc(info.binder)}" target="_blank" rel="noopener">Open in Binder</a>` : ''}
             ${info.colab ? `<a class="btn" href="${esc(info.colab)}" target="_blank" rel="noopener">Open in Colab</a>` : ''}
@@ -638,6 +646,8 @@
 
     const cmpBtn = document.getElementById('compare-btn');
     if (cmpBtn) cmpBtn.addEventListener('click', () => openCompare(info.compare));
+    const seedBtn = document.getElementById('compare-seed-btn');
+    if (seedBtn) seedBtn.addEventListener('click', () => { compareSeed = info.seed; location.hash = '#/compare'; });
 
     const toggleOut = document.getElementById('toggle-outputs');
     toggleOut.addEventListener('click', () => {
@@ -1414,6 +1424,7 @@
     });
   }
 
+  let compareSeed = null; // a notebook handed over from its page to the Compare page: { file } or { link }
   const GH_OWNER = /^[A-Za-z0-9-]+$/;
   const GH_REPO = /^[A-Za-z0-9_.-]+$/;
   const rawUrl = (owner, repo, ref, path) => `${RAW}/${enc(owner)}/${enc(repo)}/${enc(ref)}/${enc(path)}`;
@@ -1429,6 +1440,8 @@
     if ((/^[a-z][a-z0-9+.-]*:\/\//i.test(text) && !/^https?:/i.test(text)) || /^(javascript|data|file|vbscript):/i.test(text)) {
       throw new ViewError("That link can't be used", `"${clip(text, 80)}" isn't a GitHub notebook link or an http(s) link to an .ipynb file.`);
     }
+    m = text.match(/^(?:https?:\/\/)?gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]+)\/([0-9a-f]{40})(?:[/?#].*)?$/i);
+    if (m) return `gist:${m[1]}@${m[2]}`;
     const hash = parseInput(text);
     const parts = hash ? hash.replace(/^#\//, '').split('/').map(safeDecode) : [];
     if (parts[0] === 'github') {
@@ -1437,12 +1450,16 @@
       if (kind === 'blob' && ref && isNbName(path)) return rawUrl(owner, repo, ref, path);
       throw new ViewError('That is not a notebook link', `"${clip(text, 80)}" points to a repo or folder. Use a link to one .ipynb file, or owner/repo/path/to/notebook.ipynb.`);
     }
-    if (parts[0] === 'gist') throw new ViewError("Gists can't be compared yet", 'Use a link to the notebook file on GitHub (raw or blob), or download it and use Two files.');
+    if (parts[0] === 'gist' && parts[1]) return `gist:${parts[1]}`;
     if (parts[0] === 'url' && /^https?:\/\//i.test(parts[1] || '')) return parts[1];
     throw new ViewError("That link can't be used", `"${clip(text, 80)}" isn't a GitHub notebook link or an http(s) link to an .ipynb file.`);
   }
 
+  const GIST_SRC = /^gist:([0-9a-f]+)(?:@([0-9a-f]{7,40}))?$/i;
+
   const labelOf = url => {
+    const g = url.match(GIST_SRC);
+    if (g) return `gist ${g[1].slice(0, 7)}${g[2] ? '@' + g[2].slice(0, 7) : ''}`;
     const m = url.match(RAW_GH);
     if (m) return `${safeDecode(m[1])}/${safeDecode(m[2])}@${safeDecode(m[3])}`;
     try { const u = new URL(url); return `${u.host}${u.pathname.length > 40 ? '/...' + u.pathname.slice(-30) : u.pathname}`; } catch { return clip(url, 40); }
@@ -1453,8 +1470,18 @@
     return m ? hashFor(safeDecode(m[1]), safeDecode(m[2]), 'blob', safeDecode(m[3]), safeDecode(m[4])) : null;
   };
 
-  async function fetchUrlCells(url) {
-    const label = labelOf(url);
+  // A gist source ("gist:ID" or "gist:ID@revision") becomes the raw URL of its first notebook, via the GitHub API.
+  async function resolveSource(src) {
+    const g = src.match(GIST_SRC);
+    if (!g) return { url: src, name: fileNameOf(src), label: labelOf(src) };
+    const data = await gh(`/gists/${encodeURIComponent(g[1])}${g[2] ? '/' + g[2] : ''}`);
+    const file = Object.values((data && data.files) || {}).find(f => f && isNbName(String(f.filename)) && typeof f.raw_url === 'string');
+    if (!file) throw new ViewError('No notebook in this gist', `${labelOf(src)} doesn't contain an .ipynb file.`);
+    return { url: file.raw_url, name: file.filename, label: labelOf(src) };
+  }
+
+  async function fetchUrlCells(url, labelOverride) {
+    const label = labelOverride || labelOf(url);
     if (!/^https?:\/\//i.test(url)) throw new ViewError('Unsupported link', 'Only http and https notebook links can be compared.');
     let res;
     try {
@@ -1471,17 +1498,19 @@
 
   async function viewCompareLinks(urlA, urlB, id) {
     showLoading('Fetching both notebooks');
-    const [a, b] = await Promise.all([fetchUrlCells(urlA), fetchUrlCells(urlB)]);
+    const [srcA, srcB] = await Promise.all([resolveSource(urlA), resolveSource(urlB)]);
     if (stale(id)) return;
-    const nameA = fileNameOf(urlA), nameB = fileNameOf(urlB);
-    const open = (url, word) => { const h = openLinkOf(url); return h ? `<a class="btn" href="${h}">Open ${word}</a>` : `<a class="btn" href="#/url/${encodeURIComponent(url)}">Open ${word}</a>`; };
+    const [a, b] = await Promise.all([fetchUrlCells(srcA.url, srcA.label), fetchUrlCells(srcB.url, srcB.label)]);
+    if (stale(id)) return;
+    const nameA = srcA.name, nameB = srcB.name;
+    const open = (src, word) => { const h = openLinkOf(src.url); return h ? `<a class="btn" href="${h}">Open ${word}</a>` : `<a class="btn" href="#/url/${encodeURIComponent(src.url)}">Open ${word}</a>`; };
     renderDiff({
       title: nameA === nameB ? nameA : `${nameA} and ${nameB}`,
       crumbs: '<a href="#/">Home</a><span class="sep">/</span><a href="#/compare">Compare</a><span class="sep">/</span><span aria-current="page">Two notebooks</span>',
-      labelA: labelOf(urlA),
-      labelB: labelOf(urlB),
+      labelA: srcA.label,
+      labelB: srcB.label,
       entries: nbvDiff.diffCells(a, b),
-      links: `<a class="btn" href="${compareLinksHash(urlB, urlA)}">Swap sides</a>${open(urlA, 'original')}${open(urlB, 'modified')}<a class="btn" href="#/compare">New comparison</a>`,
+      links: `<a class="btn" href="${compareLinksHash(urlB, urlA)}">Swap sides</a>${open(srcA, 'original')}${open(srcB, 'modified')}<a class="btn" href="#/compare">New comparison</a>`,
     });
   }
 
@@ -1556,6 +1585,10 @@
       slotEl.addEventListener('dragleave', () => slotEl.classList.remove('over'));
       slotEl.addEventListener('drop', e => { e.preventDefault(); slotEl.classList.remove('over'); take(key, e.dataTransfer.files[0]); });
     }
+    const seed = compareSeed;
+    compareSeed = null;
+    if (seed && seed.file) { setMode('files'); take('a', seed.file); }
+    else if (seed && seed.link) { document.getElementById('link-a').value = seed.link; document.getElementById('link-b').focus(); }
     go.addEventListener('click', async () => {
       msg.hidden = true;
       try {
@@ -1612,7 +1645,14 @@
     row.append(mk('span', 'dsign', line.t === 'add' ? '+' : line.t === 'del' ? '-' : ' '));
     if (line.t !== 'eq') row.lastChild.setAttribute('aria-hidden', 'true');
     if (line.t !== 'eq') row.append(mk('span', 'sr-only', line.t === 'add' ? 'added: ' : 'removed: '));
-    row.append(mk('span', 'dtext', line.text === '' ? ' ' : line.text));
+    const text = mk('span', 'dtext');
+    if (line.parts) {
+      for (const part of line.parts) {
+        if (part.t === 'chg') text.append(mk('span', 'dw', part.text));
+        else text.append(document.createTextNode(part.text));
+      }
+    } else text.textContent = line.text === '' ? ' ' : line.text;
+    row.append(text);
     return row;
   }
 
@@ -1962,8 +2002,12 @@
 
   function openCompare(c) {
     cmpCtx = c;
-    document.getElementById('compare-file').textContent = c.path;
-    document.getElementById('compare-head').textContent = shortRef(c.ref);
+    const gist = !!c.gist;
+    document.getElementById('compare-file').textContent = gist ? fileNameOf(c.url) : c.path;
+    document.getElementById('compare-head').textContent = gist ? `gist ${c.gist.slice(0, 7)}` : shortRef(c.ref);
+    document.getElementById('compare-base-label').textContent = gist ? 'An earlier revision of this gist (commit id)' : 'Another version (branch, tag or commit)';
+    cmpBase.placeholder = gist ? 'a revision id, or pick one below' : 'main, v1.0 or a commit';
+    document.getElementById('compare-load').textContent = gist ? 'Show revisions of this gist' : 'Show recent commits of this file';
     cmpBase.value = '';
     cmpOther.value = '';
     cmpList.replaceChildren();
@@ -1979,9 +2023,16 @@
     cmpErr.hidden = true;
     cmpList.textContent = 'Loading...';
     try {
-      const { owner, repo, ref, path } = cmpCtx;
-      const items = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(ref)}&per_page=30`);
-      if (!Array.isArray(items)) throw new ViewError('Unexpected answer from GitHub', 'The commit list was not in the expected format.');
+      let items;
+      if (cmpCtx.gist) {
+        const revs = await gh(`/gists/${encodeURIComponent(cmpCtx.gist)}/commits?per_page=30`);
+        if (!Array.isArray(revs)) throw new ViewError('Unexpected answer from GitHub', 'The revision list was not in the expected format.');
+        items = revs.map(r => ({ sha: r && r.version, commit: { message: r && r.change_status ? `+${r.change_status.additions || 0} -${r.change_status.deletions || 0}` : '', author: { date: r && r.committed_at } } }));
+      } else {
+        const { owner, repo, ref, path } = cmpCtx;
+        items = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(ref)}&per_page=30`);
+        if (!Array.isArray(items)) throw new ViewError('Unexpected answer from GitHub', 'The commit list was not in the expected format.');
+      }
       cmpList.replaceChildren();
       for (const it of items) {
         if (!it || typeof it.sha !== 'string' || !/^[0-9a-f]{40}$/i.test(it.sha)) continue;
@@ -2009,12 +2060,19 @@
     const other = cmpOther.value.trim();
     const fail = (msg, field) => { cmpErr.textContent = msg; cmpErr.hidden = false; field.focus(); };
     if (base && other) return fail('Fill in only one of the two fields.', cmpOther);
+    const current = cmpCtx.gist ? cmpCtx.url : rawUrl(cmpCtx.owner, cmpCtx.repo, cmpCtx.ref, cmpCtx.path);
     if (other) {
       try {
         const url = notebookUrl(other);
         cmpDlg.close();
-        location.hash = compareLinksHash(url, rawUrl(cmpCtx.owner, cmpCtx.repo, cmpCtx.ref, cmpCtx.path));
+        location.hash = compareLinksHash(url, current);
       } catch (err) { fail(err.detail || err.message, cmpOther); }
+      return;
+    }
+    if (cmpCtx.gist) {
+      if (!/^[0-9a-f]{7,40}$/i.test(base)) return fail('Enter a revision id (7 to 40 hex characters), pick one below, or another notebook.', cmpBase);
+      cmpDlg.close();
+      location.hash = compareLinksHash(`gist:${cmpCtx.gist}@${base}`, current);
       return;
     }
     if (!base || /\s|\.\./.test(base)) return fail('Enter a branch, tag or commit with no spaces, or another notebook.', cmpBase);

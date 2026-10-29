@@ -317,6 +317,14 @@ test('diff engine: identical, added, removed, modified, reordered', () => {
   assert(lines === 'eq:a,del:b,add:B,eq:c,add:d', lines);
 });
 
+test('diff engine: changed words are marked only on similar lines', () => {
+  const w = diff.diffWords('x = np.arange(10)', 'x = np.arange(20)');
+  assert(w.old.filter(p => p.t === 'chg').map(p => p.text).join() === '10' && w.new.filter(p => p.t === 'chg').map(p => p.text).join() === '20', w);
+  const similar = diff.diffLines('keep\nresult = foo(a, b)\nend', 'keep\nresult = foo(a, c, d)\nend').filter(l => l.parts);
+  assert(similar.length === 2, similar);
+  assert(!diff.diffLines('totally different', 'nothing alike here').some(l => l.parts), 'unrelated lines should not be word-marked');
+});
+
 test('diff engine: output text is compared, execution counts and images are not', () => {
   const out = text => [{ output_type: 'stream', name: 'stdout', text: [text] }];
   const a = dcell('code', 'p', out('hello\n')), b = dcell('code', 'p', out('bye\n'));
@@ -389,6 +397,11 @@ test('compare: long lines wrap (no per-line scrolling), lines are numbered, and 
     return { view, cols, wraps: t.scrollWidth <= t.clientWidth + 1, nums: [...document.querySelectorAll('.dsplit > .dline')].slice(0, 2).map(n => n.querySelector('.dnum').textContent) };
   });
   assert(split.view > 1400 && split.cols[0] > 600 && split.cols[1] > 600 && split.wraps && split.nums.join(',') === '1,1', split);
+}));
+
+test('compare: changed words are highlighted inside changed lines', () => run({ hash: CMP, raw: byRef, settle: 400 }, async ({ page }) => {
+  const r = await page.evaluate(() => ({ del: [...document.querySelectorAll('.dline.del .dw')].map(n => n.textContent), add: [...document.querySelectorAll('.dline.add .dw')].map(n => n.textContent), bg: getComputedStyle(document.querySelector('.dline.add .dw')).backgroundColor }));
+  assert(r.del.includes('10') && r.add.includes('20') && r.bg !== 'rgba(0, 0, 0, 0)', r);
 }));
 
 test('compare: notebook text is shown as text, never as HTML', () => run({
@@ -495,7 +508,7 @@ test('compare by link: the form accepts GitHub links, raw links, shorthand and p
 });
 
 test('compare by link: unusable input is explained on the form', async () => {
-  const bad = [['', 'alice/one/a.ipynb', /Enter a notebook link/i], ['https://github.com/alice/one', 'alice/one/a.ipynb', /repo or folder/], ['https://gist.github.com/someone/0123abcd', 'alice/one/a.ipynb', /notebook file on GitHub/], ['ftp://example.com/a.ipynb', 'alice/one/a.ipynb', /isn't a GitHub notebook link/], ['javascript:alert(1)', 'alice/one/a.ipynb', /isn't a GitHub notebook link/]];
+  const bad = [['', 'alice/one/a.ipynb', /Enter a notebook link/i], ['https://github.com/alice/one', 'alice/one/a.ipynb', /repo or folder/], ['ftp://example.com/a.ipynb', 'alice/one/a.ipynb', /isn't a GitHub notebook link/], ['javascript:alert(1)', 'alice/one/a.ipynb', /isn't a GitHub notebook link/]];
   for (const [a, b, re] of bad) {
     await run({ hash: '#/compare', settle: 300 }, async ({ page, requests }) => {
       await page.fill('#link-a', a); await page.fill('#link-b', b);
@@ -529,6 +542,62 @@ test('compare dialog: a different notebook (and not both fields at once)', () =>
   await page.waitForSelector('.diffview');
   const hash = await page.evaluate(() => decodeURIComponent(location.hash));
   assert(hash === `#/compare/links/${rawOf('bob', 'two', 'HEAD', 'b/nb.ipynb')}/${rawOf('alice', 'one', 'main', 't.ipynb')}`, hash);
+}));
+
+const GID = '0123abcd0123abcd0123abcd0123abcd', REV1 = '1'.repeat(40), REV2 = '2'.repeat(40);
+const gistRaw = rev => `https://gist.githubusercontent.com/someone/${GID}/raw/${rev}/nb.ipynb`;
+const gistApi = u => {
+  const p = new URL(u).pathname;
+  if (p === `/gists/${GID}`) return { body: JSON.stringify({ files: { 'nb.ipynb': { filename: 'nb.ipynb', raw_url: gistRaw(REV2) } } }) };
+  if (p === `/gists/${GID}/${REV1}`) return { body: JSON.stringify({ files: { 'nb.ipynb': { filename: 'nb.ipynb', raw_url: gistRaw(REV1) } } }) };
+  if (p === `/gists/${GID}/commits`) return { body: JSON.stringify([{ version: REV2, committed_at: '2026-10-02T00:00:00Z', change_status: { additions: 3, deletions: 1 } }, { version: REV1, committed_at: '2026-10-01T00:00:00Z' }]) };
+  return null;
+};
+const gistHosts = u => (hostOf(u) === 'gist.githubusercontent.com' ? { body: JSON.stringify(u.includes(REV1) ? oldNb : newNb) } : null);
+
+test('compare with a gist: gist link vs a GitHub notebook', () => run({ hash: '#/compare', settle: 300, api: gistApi, other: gistHosts, raw: () => ({ body: JSON.stringify(oldNb) }) }, async ({ page }) => {
+  await page.fill('#link-a', `https://gist.github.com/someone/${GID}`); await page.fill('#link-b', 'alice/one/nb.ipynb');
+  await page.click('#links-form button[type="submit"]');
+  await page.waitForSelector('.diffview');
+  const r = await page.evaluate(() => ({ hash: decodeURIComponent(location.hash), labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent }));
+  assert(r.hash.startsWith(`#/compare/links/gist:${GID}/`) && r.labels === `gist ${GID.slice(0, 7)} to alice/one@HEAD` && /modified/.test(r.sum), r);
+}));
+
+test('compare a gist with an earlier revision of itself', () => run({ hash: '#/url/' + encodeURIComponent(gistRaw(REV2)), settle: 400, api: gistApi, other: gistHosts }, async ({ page }) => {
+  await page.click('#compare-btn');
+  assert(await page.evaluate(() => /revision of this gist/.test(document.querySelector('#compare-base-label').textContent)), 'dialog not in gist mode');
+  await page.click('#compare-load');
+  await page.waitForSelector('.commit-item');
+  assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 2), 'revision list');
+  await page.click('.commit-item:nth-child(2)');
+  await page.click('#compare-form button[type="submit"]');
+  await page.waitForSelector('.diffview');
+  const r = await page.evaluate(() => ({ hash: decodeURIComponent(location.hash), sum: document.querySelector('#d-summary').textContent }));
+  assert(r.hash === `#/compare/links/gist:${GID}@${REV1}/${gistRaw(REV2)}` && /2 modified/.test(r.sum), r);
+}));
+
+test('compare from a local notebook: the open file is the original, pick the second', () => run({ hash: '', settle: 300 }, async ({ page }) => {
+  const file = (name, body) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(body)) });
+  await page.setInputFiles('#file-input', file('mine.ipynb', oldNb));
+  await page.waitForSelector('#compare-seed-btn');
+  await page.click('#compare-seed-btn');
+  await page.waitForSelector('#panel-files:not([hidden])');
+  assert(await page.evaluate(() => /mine\.ipynb/.test(document.querySelector('#name-a').textContent) && document.querySelector('#compare-go').disabled), 'first file not prefilled');
+  await page.setInputFiles('#file-b', file('theirs.ipynb', newNb));
+  await page.click('#compare-go');
+  await page.waitForSelector('.diffview');
+  const r = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent }));
+  assert(r.labels === 'mine.ipynb to theirs.ipynb' && /2 modified, 1 added, 1 removed/.test(r.sum), r);
+}));
+
+test('compare from a notebook opened by URL: the link is prefilled', () => run({ hash: '#/url/' + encodeURIComponent('https://example.com/a/nb.ipynb'), other: u => (hostOf(u) === 'example.com' ? { body: JSON.stringify(u.includes('/b/') ? newNb : oldNb) } : null), settle: 400 }, async ({ page }) => {
+  await page.click('#compare-seed-btn');
+  await page.waitForSelector('#link-a');
+  assert(await page.evaluate(() => document.querySelector('#link-a').value === 'https://example.com/a/nb.ipynb'), 'link not prefilled');
+  await page.fill('#link-b', 'https://example.com/b/nb.ipynb');
+  await page.click('#links-form button[type="submit"]');
+  await page.waitForSelector('.diffview');
+  assert(await page.evaluate(() => /2 modified/.test(document.querySelector('#d-summary').textContent)), 'no diff');
 }));
 
 test('compare pages pass axe', async () => {
