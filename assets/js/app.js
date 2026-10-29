@@ -516,6 +516,7 @@
     reader.onload = () => {
       const id = ++routeId;
       document.body.classList.remove('is-home');
+      keepFocus();
       const text = reader.result;
       const open = async () => {
         try {
@@ -2124,6 +2125,16 @@
 
   let targetCell = 0; // cell number from a ?cell=N link, 1-based
 
+  // The old view is about to be replaced. If focus was in it (or nowhere), park it on the main region so keyboard and
+  // screen reader users continue from the new content instead of from the top of the page.
+  let firstView = true;
+  function keepFocus() {
+    const a = document.activeElement;
+    // Not on a fresh page load, where the skip link should be the first Tab stop.
+    if (!firstView && (!a || a === document.body || app.contains(a))) app.focus({ preventScroll: true });
+    firstView = false;
+  }
+
   async function route() {
     const id = ++routeId;
     const cellAt = /\?cell=(\d{1,6})$/.exec(location.hash);
@@ -2132,6 +2143,7 @@
     const parts = raw.split('/').filter(Boolean).map(safeDecode);
     document.body.classList.toggle('is-home', parts.length === 0);
     window.scrollTo(0, 0);
+    keepFocus();
 
     if (!window.marked || !window.DOMPurify) {
       renderError(new ViewError("Couldn't load the rendering libraries", 'A script failed to load. Reload the page, or check for content blockers.'));
@@ -2195,6 +2207,11 @@
   }
 
   /* ---------- global wiring ---------- */
+
+  document.getElementById('skip-link').addEventListener('click', e => {
+    e.preventDefault(); // the address must stay as it is: it is the router's input
+    app.focus();
+  });
 
   document.getElementById('jump').addEventListener('submit', e => {
     e.preventDefault();

@@ -696,3 +696,9 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .widget-row progress.bar-danger { accent-color: #c62828; }
 .widget-row progress.bar-warning { accent-color: #ed8b00; }
 .widget-button { padding: 0.15rem 0.6rem; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); font: 13px var(--nb-mono); }
+
+/* Skip link and landing focus */
+.skip-link { position: absolute; left: 0.5rem; top: -4rem; z-index: 100; padding: 0.5rem 0.9rem; background: var(--surface); color: var(--ink); border: 2px solid var(--in); border-radius: 4px; font: 14px var(--mono); }
+.skip-link:focus { top: 0.5rem; }
+#app:focus { outline: none; }
+@media print { .skip-link { display: none !important; } }
