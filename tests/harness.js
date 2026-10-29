@@ -17,13 +17,31 @@ const hostOf = u => { try { return new URL(u).hostname; } catch { return ''; } }
 
 let server, browser, base;
 
+// The headers Cloudflare Pages will send, read from the repo's own _headers file, so tests run under the real
+// Content-Security-Policy and a violation shows up as a failing test instead of a surprise in production.
+function readHeaders() {
+  const rules = [];
+  let current = null;
+  for (const raw of fs.readFileSync(path.join(ROOT, '_headers'), 'utf8').split('\n')) {
+    if (!raw.trim() || raw.trim().startsWith('#')) continue;
+    if (!/^\s/.test(raw)) { current = { pattern: raw.trim(), headers: {} }; rules.push(current); continue; }
+    const i = raw.indexOf(':');
+    if (current && i > 0) current.headers[raw.slice(0, i).trim()] = raw.slice(i + 1).trim();
+  }
+  return rules;
+}
+const matches = (pattern, p) => (pattern.endsWith('*') ? p.startsWith(pattern.slice(0, -1)) : p === pattern);
+
 async function start() {
+  const rules = readHeaders();
   server = http.createServer((req, res) => {
     let p = decodeURIComponent(req.url.split('?')[0]);
     if (p.endsWith('/')) p += 'index.html';
     const file = path.join(ROOT, p);
     if (!file.startsWith(ROOT) || !fs.existsSync(file) || !fs.statSync(file).isFile()) { res.writeHead(404); return res.end(); }
-    res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
+    const headers = { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' };
+    for (const rule of rules) if (matches(rule.pattern, p)) Object.assign(headers, rule.headers);
+    res.writeHead(200, headers);
     fs.createReadStream(file).pipe(res);
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));

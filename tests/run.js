@@ -51,8 +51,8 @@ test('#/url/ rejects data:, javascript: and file: links', async () => {
   }
 });
 
-test('#/url/ accepts nbviewer-style forms (//host, /urls/, /url/)', async () => {
-  const want = [['#/url/' + encodeURIComponent('//host.example/a.ipynb'), 'http://host.example/a.ipynb'], ['#/urls/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/host.example/a.ipynb', 'http://host.example/a.ipynb']];
+test('#/url/ accepts nbviewer-style forms (//host, /urls/, /url/) and loads http links over https', async () => {
+  const want = [['#/url/' + encodeURIComponent('//host.example/a.ipynb'), 'https://host.example/a.ipynb'], ['#/urls/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/host.example/a.ipynb', 'https://host.example/a.ipynb'], ['#/url/' + encodeURIComponent('http://host.example/a.ipynb'), 'https://host.example/a.ipynb']];
   for (const [hash, expect] of want) {
     await run({ hash, other: u => (hostOf(u) === 'host.example' ? { body: JSON.stringify(good) } : null), settle: 300 }, async ({ page, requests }) => {
       assert(requests[0] === expect && (await state(page)).cells === 1, { hash, requests });
@@ -161,7 +161,7 @@ test('input parsing: where each pasted string goes', async () => {
     ['https://nbviewer.org/github/o/r/blob/main/a.ipynb', '#/github/o/r/blob/main/a.ipynb'],
     ['https://nbviewer.org/gist/someone/0123abcd', '#/gist/0123abcd'],
     ['https://nbviewer.org/urls/example.com/x.ipynb', '#/url/https://example.com/x.ipynb'],
-    ['https://nbviewer.org/url/example.com/x.ipynb', '#/url/http://example.com/x.ipynb'],
+    ['https://nbviewer.org/url/example.com/x.ipynb', '#/url/https://example.com/x.ipynb'],
     ['https://colab.research.google.com/github/o/r/blob/main/a.ipynb', '#/github/o/r/blob/main/a.ipynb'],
     ['git@github.com:o/r.git', '#/github/o/r'],
     ['https://example.com/a.ipynb', '#/url/https://example.com/a.ipynb'],
@@ -218,7 +218,7 @@ test('axe: no violations on home, notebook and error pages', async () => {
   const wide = nb([code('x = "' + 'y'.repeat(400) + '"', [{ output_type: 'execute_result', execution_count: 1, metadata: {}, data: { 'text/plain': ['1'] } }], 1)]);
   for (const [name, opts] of [['home', { hash: '' }], ['notebook', { hash: H, raw: wide }], ['error', { hash: H, raw: () => ({ status: 404, body: 'x', type: 'text/plain' }) }]]) {
     await run({ ...opts, settle: 300 }, async ({ page }) => {
-      await page.addScriptTag({ path: axeFile });
+      await page.evaluate(fs.readFileSync(axeFile, 'utf8'));
       const v = await page.evaluate(() => axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'best-practice'] }).then(r => r.violations.map(x => `${x.id} (${x.nodes.length})`)));
       assert(!v.length, { name, v });
     });
@@ -604,7 +604,7 @@ test('compare pages pass axe', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
   for (const [name, opts] of [['pick', { hash: '#/compare' }], ['diff', { hash: CMP, raw: byRef }]]) {
     await run({ ...opts, settle: 400 }, async ({ page }) => {
-      await page.addScriptTag({ path: axeFile });
+      await page.evaluate(fs.readFileSync(axeFile, 'utf8'));
       const v = await page.evaluate(() => axe.run(document, { runOnly: ['wcag2a', 'wcag2aa', 'best-practice'] }).then(r => r.violations.map(x => `${x.id} (${x.nodes.length})`)));
       assert(!v.length, { name, v });
     });

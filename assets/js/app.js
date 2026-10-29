@@ -82,13 +82,17 @@
     return h;
   }
 
-  // nbviewer writes /url/host/path (http) and /urls/host/path (https) with no scheme.
+  // This site is https only (its security policy and the browser both refuse plain http requests), so notebook links
+  // written as http:// are fetched over https.
+  const secureUrl = u => String(u).replace(/^http:\/\//i, 'https://');
+
+  // nbviewer writes /url/host/path (http) and /urls/host/path (https) with no scheme; both end up as https here.
   function nbviewerUrl(kind, rest) {
     rest = rest.trim();
     if (/^https?:\/+/i.test(rest)) return rest.replace(/^(https?:)\/+/i, '$1//');
     // Another scheme (data:, javascript:, file:) stays as written so it is refused, not turned into a host name.
     if (/^[a-z][a-z0-9+.-]*:(?!\d+(\/|$))/i.test(rest)) return rest;
-    return (kind.toLowerCase() === 'urls' ? 'https://' : 'http://') + rest;
+    return 'https://' + rest;
   }
 
   // Turns whatever the user pastes into a route.
@@ -451,7 +455,7 @@
 
     let res;
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
     } catch (e) {
       if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
       throw new ViewError(
@@ -1485,7 +1489,7 @@
     if (!/^https?:\/\//i.test(url)) throw new ViewError('Unsupported link', 'Only http and https notebook links can be compared.');
     let res;
     try {
-      res = await fetch(url, { signal: AbortSignal.timeout(60000) });
+      res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
     } catch (e) {
       throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.'
         : RAW_GH.test(url) ? 'The network request failed. Check your connection and try again.'
