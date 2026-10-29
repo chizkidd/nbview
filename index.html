@@ -18,6 +18,7 @@
   <link rel="stylesheet" href="assets/css/style.css">
 </head>
 <body class="is-home">
+  <a class="skip-link" id="skip-link" href="#app">Skip to content</a>
   <header class="bar">
     <a class="brand" href="#/">nbview</a>
     <button id="theme-btn" class="theme-btn" type="button" aria-label="Switch to dark mode">
@@ -34,7 +35,7 @@
     </a>
   </header>
 
-  <main id="app">
+  <main id="app" tabindex="-1">
     <div class="home">
       <h1 class="home-title">Read Jupyter notebooks from any public GitHub repo.</h1>
       <p class="hint">nbview is a fast nbviewer alternative that runs entirely in your browser, so there is no server to go down. Paste a GitHub repo, notebook link, gist or nbviewer link, or change <code>nbviewer.org</code> to <code>nbview.org</code> in the address bar and the same notebook opens here.</p>

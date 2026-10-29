@@ -4,6 +4,10 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ## [Unreleased]
 
+### Accessibility
+- **Skip link.** The first Tab stop on every page is now "Skip to content", which moves keyboard focus to the main content without touching the address.
+- **Focus no longer gets lost** when a view changes (opening a notebook, going back, switching to Compare): it moves to the main region instead of dropping to the top of the page.
+
 ### Added
 - **`llms.txt`** describing the site, how to build links to notebooks, and where an automated reader should get notebook contents (raw files on GitHub), for AI agents and tools that look for it.
 - **Saved widgets are shown.** ipywidgets outputs (tqdm progress bars, sliders, dropdowns, labels, HTML, and the boxes holding them) now appear read-only from the widget state saved in the notebook, instead of a bare text description. Passwords are never shown, and widgets with no saved state keep their text fallback or a short note.

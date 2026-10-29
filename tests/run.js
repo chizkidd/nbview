@@ -452,6 +452,25 @@ test('widgets: cyclic and hostile saved state cannot hang or break the page', as
   });
 });
 
+test('keyboard: skip link works, and focus stays in the page after the view changes', async () => {
+  await run({ hash: H, raw: tocNb, settle: 400 }, async ({ page }) => {
+    await page.keyboard.press('Tab');
+    assert(await page.evaluate(() => document.activeElement.id === 'skip-link' && document.activeElement.getBoundingClientRect().top >= 0), 'skip link is not the first stop or not visible when focused');
+    const hash = await page.evaluate(() => location.hash);
+    await page.keyboard.press('Enter');
+    const r = await page.evaluate(() => ({ active: document.activeElement.id, hash: location.hash }));
+    assert(r.active === 'app' && r.hash === hash, r);
+    await page.keyboard.press('Tab');
+    assert(await page.evaluate(() => document.getElementById('app').contains(document.activeElement)), 'Tab after the skip link did not enter the content');
+  });
+  await run({ hash: '', raw: good, settle: 300 }, async ({ page }) => {
+    await page.fill('#hero-input', 'https://github.com/o/r/blob/main/t.ipynb');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.cell');
+    assert(await page.evaluate(() => document.activeElement.id === 'app'), 'focus fell to ' + await page.evaluate(() => document.activeElement.tagName));
+  });
+});
+
 test('contents menu stays hidden without headings and closes on Escape', async () => {
   await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
     assert(await page.evaluate(() => document.querySelector('#toc-menu').hidden), 'menu shown without headings');
