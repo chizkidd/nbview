@@ -371,6 +371,26 @@ test('compare: opens unified on any screen size, and remembers a chosen side-by-
   });
 });
 
+test('compare: long lines wrap (no per-line scrolling), lines are numbered, and side by side uses the page width', () => run({
+  hash: CMP, settle: 400, viewport: { width: 1600, height: 900 },
+  raw: u => ({ body: JSON.stringify(nb([code('first\n' + 'word '.repeat(300) + (/\/oldref\//.test(u) ? 'old' : 'new') + '\nlast')])) }),
+}, async ({ page }) => {
+  const unified = await page.evaluate(() => {
+    const t = [...document.querySelectorAll('.dline .dtext')].find(n => n.textContent.length > 1000);
+    const nums = [...document.querySelectorAll('.dline.eq')][0].querySelectorAll('.dnum');
+    return { wraps: t.scrollWidth <= t.clientWidth + 1, tall: t.getBoundingClientRect().height > 40, nums: [...nums].map(n => n.textContent), hidden: [...nums].every(n => n.getAttribute('aria-hidden') === 'true'), width: document.querySelector('.diffview').getBoundingClientRect().width };
+  });
+  assert(unified.wraps && unified.tall && unified.nums.join(',') === '1,1' && unified.hidden && unified.width <= 1200, unified);
+  await page.click('#d-split');
+  const split = await page.evaluate(() => {
+    const view = document.querySelector('.diffview').getBoundingClientRect().width;
+    const cols = [...document.querySelectorAll('.dsplit > .dline')].slice(0, 2).map(n => Math.round(n.getBoundingClientRect().width));
+    const t = [...document.querySelectorAll('.dline .dtext')].find(n => n.textContent.length > 1000);
+    return { view, cols, wraps: t.scrollWidth <= t.clientWidth + 1, nums: [...document.querySelectorAll('.dsplit > .dline')].slice(0, 2).map(n => n.querySelector('.dnum').textContent) };
+  });
+  assert(split.view > 1400 && split.cols[0] > 600 && split.cols[1] > 600 && split.wraps && split.nums.join(',') === '1,1', split);
+}));
+
 test('compare: notebook text is shown as text, never as HTML', () => run({
   hash: CMP, settle: 400,
   raw: u => ({ body: JSON.stringify(/\/oldref\//.test(u) ? nb([md('safe')]) : nb([md('<img src=x onerror="window.__pwn=1"><script>window.__pwn=2</script>'), code('print("<b>x</b>")')])) }),

@@ -653,3 +653,13 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 .compare-links input { font: 14px var(--mono); padding: 0.55rem 0.7rem; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; width: 100%; }
 .compare-or { margin-top: 1rem; }
 .compare-go { margin-top: 0.6rem; }
+
+/* Diff lines wrap like GitHub's instead of scrolling one by one, and side by side uses the whole page width */
+.dline { white-space: normal; }
+.dline .dtext { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; padding: 0 0.5rem 0 0; }
+.dline .dnum { flex: none; width: 3.4em; padding-right: 0.6em; text-align: right; color: var(--muted); user-select: none; opacity: 0.8; }
+.dline.add .dnum, .dline.del .dnum { opacity: 1; }
+.dline .dsign { width: 1.4em; }
+.diffview { max-width: 1200px; }
+.diffview.is-split { max-width: none; }
+.dsplit > .dline.empty { min-height: 1.45em; }
