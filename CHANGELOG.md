@@ -4,6 +4,10 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ## [Unreleased]
 
+### Accessibility
+- **Skip link.** The first Tab stop on every page is now "Skip to content", which moves keyboard focus to the main content without touching the address.
+- **Focus no longer gets lost** when a view changes (opening a notebook, going back, switching to Compare): it moves to the main region instead of dropping to the top of the page.
+
 ### Added
 - **Find in notebook.** A **Find** button (or press `/`) opens a search bar that highlights every match in code, text and outputs, shows "3 of 12", and steps through matches with Enter, Shift+Enter or the arrow buttons. Unlike the browser's find, it works on cells scrolled far off screen in large notebooks, and it skips code or outputs you have hidden. Matching ignores case and treats what you type literally. Escape closes it. Browsers without the highlight feature outline the cell instead.
 - **`llms.txt`** describing the site, how to build links to notebooks, and where an automated reader should get notebook contents (raw files on GitHub), for AI agents and tools that look for it.
