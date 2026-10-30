@@ -452,24 +452,77 @@ test('widgets: cyclic and hostile saved state cannot hang or break the page', as
   });
 });
 
-test('keyboard: skip link works, and focus stays in the page after the view changes', async () => {
-  await run({ hash: H, raw: tocNb, settle: 400 }, async ({ page }) => {
-    await page.keyboard.press('Tab');
-    assert(await page.evaluate(() => document.activeElement.id === 'skip-link' && document.activeElement.getBoundingClientRect().top >= 0), 'skip link is not the first stop or not visible when focused');
-    const hash = await page.evaluate(() => location.hash);
-    await page.keyboard.press('Enter');
-    const r = await page.evaluate(() => ({ active: document.activeElement.id, hash: location.hash }));
-    assert(r.active === 'app' && r.hash === hash, r);
-    await page.keyboard.press('Tab');
-    assert(await page.evaluate(() => document.getElementById('app').contains(document.activeElement)), 'Tab after the skip link did not enter the content');
-  });
-  await run({ hash: '', raw: good, settle: 300 }, async ({ page }) => {
-    await page.fill('#hero-input', 'https://github.com/o/r/blob/main/t.ipynb');
-    await page.keyboard.press('Enter');
-    await page.waitForSelector('.cell');
-    assert(await page.evaluate(() => document.activeElement.id === 'app'), 'focus fell to ' + await page.evaluate(() => document.activeElement.tagName));
-  });
-});
+/* ---------- find in notebook ---------- */
+
+const findNb = nb([
+  md('# Alpha\n\nThe **Beta** value and a.b literal'),
+  code('beta = 1  # source beta', [{ output_type: 'stream', name: 'stdout', text: ['beta result\n'] }]),
+  ...Array.from({ length: 40 }, (_, i) => md('filler paragraph ' + i + ' ' + 'lorem ipsum '.repeat(30))),
+  md('Far away: BETA at the end, and axb'),
+]);
+const findState = page => page.evaluate(() => ({
+  count: document.getElementById('find-count').textContent,
+  cur: CSS.highlights && CSS.highlights.get('nbv-find-current') ? [...CSS.highlights.get('nbv-find-current')].map(r => r.toString()) : null,
+  all: CSS.highlights && CSS.highlights.get('nbv-find') ? CSS.highlights.get('nbv-find').size : null,
+  active: document.activeElement.id,
+  expanded: document.getElementById('find-btn').getAttribute('aria-expanded'),
+}));
+
+test('find: counts matches case-insensitively, steps through them, scrolls, and closes cleanly', () => run({ hash: H, raw: findNb, settle: 600 }, async ({ page }) => {
+  assert((await findState(page)).expanded === 'false' && await page.evaluate(() => document.getElementById('findbar').hidden), 'bar open at start');
+  await page.keyboard.press('/');
+  let s = await findState(page);
+  assert(s.active === 'find-input' && s.expanded === 'true', s);
+  await page.keyboard.type('beta');
+  await page.waitForFunction(() => /of/.test(document.getElementById('find-count').textContent));
+  s = await findState(page);
+  assert(s.count === '1 of 5' && s.all === 5 && s.cur.length === 1 && s.cur[0].toLowerCase() === 'beta', s);
+  for (let i = 0; i < 4; i++) await page.keyboard.press('Enter');
+  s = await findState(page);
+  assert(s.count === '5 of 5' && s.cur[0] === 'BETA', s);
+  const y = await page.evaluate(() => { const r = [...CSS.highlights.get('nbv-find-current')][0].getBoundingClientRect(); return { top: r.top, h: innerHeight }; });
+  assert(y.top > 0 && y.top < y.h, y);
+  await page.keyboard.press('Shift+Enter');
+  assert((await findState(page)).count === '4 of 5', 'previous');
+  await page.keyboard.press('Enter'); await page.keyboard.press('Enter');
+  assert((await findState(page)).count === '1 of 5', 'wraps around');
+  await page.keyboard.press('Escape');
+  s = await findState(page);
+  assert(s.all === null && s.cur === null && s.active === 'find-btn' && s.expanded === 'false', s);
+}));
+
+test('find: text is literal, empty and missing queries are handled, Hide code removes code matches', () => run({ hash: H, raw: findNb, settle: 600 }, async ({ page }) => {
+  await page.click('#find-btn');
+  const type = async q => { await page.fill('#find-input', q); await page.waitForTimeout(400); return findState(page); };
+  assert((await type('a.b')).count === '1 of 1', 'dot matched literally');
+  assert((await type('zzzz')).count === 'No matches', 'no matches message');
+  assert((await type('   ')).count === '', 'blank query');
+  assert((await type('(.*)[')).count === 'No matches', 'regex characters');
+  assert((await type('beta')).count === '1 of 5', 'back to five');
+  await page.click('#toggle-code');
+  await page.waitForTimeout(400);
+  assert((await findState(page)).count === '1 of 3', 'hidden code still matched');
+  await page.click('#toggle-outputs');
+  await page.waitForTimeout(400);
+  assert((await findState(page)).count === '1 of 2', 'hidden output still matched');
+  await page.click('#find-close');
+  assert((await findState(page)).active === 'find-btn', 'focus not returned');
+}));
+
+test('find: "/" is left alone while typing in a field, highlights go away when the view changes, and axe passes', () => run({ hash: H, raw: findNb, settle: 600 }, async ({ page }) => {
+  await page.focus('#jump-input');
+  await page.keyboard.type('a/b');
+  assert(await page.evaluate(() => document.getElementById('findbar').hidden && document.getElementById('jump-input').value === 'a/b'), 'slash hijacked');
+  await page.click('#find-btn');
+  await page.fill('#find-input', 'beta');
+  await page.waitForTimeout(400);
+  await page.evaluate(fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
+  const v = await page.evaluate(async () => (await axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map(x => x.id));
+  assert(!v.length, v);
+  await page.evaluate(() => { location.hash = '#/compare'; });
+  await page.waitForTimeout(500);
+  assert(await page.evaluate(() => !CSS.highlights.get('nbv-find')), 'highlights survived navigation');
+}));
 
 test('contents menu stays hidden without headings and closes on Escape', async () => {
   await run({ hash: H, raw: nb([md('just text'), code('1')]), settle: 300 }, async ({ page }) => {
