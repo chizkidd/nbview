@@ -4,6 +4,10 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-02
+
+Improves accessibility, adds notebook search and saved widget rendering, introduces privacy-preserving link previews, and speeds up initial page loading.
+
 ### Accessibility
 - **Skip link.** The first Tab stop on every page is now "Skip to content", which moves keyboard focus to the main content without touching the address.
 - **Focus no longer gets lost** when a view changes (opening a notebook, going back, switching to Compare): it moves to the main region instead of dropping to the top of the page.
@@ -192,6 +196,7 @@ First release.
 - JavaScript outputs (ipywidgets, Plotly, Bokeh) are not run; a note points to Colab.
 - Public GitHub repositories only.
 
+[0.11.0]: https://github.com/chizkidd/nbview/releases/tag/v0.11.0
 [0.10.0]: https://github.com/chizkidd/nbview/releases/tag/v0.10.0
 [0.9.0]: https://github.com/chizkidd/nbview/releases/tag/v0.9.0
 [0.8.0]: https://github.com/chizkidd/nbview/releases/tag/v0.8.0
