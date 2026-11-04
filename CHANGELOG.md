@@ -6,6 +6,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ### Fixed
 - The "Skip to content" link no longer shows up on every page or pushes the top bar down. It stays hidden until it receives keyboard focus, then slides into the top-left corner.
+- The home page's search box no longer takes focus when the page loads, so the skip link is the first Tab stop there too (before, Tab started below the header and only reached the link after going round the whole page).
 
 ## [0.11.0] - 2026-11-02
 

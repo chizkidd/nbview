@@ -269,7 +269,7 @@
         <form class="hero-cell" id="hero-form">
           <span class="prompt in" id="hero-prompt">In [ ]:</span>
           <input id="hero-input" type="text" placeholder="karpathy/nn-zero-to-hero"
-                 aria-label="Repo, link or notebook URL" autocomplete="off" spellcheck="false" autofocus>
+                 aria-label="Repo, link or notebook URL" autocomplete="off" spellcheck="false">
           <button class="btn primary" type="submit">Open</button>
         </form>
         <p class="hint">Takes a username, <code>owner/repo</code>, any GitHub or nbviewer link, or a direct URL to an <code>.ipynb</code> file.

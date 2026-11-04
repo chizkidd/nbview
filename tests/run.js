@@ -213,28 +213,36 @@ test('320px phone: a long filename does not scroll the page sideways', () => run
   hash: '#/github/o/r/blob/main/My_Very_Long_Notebook_Name_For_Testing_2024.ipynb', raw: good, viewport: { width: 320, height: 700 }, settle: 300,
 }, async ({ page }) => assert(!(await state(page)).hscroll, 'horizontal scroll')));
 
-test('skip link: out of the way until focused, then visible, and it moves focus to the page', () => run({
-  hash: H, raw: good, settle: 300,
-}, async ({ page }) => {
-  const before = await page.evaluate(() => {
-    const a = document.querySelector('.skip-link');
-    const r = a.getBoundingClientRect();
-    const at = document.elementFromPoint(50, 20);
-    return { bottom: r.bottom, barTop: document.querySelector('.bar').getBoundingClientRect().top, barAtPoint: !!(at && at.closest('.bar')) };
+test('skip link: first Tab stop, out of the way until focused, then moves focus to the page', async () => {
+  await run({ hash: H, raw: good, settle: 300 }, async ({ page }) => {
+    const before = await page.evaluate(() => {
+      const a = document.querySelector('.skip-link');
+      const r = a.getBoundingClientRect();
+      const at = document.elementFromPoint(50, 20);
+      return { bottom: r.bottom, barTop: document.querySelector('.bar').getBoundingClientRect().top, barAtPoint: !!(at && at.closest('.bar')) };
+    });
+    assert(before.bottom <= 0 && before.barTop === 0 && before.barAtPoint, { before });
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(250);
+    const focused = await page.evaluate(() => {
+      const a = document.activeElement;
+      const r = a.getBoundingClientRect();
+      return { cls: a.className, top: r.top, bottom: r.bottom, width: r.width, vh: innerHeight };
+    });
+    assert(focused.cls === 'skip-link' && focused.width > 0 && focused.top >= 0 && focused.bottom <= focused.vh, { focused });
+    await page.keyboard.press('Enter');
+    const after = await page.evaluate(() => ({ id: document.activeElement.id, hash: location.hash }));
+    assert(after.id === 'app' && after.hash === '#/github/o/r/blob/main/t.ipynb', after);
   });
-  assert(before.bottom <= 0 && before.barTop === 0 && before.barAtPoint, { before });
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(250);
-  const focused = await page.evaluate(() => {
-    const a = document.activeElement;
-    const r = a.getBoundingClientRect();
-    return { cls: a.className, top: r.top, bottom: r.bottom, width: r.width, vh: innerHeight };
+
+  // The home page's search box used to take focus on load, which put the skip link behind the whole page in the tab
+  // order. It has to be the first stop there too.
+  await run({ hash: '', settle: 300 }, async ({ page }) => {
+    await page.keyboard.press('Tab');
+    const first = await page.evaluate(() => ({ cls: document.activeElement.className, tag: document.activeElement.tagName }));
+    assert(first.cls === 'skip-link', { first });
   });
-  assert(focused.cls === 'skip-link' && focused.width > 0 && focused.top >= 0 && focused.bottom <= focused.vh, { focused });
-  await page.keyboard.press('Enter');
-  const after = await page.evaluate(() => ({ id: document.activeElement.id, hash: location.hash }));
-  assert(after.id === 'app' && after.hash === '#/github/o/r/blob/main/t.ipynb', after);
-}));
+});
 
 test('axe: no violations on home, notebook and error pages', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
