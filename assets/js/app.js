@@ -2259,7 +2259,7 @@
   let firstView = true;
   function keepFocus() {
     const a = document.activeElement;
-    // Not on a fresh page load, where the skip link should be the first Tab stop.
+    // Not on a fresh page load, where focus should stay untouched so the page does not jump on arrival.
     if (!firstView && (!a || a === document.body || app.contains(a))) app.focus({ preventScroll: true });
     firstView = false;
   }
@@ -2336,11 +2336,6 @@
   }
 
   /* ---------- global wiring ---------- */
-
-  document.getElementById('skip-link').addEventListener('click', e => {
-    e.preventDefault(); // the address must stay as it is: it is the router's input
-    app.focus();
-  });
 
   document.getElementById('jump').addEventListener('submit', e => {
     e.preventDefault();
