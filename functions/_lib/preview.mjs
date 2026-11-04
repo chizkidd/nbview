@@ -56,27 +56,47 @@ function previewPage({ title, description, path }) {
 `;
 }
 
-// kind is 'github' or 'gist'. Returns a Response.
-function handle(request, kind) {
-  const url = new URL(request.url);
-  const tail = url.pathname.replace(new RegExp(`^/${kind}/?`), '');
-  const segments = tail.split('/').filter(Boolean);
-  // /gist/user/id and /gist/id both open the gist by id, as the old redirect rules did.
-  const hashPath = kind === 'gist' ? `/gist/${segments[segments.length - 1] || ''}` : `/${kind}/${segments.join('/')}`;
-  const human = Response.redirect(`${url.origin}/#${hashPath}${url.search}`, 302);
-  if (!segments.length || request.method === 'POST' || !BOT.test(request.headers.get('user-agent') || '')) return human;
+// Where a /kind/... path lands in the viewer. /gist/user/id and /gist/id both open the gist by id, as the old
+// redirect rules did.
+function hashPathFor(kind, segments) {
+  return kind === 'gist' ? `/gist/${segments[segments.length - 1] || ''}` : `/${kind}/${segments.join('/')}`;
+}
 
-  const card = kind === 'github' ? githubCard(segments) : gistCard(segments);
-  if (!card) return human;
-  return new Response(previewPage({ ...card, path: hashPath }), {
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'public, max-age=3600',
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'no-referrer',
-      'content-security-policy': "default-src 'none'; style-src 'none'; base-uri 'none'; form-action 'none'",
-    },
-  });
+// The plain redirect to the viewer, kept separate so it can still be built when something else has gone wrong.
+// It never throws: this is what a visitor gets in the worst case, so a bug in the preview code cannot take a link down.
+function viewerRedirect(request, kind) {
+  try {
+    const url = new URL(request.url);
+    const segments = url.pathname.replace(new RegExp(`^/${kind}/?`), '').split('/').filter(Boolean);
+    return Response.redirect(`${url.origin}/#${hashPathFor(kind, segments)}${url.search}`, 302);
+  } catch {
+    return new Response(null, { status: 302, headers: { location: `${SITE}/#/${kind}/` } });
+  }
+}
+
+// kind is 'github' or 'gist'. Always returns a Response: the preview is a nicety, opening the notebook is the product.
+function handle(request, kind) {
+  try {
+    const url = new URL(request.url);
+    const segments = url.pathname.replace(new RegExp(`^/${kind}/?`), '').split('/').filter(Boolean);
+    const hashPath = hashPathFor(kind, segments);
+    const human = viewerRedirect(request, kind);
+    if (!segments.length || request.method === 'POST' || !BOT.test(request.headers.get('user-agent') || '')) return human;
+
+    const card = kind === 'github' ? githubCard(segments) : gistCard(segments);
+    if (!card) return human;
+    return new Response(previewPage({ ...card, path: hashPath }), {
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'public, max-age=3600',
+        'x-content-type-options': 'nosniff',
+        'referrer-policy': 'no-referrer',
+        'content-security-policy': "default-src 'none'; style-src 'none'; base-uri 'none'; form-action 'none'",
+      },
+    });
+  } catch {
+    return viewerRedirect(request, kind);
+  }
 }
 
 export { handle, previewPage, githubCard, gistCard };

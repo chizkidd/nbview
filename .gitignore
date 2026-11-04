@@ -1,4 +1,6 @@
+# Dependencies are pinned exactly in package.json, so the test install needs no lockfile.
 node_modules/
+package-lock.json
 tests/out/
 
 # macOS
@@ -15,7 +17,6 @@ tests/out/
 # Environment / secrets
 .env
 .env.*
-!.env.example
 
 # Logs and test artifacts
 *.log
