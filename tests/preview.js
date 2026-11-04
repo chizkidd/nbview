@@ -57,6 +57,14 @@ const req = (path, ua = BOT) => new Request('https://nbview.org' + path, { heade
     assert.strictEqual(handle(req('/gist/'), 'gist').status, 302);
   });
 
+  test('a broken request still redirects instead of failing', () => {
+    // The preview is a nicety; the redirect is the product. Nothing here may throw a 500 over a shared link.
+    const r = handle({ url: 'not a url', method: 'GET', headers: new Headers() }, 'github');
+    assert.strictEqual(r.status, 302);
+    assert.strictEqual(r.headers.get('location'), 'https://nbview.org/#/github/');
+    assert.strictEqual(handle({ url: 'not a url', method: 'GET', headers: new Headers() }, 'gist').headers.get('location'), 'https://nbview.org/#/gist/');
+  });
+
   test('the function never makes a network request', async () => {
     const original = global.fetch;
     global.fetch = () => { throw new Error('fetch called'); };
