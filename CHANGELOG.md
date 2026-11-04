@@ -4,6 +4,9 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ## [Unreleased]
 
+### Fixed
+- The "Skip to content" link no longer shows up on every page or pushes the top bar down. It stays hidden until it receives keyboard focus, then slides into the top-left corner.
+
 ## [0.11.0] - 2026-11-02
 
 Improves accessibility, adds notebook search and saved widget rendering, introduces privacy-preserving link previews, and speeds up initial page loading.

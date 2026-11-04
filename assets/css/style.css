@@ -99,6 +99,25 @@ a { color: var(--in); }
 :focus-visible { outline: 2px solid var(--in); outline-offset: 2px; }
 code, pre { font-family: var(--mono); }
 
+/* Skip link: the first Tab stop on every page. Fixed, so it takes no room and the top bar keeps its place; it
+   sits just above the corner and slides in while focused. */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 20;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--in);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px var(--mono);
+  text-decoration: none;
+  transform: translateY(calc(-100% - 1.5rem));
+  transition: transform 120ms ease-out;
+}
+.skip-link:focus { transform: none; }
+
 /* Top bar */
 .bar {
   position: sticky;
@@ -326,7 +345,7 @@ main { padding: 1.75rem 1.25rem 5rem; }
 }
 .star { display: inline-block; animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: 0.2; } }
-@media (prefers-reduced-motion: reduce) { .star { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .star { animation: none; } .skip-link { transition: none; } }
 .error-box {
   max-width: 620px;
   margin: 3rem auto;
