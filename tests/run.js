@@ -232,6 +232,23 @@ test('top bar starts at the top, and loading a page does not steal focus', async
   }
 });
 
+test('home: "/" jumps into the search box, and still opens Find in a notebook', async () => {
+  await run({ hash: '', settle: 300 }, async ({ page }) => {
+    await page.keyboard.press('/');
+    let s = await page.evaluate(() => ({ id: document.activeElement.id, value: document.activeElement.value }));
+    assert(s.id === 'hero-input' && s.value === '', s);
+    await page.keyboard.type('a/b');
+    s = await page.evaluate(() => ({ id: document.activeElement.id, value: document.getElementById('hero-input').value }));
+    assert(s.id === 'hero-input' && s.value === 'a/b', s); // a "/" typed into the box stays in the box
+  });
+
+  await run({ hash: H, raw: good, settle: 300 }, async ({ page }) => {
+    await page.keyboard.press('/');
+    const s = await page.evaluate(() => ({ id: document.activeElement.id, open: !document.getElementById('findbar').hidden }));
+    assert(s.id === 'find-input' && s.open, s);
+  });
+});
+
 test('axe: no violations on home, notebook and error pages', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
   const wide = nb([code('x = "' + 'y'.repeat(400) + '"', [{ output_type: 'execute_result', execution_count: 1, metadata: {}, data: { 'text/plain': ['1'] } }], 1)]);
