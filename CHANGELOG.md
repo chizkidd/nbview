@@ -6,7 +6,8 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ### Fixed
 - The "Skip to content" link no longer shows up on every page or pushes the top bar down. It stays hidden until it receives keyboard focus, then slides into the top-left corner.
-- 
+- The home page's search box no longer takes focus when the page loads, so the skip link is the first Tab stop there too (before, Tab started below the header and only reached the link after going round the whole page).
+
 ### Internal
 - Link previews now fall back to the plain redirect to the viewer if anything in the preview code fails, and `_redirects` keeps `/github/...` and `/gist/...` links working if the Functions are ever not invoked (for example a failed Functions deploy). Opening a shared link no longer depends on a single mechanism.
 
