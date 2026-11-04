@@ -1,4 +1,9 @@
 # Redirect nbviewer.org-style links: swap the domain and it just works.
-# /github/* and /gist/* are handled by functions/ (same redirect, plus a link preview for chat and social crawlers).
-/url/*          /#/url/:splat     302
-/urls/*         /#/urls/:splat    302
+# /github/* and /gist/* are answered by functions/ first (redirect for people, link preview for crawlers). The two
+# rules below are a backup: they only run when no Function is invoked for the path, for example if the Functions
+# deploy fails or the project fails open. Keep them in step with hashPathFor() in functions/_lib/preview.mjs.
+/github/*           /#/github/:splat    302
+/gist/:user/:id     /#/gist/:id         302
+/gist/:id           /#/gist/:id         302
+/url/*              /#/url/:splat       302
+/urls/*             /#/urls/:splat      302
