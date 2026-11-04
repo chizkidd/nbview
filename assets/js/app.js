@@ -2335,6 +2335,18 @@
     return true;
   }
 
+  // On the home page, "/" jumps into the search box. Inside a notebook the same key opens Find instead.
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    if (!document.body.classList.contains('is-home') || document.querySelector('dialog[open]')) return;
+    const input = document.getElementById('hero-input');
+    if (!input) return;
+    e.preventDefault();
+    input.focus();
+  });
+
   /* ---------- global wiring ---------- */
 
   document.getElementById('jump').addEventListener('submit', e => {

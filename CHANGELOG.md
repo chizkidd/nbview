@@ -4,6 +4,9 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ## [Unreleased]
 
+### Added
+- Press `/` on the home page to jump into the search box. Inside a notebook the same key still opens Find.
+
 ### Removed
 - The "Skip to content" link. It was invisible until it received keyboard focus, easy to miss, and the top bar is only a few controls wide, so it caused more confusion than it saved. Focus still moves to the main content when the view changes, so keyboard and screen reader users keep their place.
 
