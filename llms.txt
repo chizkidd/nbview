@@ -1,6 +1,6 @@
 # nbview
 
-> nbview is a free, open-source Jupyter notebook viewer for public GitHub repos, gists and direct .ipynb links. Notebooks are fetched and rendered in the reader's browser; there is no nbview server that sees them. It is an independent alternative to nbviewer, not affiliated with Project Jupyter.
+> nbview is a free, open-source Jupyter notebook viewer for GitHub repos (public, and private with a read-only token), gists and direct .ipynb links. Notebooks are fetched and rendered in the reader's browser; there is no nbview server that sees them. It is an independent alternative to nbviewer, not affiliated with Project Jupyter.
 
 ## How to link to a notebook
 
@@ -20,5 +20,5 @@
 
 ## Notes for automated agents
 
-- The viewer is a client-side app. Notebook content only exists after JavaScript runs in a browser, so a plain HTTP fetch of a nbview.org link returns the app shell, not the notebook. To read a notebook's contents, fetch the raw .ipynb from GitHub (raw.githubusercontent.com) instead.
+- The viewer is a client-side app. Notebook content only exists after JavaScript runs in a browser, so a plain HTTP fetch of a nbview.org link returns the app shell, not the notebook. To read a notebook's contents, fetch the raw .ipynb from GitHub (raw.githubusercontent.com). Private notebooks need a GitHub token with Contents: Read access, requested from api.github.com (`GET /repos/{owner}/{repo}/contents/{path}` with `Accept: application/vnd.github.raw`).
 - Source code (MIT license): https://github.com/chizkidd/nbview

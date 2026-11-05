@@ -68,8 +68,26 @@ async function open(opts = {}) {
     if (u.startsWith(base)) return route.continue();
     const host = hostOf(u);
     if (host === 'fonts.googleapis.com' || host === 'fonts.gstatic.com') return route.fulfill({ body: '', contentType: 'text/css' });
+    // A request with an Authorization header needs a CORS preflight. Let it through with the headers the real API allows.
+    if (route.request().method() === 'OPTIONS') {
+      return route.fulfill({
+        status: 204,
+        headers: {
+          'access-control-allow-origin': '*',
+          'access-control-allow-methods': 'GET, OPTIONS',
+          'access-control-allow-headers': 'authorization, accept',
+        },
+      });
+    }
     requests.push(u);
-    const pick = (src) => (typeof src === 'function' ? src(u, route.request()) : src === undefined ? null : { body: typeof src === 'string' || Buffer.isBuffer(src) ? src : JSON.stringify(src) });
+    const pick = (src) => {
+      if (typeof src !== 'function') {
+        return src === undefined ? null : { body: typeof src === 'string' || Buffer.isBuffer(src) ? src : JSON.stringify(src) };
+      }
+      const v = src(u, route.request());
+      if (v === undefined) return null;
+      return { ...v, body: v.body === undefined ? '' : typeof v.body === 'string' || Buffer.isBuffer(v.body) ? v.body : JSON.stringify(v.body) };
+    };
     let h = null;
     if (host === 'raw.githubusercontent.com') h = pick(opts.raw);
     else if (host === 'api.github.com') h = pick(opts.api);

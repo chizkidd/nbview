@@ -249,6 +249,78 @@ test('home: "/" jumps into the search box, and still opens Find in a notebook', 
   });
 });
 
+/* ---------- private repos ---------- */
+
+const tokenInit = () => localStorage.setItem('nbv.token', JSON.stringify('ghp_private_test'));
+
+test('private repo: a saved token opens a notebook through the Contents API', async () => {
+  const body = JSON.stringify(nb([md('private hello')]));
+  const seen = { raw: [], api: [] };
+  await run({
+    hash: H, init: tokenInit,
+    raw: (u, req) => { seen.raw.push(req.headers()['authorization'] || ''); return { status: 404, body: 'Not Found', type: 'text/plain' }; },
+    api: (u, req) => { seen.api.push({ u, auth: req.headers()['authorization'] || '' }); return { body, type: 'application/vnd.github.raw' }; },
+  }, async ({ page }) => {
+    const s = await state(page);
+    assert(s.cells === 1 && /private hello/.test(await page.textContent('.cells')), s);
+  });
+  assert(seen.raw.length === 1 && seen.raw[0] === '', seen.raw);
+  assert(seen.api.length === 1 && /^https:\/\/api\.github\.com\/repos\/o\/r\/contents\/t\.ipynb\?ref=main$/.test(seen.api[0].u)
+    && seen.api[0].auth === 'Bearer ghp_private_test', seen.api);
+});
+
+test('private repo: the token is not sent to raw.githubusercontent.com, and public files stay on the raw host', async () => {
+  let api = 0;
+  await run({ hash: H, raw: good, api: () => { api++; return { body: '{}' }; }, init: tokenInit }, async ({ page }) => {
+    await page.waitForSelector('.cell');
+  });
+  assert(api === 0, api);
+});
+
+test('private repo: without a token the error says how to add one', () => run({
+  hash: H, raw: () => ({ status: 404, body: 'Not Found', type: 'text/plain' }),
+}, async ({ page }) => {
+  await page.waitForSelector('.error-box');
+  const s = await page.evaluate(() => ({
+    err: (document.querySelector('.error-box h1') || {}).textContent || null,
+    errText: (document.querySelector('.error-box p') || {}).textContent || null,
+    button: !!document.getElementById('err-token'),
+  }));
+  assert(s.err === 'Notebook not found' && /private/i.test(s.errText) && /token/i.test(s.errText) && s.button, s);
+}));
+
+test('private repo: a rejected token is explained and offers the token dialog', () => run({
+  hash: H, init: tokenInit,
+  raw: () => ({ status: 404, body: 'Not Found', type: 'text/plain' }),
+  api: () => ({ status: 401, body: { message: 'Bad credentials' } }),
+}, async ({ page }) => {
+  await page.waitForSelector('.error-box');
+  const s = await page.evaluate(() => ({ h1: document.querySelector('.error-box h1').textContent, button: !!document.getElementById('err-token') }));
+  assert(s.h1 === 'Token rejected' && s.button, s);
+}));
+
+test('private repos: compare notebooks from two different private repos', async () => {
+  const a = JSON.stringify(nb([md('from repo alpha')]));
+  const b = JSON.stringify(nb([md('from repo beta')]));
+  const urlA = 'https://raw.githubusercontent.com/me/alpha/main/a.ipynb';
+  const urlB = 'https://raw.githubusercontent.com/me/beta/main/b.ipynb';
+  const calls = [];
+  await run({
+    hash: '#/compare/links/' + encodeURIComponent(urlA) + '/' + encodeURIComponent(urlB),
+    init: tokenInit,
+    raw: () => ({ status: 404, body: 'Not Found', type: 'text/plain' }),
+    api: (u, req) => {
+      calls.push({ u, auth: req.headers()['authorization'] || '' });
+      return { body: /\/me\/alpha\//.test(u) ? a : b, type: 'application/vnd.github.raw' };
+    },
+  }, async ({ page }) => {
+    await page.waitForSelector('.diffview');
+    const text = await page.textContent('.diffview');
+    assert(/from repo alpha/.test(text) && /from repo beta/.test(text), text.slice(0, 200));
+  });
+  assert(calls.length === 2 && calls.every(c => c.auth === 'Bearer ghp_private_test'), calls);
+});
+
 test('axe: no violations on home, notebook and error pages', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
   const wide = nb([code('x = "' + 'y'.repeat(400) + '"', [{ output_type: 'execute_result', execution_count: 1, metadata: {}, data: { 'text/plain': ['1'] } }], 1)]);

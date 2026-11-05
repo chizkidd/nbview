@@ -5,6 +5,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ## [Unreleased]
 
 ### Added
+- **Private repos.** Save a fine-grained GitHub token with **Contents: Read-only** access and open or compare notebooks from private repos, including notebooks in two different private repos. The token is sent only to `api.github.com`; public notebooks keep loading from `raw.githubusercontent.com` without using the API limit.
 - Press `/` on the home page to jump into the search box. Inside a notebook the same key still opens Find.
 
 ### Removed
