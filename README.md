@@ -1,6 +1,6 @@
 # nbview
 
-A client-side Jupyter notebook viewer for GitHub repos — public, and private with a read-only token. No server: the browser fetches the `.ipynb` straight from GitHub and renders it, so there's nothing to crash or queue.
+A client-side Jupyter notebook viewer for GitHub repos (public, and private with a read-only token). No server: the browser fetches the `.ipynb` straight from GitHub and renders it, so there's nothing to crash or queue.
 
 **Live at [nbview.org](https://nbview.org)**
 
