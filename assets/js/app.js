@@ -1,4 +1,4 @@
-/* nbview: a fully client-side Jupyter notebook viewer for public GitHub repos.
+/* nbview: a fully client-side Jupyter notebook viewer for GitHub repos. Private repos work with a saved token.
  *
  * Routes (hash-based, so it works on any static host):
  *   #/                                         home
@@ -155,14 +155,20 @@
     try { sessionStorage.setItem('nbv.c:' + path, JSON.stringify({ t: Date.now(), d })); } catch { /* storage full or unavailable */ }
   }
 
-  async function gh(path) {
-    const cached = cacheGet(path);
-    if (cached) return cached;
-    const headers = { Accept: 'application/vnd.github+json' };
+  // The saved token, checked for characters that cannot appear in one (usually an invisible space from copying).
+  function tokenOf() {
     const token = store.get('nbv.token');
     if (token && !TOKEN_OK.test(String(token))) {
       throw new ViewError('The saved GitHub token looks wrong', 'It contains a character a token cannot have, often an invisible space picked up when copying. Enter it again.', { token: true });
     }
+    return token ? String(token) : '';
+  }
+
+  async function gh(path) {
+    const cached = cacheGet(path);
+    if (cached) return cached;
+    const headers = { Accept: 'application/vnd.github+json' };
+    const token = tokenOf();
     if (token) headers.Authorization = `Bearer ${token}`;
 
     let res;
@@ -191,10 +197,56 @@
     if (res.status === 401) {
       throw new ViewError('Token rejected', "GitHub didn't accept the saved token. Update or remove it.", { token: true });
     }
+    if (res.status === 403) {
+      throw new ViewError('No access to this repository', 'The saved token cannot read it. Give the token Contents: Read access to this repo.', { token: true });
+    }
     if (res.status === 404) {
-      throw new ViewError('Not found', "That repo, branch or folder doesn't exist, or it's private. Only public repos can be viewed.");
+      throw new ViewError('Not found', "That repo, branch or folder doesn't exist, or the saved token can't see it. For a private repo, give the token Contents: Read access.");
     }
     throw new ViewError(`GitHub returned ${res.status}`, 'The request was refused. Try again in a moment.');
+  }
+
+  const privateHint = 'If the repository is private, add a GitHub token with Contents: Read access to it.';
+
+  // A failed raw or Contents API response, as the error the page should show.
+  function ghTextError(r, title, detail, opts) {
+    if (r.status === 401) {
+      return new ViewError('Token rejected', "GitHub didn't accept the saved token. Update or remove it.", { token: true });
+    }
+    if (r.status === 403 && r.remaining === '0') {
+      const mins = Math.max(1, Math.ceil((r.reset - Date.now()) / 60000));
+      return new ViewError('GitHub rate limit reached', `Try again in about ${mins} min. A token raises the limit to 5,000 requests an hour.`, { token: true });
+    }
+    if (r.status === 403) {
+      return new ViewError('No access to this repository', 'The saved token cannot read it. Give the token Contents: Read access to this repo.', { token: true });
+    }
+    if (r.status === 404) return new ViewError(title, detail, opts);
+    return new ViewError(`Request failed (${r.status})`, 'The server refused the request. Try again in a moment.');
+  }
+
+  // Reads one file from a GitHub repo. Public files come from raw.githubusercontent.com, which does not use the API
+  // quota. If that 404s and a token is saved, the file is retried through the Contents API: the raw host refuses CORS
+  // preflights that carry an Authorization header, so the API is the only way to read a private repo from a page.
+  // Returns { text } or { status, remaining, reset }; only network failures throw.
+  async function githubText(owner, repo, ref, path, signal) {
+    const res = await fetch(`${RAW}/${enc(owner)}/${enc(repo)}/${enc(ref)}/${enc(path)}`, { signal });
+    if (res.ok) return { text: await res.text() };
+
+    const token = tokenOf();
+    if (res.status !== 404 || !token) return { status: res.status };
+
+    // "HEAD" is a raw host alias for the default branch, not a ref the API accepts.
+    const query = !ref || /^HEAD$/i.test(ref) ? '' : `?ref=${encodeURIComponent(ref)}`;
+    const api = await fetch(`${API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${enc(path)}${query}`, {
+      headers: { Accept: 'application/vnd.github.raw', Authorization: `Bearer ${token}` },
+      signal,
+    });
+    if (api.ok) return { text: await api.text() };
+    return {
+      status: api.status,
+      remaining: api.headers.get('x-ratelimit-remaining'),
+      reset: Number(api.headers.get('x-ratelimit-reset') || 0) * 1000,
+    };
   }
 
   function crumbs(owner, repo, ref, path) {
@@ -265,7 +317,7 @@
     const recents = getRecents();
     app.innerHTML = `
       <div class="home">
-        <h1 class="home-title">Read Jupyter notebooks from any public GitHub repo.</h1>
+        <h1 class="home-title">Read Jupyter notebooks from any GitHub repo.</h1>
         <form class="hero-cell" id="hero-form">
           <span class="prompt in" id="hero-prompt">In [ ]:</span>
           <input id="hero-input" type="text" placeholder="karpathy/nn-zero-to-hero"
@@ -273,7 +325,7 @@
           <button class="btn primary" type="submit">Open</button>
         </form>
         <p class="hint">Takes a username, <code>owner/repo</code>, any GitHub or nbviewer link, or a direct URL to an <code>.ipynb</code> file.
-          Try <a href="#/github/jakevdp/PythonDataScienceHandbook">jakevdp/PythonDataScienceHandbook</a>.</p>
+          Try <a href="#/github/jakevdp/PythonDataScienceHandbook">jakevdp/PythonDataScienceHandbook</a>. Private repos work when you add a read-only token from the top bar.</p>
         <p class="hint">Want to see what changed? <a href="#/compare">Compare two notebooks</a>, or use Compare on any GitHub notebook.</p>
         <div class="drop" id="drop">
           Have the file already? Drop an .ipynb here or <label>choose one<input type="file" id="file-input" accept=".ipynb,application/json" hidden></label>.
@@ -453,24 +505,33 @@
       }
     }
 
-    let res;
-    try {
-      res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
-    } catch (e) {
-      if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
-      throw new ViewError(
-        "Couldn't load the file",
-        isGh
-          ? 'The network request failed. Check your connection and try again.'
-          : "The site hosting this file doesn't let other pages read it (CORS). GitHub, GitLab raw and gist raw links work."
-      );
+    let text;
+    if (isGh) {
+      let r;
+      try {
+        r = await githubText(src.owner, src.repo, src.ref, src.path, AbortSignal.timeout(60000));
+      } catch (e) {
+        if (e instanceof ViewError) throw e;
+        if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
+        throw new ViewError("Couldn't load the file", 'The network request failed. Check your connection and try again.');
+      }
+      if (r.text == null) throw ghTextError(r, 'Notebook not found', `Check the path and branch. ${privateHint}`, { token: true });
+      text = r.text;
+    } else {
+      let res;
+      try {
+        res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
+      } catch (e) {
+        if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
+        throw new ViewError("Couldn't load the file", "The site hosting this file doesn't let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
+      }
+      if (!res.ok) {
+        throw res.status === 404
+          ? new ViewError('Notebook not found', 'Check the link, path and branch.')
+          : new ViewError(`Request failed (${res.status})`, 'The server refused the request. Try again in a moment.');
+      }
+      text = await res.text();
     }
-    if (!res.ok) {
-      throw res.status === 404
-        ? new ViewError('Notebook not found', 'Check the path and branch. Only public repos can be viewed.')
-        : new ViewError(`Request failed (${res.status})`, 'The server refused the request. Try again in a moment.');
-    }
-    const text = await res.text();
     if (stale(id)) return;
 
     if (text.length > BIG_NB && !bigOk.has(location.hash)) {
@@ -1793,17 +1854,18 @@
   }
 
   async function fetchCells(owner, repo, ref, path) {
-    let res;
+    let r;
     try {
-      res = await fetch(`${RAW}/${enc(owner)}/${enc(repo)}/${enc(ref)}/${enc(path)}`, { signal: AbortSignal.timeout(60000) });
+      r = await githubText(owner, repo, ref, path, AbortSignal.timeout(60000));
     } catch (e) {
+      if (e instanceof ViewError) throw e;
       throw new ViewError("Couldn't load a version", e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
     }
-    if (res.status === 404) {
-      throw new ViewError(`Not found at ${shortRef(ref)}`, `The file ${path} doesn't exist at "${ref}", or that branch, tag or commit doesn't exist. Only public repos can be compared.`);
+    if (r.text == null) {
+      if (r.status === 404) throw ghTextError(r, `Not found at ${shortRef(ref)}`, `The file ${path} doesn't exist at "${ref}", or that branch, tag or commit doesn't exist. ${privateHint}`, { token: true });
+      throw ghTextError(r);
     }
-    if (!res.ok) throw new ViewError(`Request failed (${res.status})`, 'The server refused the request. Try again in a moment.');
-    return parseCells(await res.text(), shortRef(ref));
+    return parseCells(r.text, shortRef(ref));
   }
 
   async function viewCompareGh(owner, repo, base, head, path, id) {
@@ -1830,6 +1892,10 @@
   const rawUrl = (owner, repo, ref, path) => `${RAW}/${enc(owner)}/${enc(repo)}/${enc(ref)}/${enc(path)}`;
   const compareLinksHash = (a, b) => `#/compare/links/${encodeURIComponent(a)}/${encodeURIComponent(b)}`;
   const RAW_GH = /^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/;
+  const parseRawGithub = url => {
+    const m = String(url).match(/^https:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+?)(?:[?#].*)?$/i);
+    return m ? { owner: safeDecode(m[1]), repo: safeDecode(m[2]), ref: safeDecode(m[3]), path: safeDecode(m[4]) } : null;
+  };
 
   // Turns what someone typed (GitHub link, raw link, owner/repo/path.ipynb or any notebook URL) into a fetchable http(s) URL.
   function notebookUrl(input) {
@@ -1883,15 +1949,29 @@
   async function fetchUrlCells(url, labelOverride) {
     const label = labelOverride || labelOf(url);
     if (!/^https?:\/\//i.test(url)) throw new ViewError('Unsupported link', 'Only http and https notebook links can be compared.');
+    const gh = parseRawGithub(url);
+    if (gh) {
+      let r;
+      try {
+        r = await githubText(gh.owner, gh.repo, gh.ref, gh.path, AbortSignal.timeout(60000));
+      } catch (e) {
+        if (e instanceof ViewError) throw e;
+        throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
+      }
+      if (r.text == null) {
+        if (r.status === 404) throw ghTextError(r, `Not found: ${label}`, `Check the link, branch and path. ${privateHint}`, { token: true });
+        throw ghTextError(r);
+      }
+      return parseCells(r.text, label);
+    }
     let res;
     try {
       res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
     } catch (e) {
       throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.'
-        : RAW_GH.test(url) ? 'The network request failed. Check your connection and try again.'
         : "The site hosting this file doesn't let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
     }
-    if (res.status === 404) throw new ViewError(`Not found: ${label}`, 'Check the link, branch and path. Only public repos can be compared.');
+    if (res.status === 404) throw new ViewError(`Not found: ${label}`, 'Check the link, branch and path.');
     if (!res.ok) throw new ViewError(`Request failed (${res.status})`, `${label} could not be loaded. Try again in a moment.`);
     return parseCells(await res.text(), label);
   }
@@ -1933,7 +2013,7 @@
           <button class="btn" id="mode-files" type="button" aria-pressed="false">Two files</button>
         </div>
         <section id="panel-links">
-          <p class="hint">Paste a link to each notebook, or <code>owner/repo/path/to/notebook.ipynb</code>. They can be in different repos or branches. Public repos only.</p>
+          <p class="hint">Paste a link to each notebook, or <code>owner/repo/path/to/notebook.ipynb</code>. They can be in different repos or branches. Private repos work when a GitHub token with access to them is saved.</p>
           <form id="links-form" class="compare-links">
             <label for="link-a">Original</label>
             <input id="link-a" type="text" placeholder="https://github.com/owner/repo/blob/main/notebook.ipynb" autocomplete="off" spellcheck="false">

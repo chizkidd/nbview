@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>nbview: Jupyter notebook viewer for GitHub</title>
-  <meta name="description" content="nbview renders Jupyter notebooks from any public GitHub repo, right in your browser. A fast nbviewer alternative: change nbviewer.org to nbview.org in a link and it opens the same notebook.">
+  <meta name="description" content="nbview renders Jupyter notebooks from GitHub repos, public or private, right in your browser. A fast nbviewer alternative: change nbviewer.org to nbview.org in a link and it opens the same notebook.">
   <link rel="canonical" href="https://nbview.org/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="nbview">
   <meta property="og:title" content="nbview: Jupyter notebook viewer for GitHub">
-  <meta property="og:description" content="nbview renders Jupyter notebooks from any public GitHub repo, right in your browser. A fast nbviewer alternative: change nbviewer.org to nbview.org in a link and it opens the same notebook.">
+  <meta property="og:description" content="nbview renders Jupyter notebooks from GitHub repos, public or private, right in your browser. A fast nbviewer alternative: change nbviewer.org to nbview.org in a link and it opens the same notebook.">
   <meta property="og:url" content="https://nbview.org/">
   <meta property="og:image" content="https://nbview.org/assets/og-light.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -36,8 +36,8 @@
 
   <main id="app" tabindex="-1">
     <div class="home">
-      <h1 class="home-title">Read Jupyter notebooks from any public GitHub repo.</h1>
-      <p class="hint">nbview is a fast nbviewer alternative that runs entirely in your browser, so there is no server to go down. Paste a GitHub repo, notebook link, gist or nbviewer link, or change <code>nbviewer.org</code> to <code>nbview.org</code> in the address bar and the same notebook opens here.</p>
+      <h1 class="home-title">Read Jupyter notebooks from any GitHub repo.</h1>
+      <p class="hint">nbview is a fast nbviewer alternative that runs entirely in your browser, so there is no server to go down. Paste a GitHub repo, notebook link, gist or nbviewer link, or change <code>nbviewer.org</code> to <code>nbview.org</code> in the address bar and the same notebook opens here. Private repos work when you add a read-only token from the top bar.</p>
       <p class="hint">nbview is an independent project and is not affiliated with Project Jupyter or nbviewer.</p>
     </div>
   </main>
@@ -45,8 +45,10 @@
   <dialog id="settings">
     <form method="dialog" class="settings-form">
       <h2>GitHub token</h2>
-      <p>Opening notebooks never counts against GitHub's limits. Browsing folders does: 60 listings an hour without a token, 5,000 with one. A classic token with no scopes is enough. It's stored in this browser only.</p>
-      <input id="token-input" type="password" placeholder="ghp_..." autocomplete="off" spellcheck="false" aria-label="GitHub token">
+      <p>To open notebooks from <strong>private repos</strong>, use a <strong>fine-grained token</strong> with <strong>Contents: Read-only</strong> access to those repos. A classic token with no scopes works for public repos and raises the folder-browsing limit.</p>
+      <p>Folder browsing allows 60 requests an hour without a token and 5,000 with one; opening public notebooks does not use that limit. The token is stored in this browser only and sent only to api.github.com.</p>
+      <p class="hint"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained token</a></p>
+      <input id="token-input" type="password" placeholder="github_pat_... or ghp_..." autocomplete="off" spellcheck="false" aria-label="GitHub token">
       <p id="token-error" class="form-error" role="alert" hidden>That doesn't look like a token. It has a space or a character a token can't have, often picked up when copying. Paste it again.</p>
       <div class="dialog-actions">
         <button class="btn" value="clear">Remove token</button>
