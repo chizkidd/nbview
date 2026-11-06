@@ -82,9 +82,10 @@ async function shell(env, request, { route, title, canonical }) {
   html = html.replace(/<head>/i, '<head>\n' + head);
   html = html.replace(/<title>[^<]*<\/title>/i, `<title>${esc(title)} | nbview</title>`);
   html = html.replace('<body class="is-home">', '<body>');
+  // Keep whatever ?v= stamp the build gave app.js, so the frame gets the same sheet and script the page does.
   html = html.replace(
-    /<script defer src="assets\/js\/app\.js"><\/script>/,
-    '<script defer src="/assets/js/embed-boot.js"></script>\n  <script defer src="/assets/js/app.js"></script>'
+    /<script defer src="(assets\/js\/app\.js[^"]*)"><\/script>/,
+    '<script defer src="/assets/js/embed-boot.js"></script>\n  <script defer src="/$1"></script>'
   );
   return html;
 }
