@@ -2506,13 +2506,28 @@
   const saveBtn = dlg.querySelector('button[value="save"]');
 
   // The top-bar button names which credential is saved, so private-repo access is visible without opening it.
+  // The account name is stored with the token, so naming it costs one request per sign-in, not one per load.
+  const shortLogin = login => (login.length > 14 ? login.slice(0, 13) + '…' : login);
+
   function syncSettingsBtn() {
     const hasToken = Boolean(store.get('nbv.token'));
     const signedIn = hasToken && Boolean(store.get('nbv.oauth'));
-    settingsBtn.textContent = signedIn ? 'Signed in' : hasToken ? 'Token saved' : 'Private repos';
-    settingsBtn.title = signedIn ? 'Signed in with GitHub'
+    const login = signedIn ? String(store.get('nbv.login') || '') : '';
+    settingsBtn.textContent = login ? '@' + shortLogin(login)
+      : signedIn ? 'Signed in' : hasToken ? 'Token saved' : 'Private repos';
+    settingsBtn.title = login ? `Signed in as ${login}`
+      : signedIn ? 'Signed in with GitHub'
       : hasToken ? 'A GitHub token is saved in this browser'
       : 'Sign in or add a token for private repos';
+  }
+
+  // Ask GitHub who this is, once per sign-in. A revoked or expired token keeps the generic label.
+  async function loadLogin() {
+    if (!store.get('nbv.token') || !store.get('nbv.oauth') || store.get('nbv.login')) return;
+    try {
+      const user = await gh('/user');
+      if (user && user.login) { store.set('nbv.login', user.login); syncSettingsBtn(); }
+    } catch { /* the account is unknown here; the button still says Signed in */ }
   }
 
   function openSettings() {
@@ -2549,8 +2564,10 @@
     if (!TOKEN_OK.test(t)) return;
     store.set('nbv.token', t);
     store.set('nbv.oauth', true);
+    store.del('nbv.login'); // a new sign-in can be a different account
     tokInput.value = t;
     syncSettingsBtn();
+    loadLogin();
     if (dlg.open) dlg.close('cancel'); // the close handler must not overwrite what just arrived
     route();
   });
@@ -2575,6 +2592,7 @@
 
   settingsBtn.addEventListener('click', openSettings);
   syncSettingsBtn();
+  loadLogin();
   saveBtn.addEventListener('click', e => {
     const t = tokInput.value.trim();
     if (!t || TOKEN_OK.test(t)) { tokError.hidden = true; return; }
@@ -2598,6 +2616,7 @@
     } else {
       return;
     }
+    store.del('nbv.login'); // a pasted token carries no account name
     syncSettingsBtn();
     if (app.querySelector('.error-box')) route();
   });

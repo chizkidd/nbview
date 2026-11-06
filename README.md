@@ -37,7 +37,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 
 - Notebooks are fetched and rendered in your browser. There is no nbview server that sees them. Link previews are built from the address alone (file name and repo), never from the notebook's contents.
 - Remote images in a notebook load from whatever host the notebook points at, so that host can see your IP address. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
-- The optional GitHub token and your recently opened list stay in this browser's local storage. The token is sent only to api.github.com, never to raw.githubusercontent.com or to notebook image hosts. Use a fine-grained token limited to the repos you need, with Contents: Read-only.
+- The optional GitHub token, your recently opened list and (after a sign-in) your GitHub account name stay in this browser's local storage. The token is sent only to api.github.com, never to raw.githubusercontent.com or to notebook image hosts. Use a fine-grained token limited to the repos you need, with Contents: Read-only.
 - nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies).
 
 ## Development
