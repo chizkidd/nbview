@@ -10,6 +10,7 @@
 - Any direct .ipynb URL that allows cross-origin reads: https://nbview.org/#/url/{url}
 - Replace nbviewer.org with nbview.org in an existing nbviewer link and it works.
 - Add ?cell=N to a notebook link to open it scrolled to cell N.
+- Embeddable frame: https://nbview.org/embed/github/{owner}/{repo}/blob/{branch}/{path}.ipynb (no toolbar; other sites may frame this path)
 
 ## Docs
 

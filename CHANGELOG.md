@@ -5,6 +5,9 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ## [Unreleased]
 
 ### Added
+- **Download a clean copy.** The Export menu now saves the notebook itself with outputs and execution counts removed, or with only its markdown cells. Like the other exports it is built in the browser, so cleaning a notebook never uploads it.
+- **Embed a notebook.** The Embed button copies an `<iframe>` snippet pointing at `/embed/...`, which shows the notebook without the toolbar and may be framed by any site. Only that path allows framing; the rest of the site still can't be.
+- **Sign in with GitHub.** Where the deployment has a GitHub OAuth app (`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`), the token dialog offers one-click sign-in for private repos. Only the code-for-token exchange is server-side; notebook content is still fetched and rendered by the reader's browser. The fine-grained token path stays for anyone who wants least privilege.
 - **Private repos.** Save a fine-grained GitHub token with **Contents: Read-only** access and open or compare notebooks from private repos, including notebooks in two different private repos. The token is sent only to `api.github.com`; public notebooks keep loading from `raw.githubusercontent.com` without using the API limit.
 - Press `/` on the home page to jump into the search box. Inside a notebook the same key still opens Find.
 
@@ -15,6 +18,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - The home page's search box no longer takes focus when the page loads, so Tab starts at the top of the page instead of in the box (and phones no longer raise the keyboard on arrival).
 
 ### Internal
+- `/embed/` and `/auth/` are Pages Functions, which set their own security headers because `_headers` rules do not apply to Function responses. That is what lets the embed path allow framing while the rest of the site keeps `frame-ancestors 'self'`.
 - Link previews now fall back to the plain redirect to the viewer if anything in the preview code fails, and `_redirects` keeps `/github/...` and `/gist/...` links working if the Functions are ever not invoked (for example a failed Functions deploy). Opening a shared link no longer depends on a single mechanism.
 
 ## [0.11.0] - 2026-11-02
