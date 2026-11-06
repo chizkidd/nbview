@@ -1,5 +1,5 @@
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' https://nbview.org https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src * data: blob:; media-src https: data: blob:; connect-src https:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; frame-src 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://nbview.org https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src * data: blob:; manifest-src 'self'; media-src https: data: blob:; connect-src https:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; frame-src 'self'; object-src 'none'
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
@@ -14,3 +14,11 @@
 
 /manifest.webmanifest
   Content-Type: application/manifest+json
+
+# These have no hashed filenames, so a copy cached before a deploy can style markup it has never seen.
+# Revalidate every load: a 304 costs nothing, a four-hour-old stylesheet breaks the page.
+/assets/css/*
+  Cache-Control: public, max-age=0, must-revalidate
+
+/assets/js/*
+  Cache-Control: public, max-age=0, must-revalidate

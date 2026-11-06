@@ -15,6 +15,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   'img-src * data: blob:',
+  "manifest-src 'self'",
   'media-src https: data: blob:',
   'connect-src https:',
   "form-action 'none'",
