@@ -398,6 +398,15 @@ main { padding: 1.75rem 1.25rem 5rem; }
 .output pre.stderr { background: var(--stderr-bg); padding: 0.45rem 0.7rem; border-radius: 2px; }
 .output pre.error { background: var(--err-bg); padding: 0.6rem 0.8rem; border-radius: 2px; }
 .output img { max-width: 100%; height: auto; display: block; background: #fff; }
+/* An image from a host other than GitHub's waits for a click, so opening a notebook tells that host nothing. */
+.img-blocked {
+  display: inline-flex; align-items: center; gap: 0.5rem; margin: 0.15rem 0;
+  font: 12px var(--nb-mono); color: var(--muted); background: none;
+  border: 1px dashed var(--rule); border-radius: 2px; padding: 0.4rem 0.65rem; cursor: pointer;
+}
+.img-blocked:hover, .img-blocked:focus-visible { border-color: var(--in); }
+.img-blocked:focus-visible { outline: 2px solid var(--in); outline-offset: 1px; }
+.img-blocked-go { color: var(--in); text-decoration: underline dotted; }
 .output .note { font: 12px var(--nb-mono); color: var(--muted); padding: 0.3rem 0; }
 .raw { margin: 0; font: 13px var(--nb-mono); color: var(--muted); white-space: pre-wrap; }
 .hide-code .cell-code .input { display: none; }

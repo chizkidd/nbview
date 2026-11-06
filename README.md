@@ -8,6 +8,7 @@ A client-side Jupyter notebook viewer for GitHub repos (public, and private with
 
 - Browse any user, org or repo (`chizkidd`, `owner/repo`, or a pasted GitHub URL)
 - Render `.ipynb` files: markdown, LaTeX (KaTeX), syntax-highlighted code, text, HTML tables, images, SVG, ANSI-colored tracebacks, progress bars
+- An image hosted anywhere other than GitHub appears as **Image from example.com — Show** until it is clicked, so simply opening a notebook cannot make your browser call the author's server
 - Inspired by nbviewer: Jupyter classic typography, Pygments-style Python colors, upright math, and long equations that wrap instead of running off the page
 - Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a gist link, or from a local file
 - Open and compare notebooks from **private repos** with a fine-grained GitHub token (Contents: Read-only), or with one-click **Sign in with GitHub** where the site has an OAuth app configured
@@ -36,7 +37,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 ## Privacy
 
 - Notebooks are fetched and rendered in your browser. There is no nbview server that sees them. Link previews are built from the address alone (file name and repo), never from the notebook's contents.
-- Remote images in a notebook load from whatever host the notebook points at, so that host can see your IP address. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
+- Images in a notebook are held back unless they come from GitHub's own file hosts, the normal case for saved plots and relative paths. Anything else is shown as **Image from example.com — Show** and is fetched only when clicked, so a third-party host learns neither your IP address nor which notebook you are reading; every image is also requested without a Referer. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
 - The optional GitHub token, your recently opened list and (after a sign-in) your GitHub account name stay in this browser's local storage. The token is sent only to api.github.com, never to raw.githubusercontent.com or to notebook image hosts. Use a fine-grained token limited to the repos you need, with Contents: Read-only.
 - nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies).
 
