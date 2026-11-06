@@ -27,7 +27,7 @@ const MARK = '<svg class="brand-mark" viewBox="278 360 468 304" width="23" heigh
 
 // Only the document layout lives here; colours, type and dark mode come from assets/css/style.css.
 const STYLE = `
-.doc { max-width: 44rem; margin: 0 auto; padding: 0.5rem 0 4rem; }
+.doc { max-width: 44rem; margin: 0 auto; padding: 0.5rem 1.25rem 4rem; min-width: 0; overflow-wrap: break-word; }
 .doc-bar-cta { margin-left: auto; }
 .doc h1 { font: 700 clamp(1.9rem, 4.6vw, 2.9rem)/1.12 var(--serif); letter-spacing: -0.02em; margin: 0 0 1.1rem; max-width: 22ch; }
 .doc .lede { font-size: 1.06rem; line-height: 1.6; margin: 0 0 1.1rem; }
@@ -38,8 +38,8 @@ const STYLE = `
 .doc li { margin: 0.4rem 0; }
 .doc a { color: var(--in); }
 .doc code { font: 0.86em var(--mono); background: var(--code-bg); padding: 0.1em 0.32em; border-radius: 3px; overflow-wrap: anywhere; }
-.doc pre { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0.85rem 1rem; margin: 0 0 1rem; overflow-x: auto; }
-.doc pre code { background: none; padding: 0; font-size: 0.82rem; }
+.doc pre { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; padding: 0.85rem 1rem; margin: 0 0 1rem; max-width: 100%; overflow-x: auto; }
+.doc pre code { background: none; padding: 0; font-size: 0.82rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .doc-table { width: 100%; border-collapse: collapse; margin: 0 0 1.1rem; font-size: 0.93rem; }
 .doc-table th, .doc-table td { text-align: left; vertical-align: top; padding: 0.55rem 0.9rem 0.55rem 0; border-bottom: 1px solid var(--rule); }
 .doc-table th { font: 600 11.5px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
