@@ -5,6 +5,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ## [Unreleased]
 
 ### Added
+- **Works offline.** An installed nbview keeps the page shell and its own CSS, JS and icons in a service worker cache, so a repeat visit paints from disk and the app still opens with no network. Notebook content still comes from GitHub, so a notebook it has not cached shows a short explanation instead.
 - **Download a clean copy.** The Export menu now saves the notebook itself with outputs and execution counts removed, or with only its markdown cells. Like the other exports it is built in the browser, so cleaning a notebook never uploads it.
 - **Embed a notebook.** The Embed button copies an `<iframe>` snippet pointing at `/embed/...`, which shows the notebook without the toolbar and may be framed by any site. Only that path allows framing; the rest of the site still can't be.
 - **Sign in with GitHub.** Where the deployment has a GitHub OAuth app (`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`), the token dialog offers one-click sign-in for private repos. Only the code-for-token exchange is server-side; notebook content is still fetched and rendered by the reader's browser. The fine-grained token path stays for anyone who wants least privilege.

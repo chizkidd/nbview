@@ -90,7 +90,7 @@ nbview/
 
 `npm install && npx playwright install chromium && npm test`. More options (other browsers, a single test, the live smoke test) are in [tests/README.md](tests/README.md).
 
-CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. `_headers` also revalidates them on every load.
+CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. The hash is what does the work: Cloudflare Pages sends its own four-hour `Cache-Control` for assets and ignores one set in `_headers`, so a repeat visit revalidates because the URL changed, not because a header asked it to.
 
 An installed copy runs from `sw.js`: the page, its stamped CSS and JS, and the icons are cached on install, so repeat visits paint from disk and the app still opens with no network. Navigations are fetched from the network first, so a deploy takes effect on the next load. `/auth/*` and `/embed/*` are never cached. Notebook content itself still comes from GitHub, so opening a notebook that is not cached offline shows the offline page.
 
