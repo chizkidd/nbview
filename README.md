@@ -92,6 +92,8 @@ nbview/
 
 CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. `_headers` also revalidates them on every load.
 
+An installed copy runs from `sw.js`: the page, its stamped CSS and JS, and the icons are cached on install, so repeat visits paint from disk and the app still opens with no network. Navigations are fetched from the network first, so a deploy takes effect on the next load. `/auth/*` and `/embed/*` are never cached. Notebook content itself still comes from GitHub, so opening a notebook that is not cached offline shows the offline page.
+
 ### Optional: GitHub sign-in
 
 Private repos work with a pasted token out of the box. One-click sign-in needs a GitHub OAuth app, which is configured on the hosting side, not in the repo:
