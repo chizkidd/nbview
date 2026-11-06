@@ -358,7 +358,13 @@
 
   async function viewUser(owner, id) {
     showLoading(`Loading repositories for ${owner}`);
-    let repos = await gh(`/users/${encodeURIComponent(owner)}/repos?per_page=100&sort=updated`);
+    // /users/:owner/repos is public-only, even for the signed-in account itself, so ask the authenticated
+    // endpoint when the saved token belongs to this owner. The login is cached with the token.
+    const me = await whoami();
+    const own = Boolean(me) && me.toLowerCase() === owner.toLowerCase();
+    let repos = await gh(own
+      ? '/user/repos?affiliation=owner&per_page=100&sort=updated'
+      : `/users/${encodeURIComponent(owner)}/repos?per_page=100&sort=updated`);
     if (stale(id)) return;
     if (!Array.isArray(repos)) throw new ViewError('Unexpected answer from GitHub', 'The repository list was not in the expected format. Try again later.');
     repos = repos.filter(r => r && typeof r.name === 'string' && r.owner && typeof r.owner.login === 'string');
@@ -369,15 +375,17 @@
         <header class="page-head">
           <h1>${esc(owner)}</h1>
           <div class="toolbar"><a class="btn" href="https://github.com/${encodeURIComponent(owner)}" target="_blank" rel="noopener">View on GitHub</a></div>
-          <p class="count">${repos.length === 100 ? 'The 100 most recently updated public repositories' : `${repos.length} public repositories`}</p>
+          <p class="count">${own
+            ? (repos.length === 100 ? 'The 100 most recently updated repositories' : `${repos.length} repositories`)
+            : (repos.length === 100 ? 'The 100 most recently updated public repositories' : `${repos.length} public repositories`)}</p>
         </header>
         ${repos.length ? `<ul class="listing">${repos.map(r => `
           <li class="entry is-dir">
             <a href="${hashFor(r.owner.login, r.name)}">${ICONS.repo}
               <span class="stack"><span class="name">${esc(r.name)}</span>${r.description ? `<span class="desc">${esc(r.description)}</span>` : ''}</span>
             </a>
-            <span class="size">${r.language === 'Jupyter Notebook' ? '<span class="tag">notebooks</span>' : esc(r.language || '')}</span>
-          </li>`).join('')}</ul>` : `<p class="empty">${esc(owner)} has no public repositories.</p>`}
+            <span class="size">${r.private ? '<span class="tag">private</span>' : ''}${r.language === 'Jupyter Notebook' ? '<span class="tag">notebooks</span>' : esc(r.language || '')}</span>
+          </li>`).join('')}</ul>` : `<p class="empty">${esc(owner)} has no ${own ? '' : 'public '}repositories.</p>`}
       </div>`;
   }
 
@@ -2603,13 +2611,24 @@
       : 'Sign in or add a token for private repos';
   }
 
-  // Ask GitHub who this is, once per sign-in. A revoked or expired token keeps the generic label.
-  async function loadLogin() {
-    if (!store.get('nbv.token') || !store.get('nbv.oauth') || store.get('nbv.login')) return;
+  // The account behind the saved token, cached beside it: one request per token, not one per view.
+  // The repository list uses it to choose the public or the authenticated endpoint.
+  async function whoami() {
+    if (!store.get('nbv.token')) return '';
+    const cached = store.get('nbv.login');
+    if (cached) return String(cached);
     try {
       const user = await gh('/user');
-      if (user && user.login) { store.set('nbv.login', user.login); syncSettingsBtn(); }
-    } catch { /* the account is unknown here; the button still says Signed in */ }
+      if (!user || !user.login) return '';
+      store.set('nbv.login', user.login);
+      return String(user.login);
+    } catch { return ''; /* a revoked or expired token leaves the public listing alone */ }
+  }
+
+  // After a sign-in, name the account on the button. A revoked token keeps the generic label.
+  async function loadLogin() {
+    if (!store.get('nbv.oauth') || store.get('nbv.login')) return;
+    if (await whoami()) syncSettingsBtn();
   }
 
   function openSettings() {

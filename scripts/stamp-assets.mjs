@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* The page asks for its CSS and JS with a content hash: assets/css/style.css?v=1a2b3c4d.
- * Pages caches /assets for four hours, so a URL that never changes can pair new markup with an old stylesheet.
- * _headers revalidates these paths on every load; the hash makes the URL change, which no cache can ignore.
+ * Pages caches /assets for four hours and ignores a Cache-Control set in _headers, so a URL that never changes can
+ * pair new markup with an old stylesheet. The hash changes the URL, which no cache can ignore.
  *
  *   node scripts/stamp-assets.mjs           rewrite index.html
  *   node scripts/stamp-assets.mjs --check   exit 1 if a version is missing or stale (npm test runs this)

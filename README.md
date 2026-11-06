@@ -32,7 +32,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 - HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.
 - Size limits keep one cell from freezing the tab: notebooks over 10 MB (including local files) ask before opening, outputs over 1 MB sit behind a "Show output" button, code cells over 200 KB are shown without syntax colors, and equations over 4,000 characters or 40 levels of nesting, or beyond the first 2,000 in a notebook, are shown as plain TeX. A cell that fails to render is replaced by a notice with its raw source.
 - Safari is slower than Chrome and Firefox on very large notebooks: about 3x slower for thousands of cells, and a single markdown cell with over 1 MB of text and no spaces or line breaks can freeze the tab for many seconds.
-- Private repos need a token with **Contents: Read** access to them. Create a fine-grained token and select only the repos you want to read; a classic token with no scopes only covers public repos. The token is read-only for notebook content and never leaves this browser except to api.github.com. With Sign in with GitHub, the only server-side step is exchanging GitHub's one-time code for that token; no notebook content is ever sent to it.
+- Private repos need a token with **Contents: Read** access to them, and with a token saved your own repository list includes them (other people's lists show public repos only). Create a fine-grained token and select only the repos you want to read; a classic token with no scopes only covers public repos. The token is read-only for notebook content and never leaves this browser except to api.github.com. With Sign in with GitHub, the only server-side step is exchanging GitHub's one-time code for that token; no notebook content is ever sent to it.
 
 ## Privacy
 
@@ -91,7 +91,7 @@ nbview/
 
 `npm install && npx playwright install chromium && npm test`. More options (other browsers, a single test, the live smoke test) are in [tests/README.md](tests/README.md).
 
-CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. `_headers` also revalidates them on every load.
+CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. The hash is what does the work: Cloudflare Pages sends its own four-hour `Cache-Control` for assets and ignores one set in `_headers`, so a repeat visit revalidates because the URL changed, not because a header asked it to.
 
 An installed copy runs from `sw.js`: the page, its stamped CSS and JS, and the icons are cached on install, so repeat visits paint from disk and the app still opens with no network. Navigations are fetched from the network first, so a deploy takes effect on the next load. `/auth/*` and `/embed/*` are never cached. Notebook content itself still comes from GitHub, so opening a notebook that is not cached offline shows the offline page.
 

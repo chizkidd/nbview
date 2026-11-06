@@ -6,6 +6,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 
 ### Added
 - **Remote images wait for a click.** Images in a notebook live anywhere the author pointed them, and loading one hands that server the reader's IP address (and, in the `Referer`, which notebook they are reading) the moment the page opens. Images from GitHub's own file hosts load as before; every other image is now a button naming its host, and the picture is fetched only when it is clicked. This closes the last way reading a notebook could reach out on its own.
+- **Works offline.** An installed nbview keeps the page shell and its own CSS, JS and icons in a service worker cache, so a repeat visit paints from disk and the app still opens with no network. Notebook content still comes from GitHub, so a notebook it has not cached shows a short explanation instead.
 - **Download a clean copy.** The Export menu now saves the notebook itself with outputs and execution counts removed, or with only its markdown cells. Like the other exports it is built in the browser, so cleaning a notebook never uploads it.
 - **Embed a notebook.** The Embed button copies an `<iframe>` snippet pointing at `/embed/...`, which shows the notebook without the toolbar and may be framed by any site. Only that path allows framing; the rest of the site still can't be.
 - **Sign in with GitHub.** Where the deployment has a GitHub OAuth app (`GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`), the token dialog offers one-click sign-in for private repos. Only the code-for-token exchange is server-side; notebook content is still fetched and rendered by the reader's browser. The fine-grained token path stays for anyone who wants least privilege.
@@ -23,6 +24,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - The "Skip to content" link. It was invisible until it received keyboard focus, easy to miss, and the top bar is only a few controls wide, so it caused more confusion than it saved. Focus still moves to the main content when the view changes, so keyboard and screen reader users keep their place.
 
 ### Fixed
+- **Your own private repositories appear in your repository list.** The list came from GitHub's public-only endpoint, so signing in changed nothing on that page. When the saved token belongs to the account being viewed it is now built from the authenticated endpoint instead, private repos are tagged, and the count no longer claims every row is public.
 - The home page's search box no longer takes focus when the page loads, so Tab starts at the top of the page instead of in the box (and phones no longer raise the keyboard on arrival).
 
 ### Internal

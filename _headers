@@ -15,14 +15,9 @@
 /manifest.webmanifest
   Content-Type: application/manifest+json
 
-# These have no hashed filenames, so a copy cached before a deploy can style markup it has never seen.
-# Revalidate every load: a 304 costs nothing, a four-hour-old stylesheet breaks the page.
-/assets/css/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-/assets/js/*
-  Cache-Control: public, max-age=0, must-revalidate
-
-# The worker picks the cache policy for everything else, so an old copy of it would keep serving an old policy.
-/sw.js
-  Cache-Control: public, max-age=0, must-revalidate
+# Cache-Control is deliberately absent for assets. Cloudflare Pages sends its own
+# `public, max-age=14400, must-revalidate` for /assets/** and /sw.js and ignores a value set here
+# (checked against production with a fresh cache key, so it is not a stale edge copy). Freshness
+# therefore comes from the ?v= content hash stamped into index.html: a deploy changes the URL, and
+# no cache can ignore that. The worker needs no rule either, because browsers bypass the HTTP cache
+# when they check a worker script for an update, so a new policy is picked up on the next load.
