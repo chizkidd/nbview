@@ -16,6 +16,7 @@
     { "src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
   ],
   "screenshots": [
-    { "src": "/assets/screenshots/home-narrow.png", "sizes": "864x1606", "type": "image/png", "form_factor": "narrow", "label": "Search a GitHub repo and open a notebook" }
+    { "src": "/assets/screenshots/home-narrow.png", "sizes": "864x1606", "type": "image/png", "form_factor": "narrow", "label": "Search a GitHub repo and open a notebook" },
+    { "src": "/assets/screenshots/home-wide.png", "sizes": "1312x800", "type": "image/png", "form_factor": "wide", "label": "Open any GitHub notebook in the browser" }
   ]
 }
