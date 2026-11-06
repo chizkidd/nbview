@@ -25,7 +25,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 
 ## Limits
 
-- Folder browsing and gists use the GitHub API: 60 requests/hour per IP without a token. Add a token via the "GitHub token" button for 5,000/hour. Opening a public notebook uses raw.githubusercontent.com and doesn't count. Opening a private notebook uses one Contents API request (with the token).
+- Folder browsing and gists use the GitHub API: 60 requests/hour per IP without a token. Sign in, or add a token via the "Private repos" button in the top bar, for 5,000/hour. Opening a public notebook uses raw.githubusercontent.com and doesn't count. Opening a private notebook uses one Contents API request (with the token).
 - API responses are cached for 5 minutes in the tab (sessionStorage), so going back to a folder you just viewed doesn't use up the limit.
 - Notebook JavaScript is never executed. Bokeh outputs are skipped, and ipywidgets show only their saved state, read-only (progress bars, labels, HTML, values; open the notebook in Binder or Colab to use them); static images, tables and text render normally. The one exception is Plotly figures that were saved as data: they only run after you click "Run interactive chart", inside a frame the browser isolates from this page (no access to your tokens, storage, cookies or the page, and no network), using the Plotly library served from this site. Charts over about 3 million values or with more than 200 traces don't run, and at most 8 run at once.
 - HTML in notebooks is sanitized: scripts, forms and form controls are removed, and author CSS is limited to colors, borders, fonts and layout (no positioning, no `url()`), scoped to the cell it came from. Only http and https notebook links are accepted.

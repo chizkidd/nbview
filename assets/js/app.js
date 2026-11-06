@@ -2494,36 +2494,51 @@
     openLocal(e.dataTransfer.files[0]);
   });
 
-  // Settings: GitHub token
+  // Settings: private repos. Two ways in: Sign in with GitHub, or a hand-made token.
   const dlg = document.getElementById('settings');
   const tokInput = document.getElementById('token-input');
+  const settingsBtn = document.getElementById('settings-btn');
+  const oauthBlock = document.getElementById('oauth-block');
+  const oauthBtn = document.getElementById('oauth-btn');
+  const clearBtn = dlg.querySelector('button[value="clear"]');
 
   const tokError = document.getElementById('token-error');
   const saveBtn = dlg.querySelector('button[value="save"]');
 
+  // The top-bar button names which credential is saved, so private-repo access is visible without opening it.
+  function syncSettingsBtn() {
+    const hasToken = Boolean(store.get('nbv.token'));
+    const signedIn = hasToken && Boolean(store.get('nbv.oauth'));
+    settingsBtn.textContent = signedIn ? 'Signed in' : hasToken ? 'Token saved' : 'Private repos';
+    settingsBtn.title = signedIn ? 'Signed in with GitHub'
+      : hasToken ? 'A GitHub token is saved in this browser'
+      : 'Sign in or add a token for private repos';
+  }
+
   function openSettings() {
     tokInput.value = store.get('nbv.token') || '';
     tokError.hidden = true;
+    // Clearing is one action, so its label says which one it means here.
+    clearBtn.textContent = store.get('nbv.oauth') ? 'Sign out' : 'Remove token';
     dlg.showModal();
     tokInput.focus();
     checkOauth();
   }
 
-  // Sign in with GitHub: the button only appears when the deployment has an OAuth app configured
-  // (functions/auth). Without one the token box works exactly as before.
-  const oauthBtn = document.getElementById('oauth-btn');
-  const oauthNote = document.getElementById('oauth-note');
+  // Sign in with GitHub: the whole block appears only when the deployment has an OAuth app configured
+  // (functions/auth). Without one the dialog is the token box, exactly as it was.
   let oauthChecked = false;
 
   async function checkOauth() {
-    if (oauthChecked || !oauthBtn) return;
+    if (oauthChecked || !oauthBtn || !oauthBlock) return;
     oauthChecked = true;
     try {
       const res = await fetch('/auth/status', { headers: { accept: 'application/json' } });
       const data = await res.json();
       if (!data || !data.enabled) return;
-      oauthBtn.hidden = false;
-      if (oauthNote) oauthNote.hidden = false;
+      oauthBlock.hidden = false;
+      // The block leads the dialog, so hand it the focus the token box was about to get.
+      if (dlg.open && document.activeElement === tokInput) oauthBtn.focus();
     } catch { /* no Functions on this host: the token box still works */ }
   }
 
@@ -2535,6 +2550,7 @@
     store.set('nbv.token', t);
     store.set('nbv.oauth', true);
     tokInput.value = t;
+    syncSettingsBtn();
     if (dlg.open) dlg.close('cancel'); // the close handler must not overwrite what just arrived
     route();
   });
@@ -2557,7 +2573,8 @@
     }).catch(() => { /* forget it locally either way */ });
   }
 
-  document.getElementById('settings-btn').addEventListener('click', openSettings);
+  settingsBtn.addEventListener('click', openSettings);
+  syncSettingsBtn();
   saveBtn.addEventListener('click', e => {
     const t = tokInput.value.trim();
     if (!t || TOKEN_OK.test(t)) { tokError.hidden = true; return; }
@@ -2581,6 +2598,7 @@
     } else {
       return;
     }
+    syncSettingsBtn();
     if (app.querySelector('.error-box')) route();
   });
   // Compare dialog: choose the version to compare the open notebook with.
