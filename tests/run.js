@@ -354,6 +354,37 @@ test('export menu: no .py item for non-Python notebooks; print styles hide the t
   assert(await page.evaluate(() => getComputedStyle(document.querySelector('.toolbar')).display === 'none' && getComputedStyle(document.querySelector('.bar')).display === 'none'), 'print styles');
 }));
 
+test('export: a clean .ipynb drops outputs, counts and metadata; markdown-only keeps markdown cells', () => run({
+  hash: H, settle: 600,
+  raw: nb([md('# Title'), code('x = 1', [{ output_type: 'stream', name: 'stdout', text: ['secret output\n'] }], 7)]),
+}, async ({ page }) => {
+  fs.mkdirSync(OUT, { recursive: true });
+  const get = async kind => { await page.click('#export-menu summary'); const [d] = await Promise.all([page.waitForEvent('download'), page.click(`[data-export="${kind}"]`)]); const f = path.join(OUT, d.suggestedFilename()); await d.saveAs(f); return { name: d.suggestedFilename(), text: fs.readFileSync(f, 'utf8') }; };
+  const clean = await get('ipynb');
+  const parsed = JSON.parse(clean.text);
+  assert(clean.name === 't.ipynb' && parsed.nbformat === 4 && parsed.cells.length === 2, clean.text);
+  const codeCell = parsed.cells.find(c => c.cell_type === 'code');
+  assert(codeCell.outputs.length === 0 && codeCell.execution_count === null, codeCell);
+  assert(!/secret output/.test(clean.text), 'output text left in the file');
+  assert(!/kernelspec|execution_count": 7/.test(clean.text), 'metadata left in the file');
+  const mdOnly = JSON.parse((await get('ipynb-md')).text);
+  assert(mdOnly.cells.length === 1 && mdOnly.cells[0].cell_type === 'markdown', mdOnly);
+}));
+
+test('embed: the dialog offers an iframe snippet that points at /embed/', () => run({ hash: H, raw: good, settle: 500 }, async ({ page }) => {
+  await page.click('#embed-btn');
+  const v = await page.evaluate(() => document.getElementById('embed-code').value);
+  assert(/<iframe src="http:\/\/127\.0\.0\.1:\d+\/embed\/github\/o\/r\/blob\/main\//.test(v), v);
+  assert(/height="600"/.test(v) && !/\/embed\/embed\//.test(v), v);
+}));
+
+test('settings: GitHub sign-in stays hidden when the deployment has no OAuth app', () => run({ hash: '', settle: 300 }, async ({ page }) => {
+  await page.click('#settings-btn');
+  await page.waitForTimeout(250);
+  assert(await page.evaluate(() => document.getElementById('oauth-btn').hidden), 'sign-in button shown without /auth/status');
+  assert(await page.evaluate(() => !document.getElementById('token-input').hidden), 'token box hidden');
+}));
+
 test('fonts are self-hosted: nothing leaves the site except GitHub', () => run({ hash: H, raw: good, settle: 600 }, async ({ page, requests }) => {
   const external = requests.filter(u => hostOf(u) !== 'raw.githubusercontent.com');
   assert(!external.length, external);

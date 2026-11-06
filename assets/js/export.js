@@ -113,5 +113,34 @@
       `<p class="nb-meta"><span>Exported from nbview.org</span></p>\n<div class="cells">\n${o.cellsHtml}\n</div>\n</article>\n</main>\n</body>\n</html>\n`;
   }
 
-  window.nbvExport = { toPython, toMarkdown, toHtml };
+  // A clean copy of the notebook itself, for sharing: outputs stripped, execution counts cleared, and cell and
+  // notebook metadata dropped (metadata is where widget state and editor leftovers hide, and where the bytes are).
+  // Built in the browser like every other export, so a notebook never has to be uploaded to be cleaned.
+  function toNotebook(cells, opts) {
+    const o = opts || {};
+    const out = [];
+    let withIds = true;
+    for (const c of cells) {
+      if (!c || typeof c !== 'object') continue;
+      const type = c.cell_type === 'code' || c.cell_type === 'markdown' || c.cell_type === 'raw' ? c.cell_type : 'raw';
+      if (o.markdownOnly && type !== 'markdown') continue;
+      const cell = { cell_type: type, metadata: {}, source: join(c.source) };
+      if (typeof c.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(c.id)) cell.id = c.id;
+      else withIds = false;
+      if (type === 'code') {
+        cell.execution_count = null;
+        cell.outputs = [];
+      }
+      out.push(cell);
+    }
+    const lang = /^[A-Za-z0-9+#._-]{1,30}$/.test(o.lang || '') ? o.lang : '';
+    return JSON.stringify({
+      cells: out,
+      metadata: lang ? { language_info: { name: lang } } : {},
+      nbformat: 4,
+      nbformat_minor: withIds ? 5 : 4,
+    }, null, 1) + '\n';
+  }
+
+  window.nbvExport = { toPython, toMarkdown, toHtml, toNotebook };
 })();

@@ -15,6 +15,8 @@
   const API = 'https://api.github.com';
   const RAW = 'https://raw.githubusercontent.com';
   const app = document.getElementById('app');
+  // The embed shell (/embed/...) runs this same app without the toolbar; assets/js/embed-boot.js sets the flag.
+  const EMBED = document.documentElement.dataset.embed === '1';
 
   let routeId = 0;
   let katexMacros = {};
@@ -678,11 +680,14 @@
                 ${lang === 'python' ? '<button type="button" data-export="py">Python script (.py)</button>' : ''}
                 <button type="button" data-export="md">Markdown (.md)</button>
                 <button type="button" data-export="html">HTML page (.html)</button>
+                <button type="button" data-export="ipynb">Notebook, no outputs (.ipynb)</button>
+                <button type="button" data-export="ipynb-md">Notebook, markdown only (.ipynb)</button>
                 <button type="button" data-export="print">Print / Save as PDF</button>
               </div>
             </details>
             ${info.compare ? '<button class="btn" id="compare-btn" type="button">Compare</button>' : info.seed ? '<button class="btn" id="compare-seed-btn" type="button">Compare</button>' : ''}
             ${info.shareable ? '<button class="btn" id="copy-link" type="button">Copy link</button>' : ''}
+            ${info.shareable && !EMBED ? '<button class="btn" id="embed-btn" type="button">Embed</button>' : ''}
             ${info.binder ? `<a class="btn" href="${esc(info.binder)}" target="_blank" rel="noopener">Open in Binder</a>` : ''}
             ${info.colab ? `<a class="btn" href="${esc(info.colab)}" target="_blank" rel="noopener">Open in Colab</a>` : ''}
             ${info.github ? `<a class="btn" href="${esc(info.github)}" target="_blank" rel="noopener">View on GitHub</a>` : ''}
@@ -715,6 +720,9 @@
         setTimeout(() => { copy.textContent = 'Copy link'; }, 1800);
       });
     }
+
+    const embedBtn = document.getElementById('embed-btn');
+    if (embedBtn) embedBtn.addEventListener('click', openEmbed);
 
     const toggle = document.getElementById('toggle-code');
     toggle.addEventListener('click', () => {
@@ -808,7 +816,26 @@
   function shareUrl() {
     const m = /^#\/(github\/.+)$/.exec(location.hash);
     if (m && /\/blob\//.test(m[1])) return location.origin + '/' + m[1];
+    // Inside an embed the address to share is the viewer's, not /embed/.
+    if (EMBED) return location.origin + '/' + location.hash.replace(/^#\//, '');
     return location.origin + location.pathname + location.search + location.hash;
+  }
+
+  // The iframe snippet. The height is fixed because a frame cannot resize itself from inside without a script on the
+  // host page; readers scroll the notebook inside it.
+  function embedSnippet() {
+    const src = shareUrl().replace(location.origin + '/', location.origin + '/embed/');
+    return '<iframe src="' + src + '" title="Jupyter notebook" width="100%" height="600" loading="lazy" '
+      + 'style="border:1px solid #d0d7de;border-radius:6px"></iframe>';
+  }
+
+  function openEmbed() {
+    const dlgEmbed = document.getElementById('embed-dialog');
+    const box = document.getElementById('embed-code');
+    if (!dlgEmbed || !box) return;
+    box.value = embedSnippet();
+    dlgEmbed.showModal();
+    box.select();
   }
 
   function addCellLink(el, n) {
@@ -987,6 +1014,8 @@
     const base = nbState.name.replace(/\.ipynb$/i, '').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_') || 'notebook';
     if (kind === 'py') return saveFile(base + '.py', window.nbvExport.toPython(nbState.cells, nbState.name), 'text/x-python');
     if (kind === 'md') return saveFile(base + '.md', window.nbvExport.toMarkdown(nbState.cells, nbState.lang), 'text/markdown');
+    if (kind === 'ipynb') return saveFile(base + '.ipynb', window.nbvExport.toNotebook(nbState.cells, { lang: nbState.lang }), 'application/x-ipynb+json');
+    if (kind === 'ipynb-md') return saveFile(base + ' (markdown).ipynb', window.nbvExport.toNotebook(nbState.cells, { lang: nbState.lang, markdownOnly: true }), 'application/x-ipynb+json');
     if (kind === 'html') {
       await nbState.rendered;
       const host = document.getElementById('cells').cloneNode(true);
@@ -2477,6 +2506,55 @@
     tokError.hidden = true;
     dlg.showModal();
     tokInput.focus();
+    checkOauth();
+  }
+
+  // Sign in with GitHub: the button only appears when the deployment has an OAuth app configured
+  // (functions/auth). Without one the token box works exactly as before.
+  const oauthBtn = document.getElementById('oauth-btn');
+  const oauthNote = document.getElementById('oauth-note');
+  let oauthChecked = false;
+
+  async function checkOauth() {
+    if (oauthChecked || !oauthBtn) return;
+    oauthChecked = true;
+    try {
+      const res = await fetch('/auth/status', { headers: { accept: 'application/json' } });
+      const data = await res.json();
+      if (!data || !data.enabled) return;
+      oauthBtn.hidden = false;
+      if (oauthNote) oauthNote.hidden = false;
+    } catch { /* no Functions on this host: the token box still works */ }
+  }
+
+  // The sign-in tab hands the token back here, so it never travels in a URL.
+  window.addEventListener('message', e => {
+    if (e.origin !== location.origin || !e.data || e.data.type !== 'nbv-token') return;
+    const t = String(e.data.token || '');
+    if (!TOKEN_OK.test(t)) return;
+    store.set('nbv.token', t);
+    store.set('nbv.oauth', true);
+    tokInput.value = t;
+    if (dlg.open) dlg.close('cancel'); // the close handler must not overwrite what just arrived
+    route();
+  });
+
+  if (oauthBtn) {
+    oauthBtn.addEventListener('click', () => {
+      const w = window.open('/auth/login', 'nbview-github-signin', 'width=520,height=680');
+      if (!w) oauthBtn.title = 'Allow pop-ups for this site, then try again';
+    });
+  }
+
+  // Best effort: ask GitHub to revoke a sign-in token before this browser forgets it.
+  function revokeToken() {
+    const t = store.get('nbv.token');
+    if (!t) return;
+    fetch('/auth/logout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ access_token: t }),
+    }).catch(() => { /* forget it locally either way */ });
   }
 
   document.getElementById('settings-btn').addEventListener('click', openSettings);
@@ -2495,8 +2573,11 @@
     if (v === 'save') {
       const t = tokInput.value.trim();
       if (t) store.set('nbv.token', t); else store.del('nbv.token');
+      store.del('nbv.oauth');
     } else if (v === 'clear') {
+      if (store.get('nbv.oauth')) revokeToken();
       store.del('nbv.token');
+      store.del('nbv.oauth');
     } else {
       return;
     }
@@ -2590,6 +2671,14 @@
     location.hash = compareHash(cmpCtx.owner, cmpCtx.repo, base, cmpCtx.ref, cmpCtx.path);
   });
   document.getElementById('compare-cancel').addEventListener('click', () => cmpDlg.close());
+
+  const embedDlg = document.getElementById('embed-dialog');
+  if (embedDlg) {
+    const box = document.getElementById('embed-code');
+    document.getElementById('embed-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(box.value); } catch { box.select(); }
+    });
+  }
 
   // The toolbar menus (Contents, Export) close on an outside click or Escape.
   document.addEventListener('click', e => {

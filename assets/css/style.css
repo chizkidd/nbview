@@ -490,8 +490,27 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
   background: var(--bg);
   color: var(--ink);
 }
+.settings-form label { display: block; font: 12px var(--mono); margin: 0 0 0.35rem; color: var(--muted); }
+.settings-form textarea {
+  width: 100%;
+  font: 12px/1.5 var(--mono);
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--ink);
+  resize: vertical;
+}
+#oauth-btn { margin: 0 0 1rem; }
 .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
 .dialog-actions .btn:first-child { margin-right: auto; }
+
+/* Embed shell: the frame shows the notebook, not the site around it. */
+html[data-embed] .bar,
+html[data-embed] .nb-head .toolbar,
+html[data-embed] .cell-link,
+html[data-embed] .nb-meta { display: none !important; }
+html[data-embed] main { padding-top: 0.5rem; }
 
 /* Small screens: prompts sit above their cells */
 @media (max-width: 700px) {
