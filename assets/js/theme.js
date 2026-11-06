@@ -18,3 +18,13 @@ try {
     });
   }
 } catch (e) { /* preloading is only a speed-up */ }
+
+// The offline shell (sw.js). Not registered inside embeds or sign-in pages, where a cached response would be wrong,
+// and not in a frame; the worker is site-wide, so one registration from the top page is enough.
+try {
+  if ('serviceWorker' in navigator && window.top === window.self && !/^\/(?:embed|auth)(?:\/|$)/.test(location.pathname)) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('/sw.js').catch(function () { /* offline support is optional */ });
+    });
+  }
+} catch (e) { /* an old browser, or no worker support */ }
