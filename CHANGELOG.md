@@ -11,6 +11,9 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - **Private repos.** Save a fine-grained GitHub token with **Contents: Read-only** access and open or compare notebooks from private repos, including notebooks in two different private repos. The token is sent only to `api.github.com`; public notebooks keep loading from `raw.githubusercontent.com` without using the API limit.
 - Press `/` on the home page to jump into the search box. Inside a notebook the same key still opens Find.
 
+### Changed
+- **New mark.** The tab icon is now nbview's own `[ ]` cell mark instead of the notebook emoji — SVG first, with 16/32/48/180/512 PNG and `.ico` fallbacks — and the wordmark in the top bar draws the same mark rather than the typed `[ ]` characters.
+
 ### Removed
 - The "Skip to content" link. It was invisible until it received keyboard focus, easy to miss, and the top bar is only a few controls wide, so it caused more confusion than it saved. Focus still moves to the main content when the view changes, so keyboard and screen reader users keep their place.
 
