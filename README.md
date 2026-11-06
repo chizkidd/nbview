@@ -52,6 +52,7 @@ nbview/
 ├── _redirects           nbviewer-style /url and /urls paths -> /#/... routes (the domain swap)
 ├── functions/           /github and /gist: redirect to the viewer, and answer link-preview crawlers with a card made from the link
 │                        /embed: the same page without the toolbar, framed by other sites; /auth: optional GitHub sign-in
+├── manifest.webmanifest  name, colours and icon for a home screen install
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
