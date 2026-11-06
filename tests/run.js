@@ -381,7 +381,7 @@ test('embed: the dialog offers an iframe snippet that points at /embed/', () => 
 test('settings: GitHub sign-in stays hidden when the deployment has no OAuth app', () => run({ hash: '', settle: 300 }, async ({ page }) => {
   await page.click('#settings-btn');
   await page.waitForTimeout(250);
-  assert(await page.evaluate(() => document.getElementById('oauth-btn').hidden), 'sign-in button shown without /auth/status');
+  assert(await page.evaluate(() => document.getElementById('oauth-block').hidden), 'sign-in offered without /auth/status');
   assert(await page.evaluate(() => !document.getElementById('token-input').hidden), 'token box hidden');
 }));
 

@@ -504,7 +504,8 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
   color: var(--ink);
   resize: vertical;
 }
-#oauth-btn { margin: 0 0 1rem; }
+#oauth-block { margin: 0 0 1.2rem; }
+#oauth-btn { margin: 0 0 0.6rem; }
 .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
 .dialog-actions .btn:first-child { margin-right: auto; }
 

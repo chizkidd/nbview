@@ -21,7 +21,7 @@
   <meta name="theme-color" content="#2D52CF">
   <meta name="apple-mobile-web-app-title" content="nbview">
   <script src="assets/js/theme.js?v=5331cfe1"></script>
-  <link rel="stylesheet" href="assets/css/style.css?v=7c3269f0">
+  <link rel="stylesheet" href="assets/css/style.css?v=0d9fd049">
 </head>
 <body class="is-home">
   <header class="bar">
@@ -34,7 +34,7 @@
       <input id="jump-input" type="text" placeholder="owner/repo, GitHub link or .ipynb URL"
              aria-label="Open a repo or notebook" autocomplete="off" spellcheck="false">
     </form>
-    <button id="settings-btn" class="btn" type="button">GitHub token</button>
+    <button id="settings-btn" class="btn" type="button">Private repos</button>
     <a class="theme-btn gh-link" href="https://github.com/chizkidd/nbview" target="_blank" rel="noopener" aria-label="nbview on GitHub" title="nbview on GitHub">
       <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.5 7.5 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
     </a>
@@ -43,18 +43,20 @@
   <main id="app" tabindex="-1">
     <div class="home">
       <h1 class="home-title">Read Jupyter notebooks from any GitHub repo.</h1>
-      <p class="hint">nbview is a fast nbviewer alternative that runs entirely in your browser, so there is no server to go down. Paste a GitHub repo, notebook link, gist or nbviewer link, or change <code>nbviewer.org</code> to <code>nbview.org</code> in the address bar and the same notebook opens here. Private repos work when you add a read-only token from the top bar.</p>
+      <p class="hint">nbview is a fast nbviewer alternative that runs entirely in your browser, so there is no server to go down. Paste a GitHub repo, notebook link, gist or nbviewer link, or change <code>nbviewer.org</code> to <code>nbview.org</code> in the address bar and the same notebook opens here. Private repos work when you sign in or add a read-only token from the top bar.</p>
       <p class="hint">nbview is an independent project and is not affiliated with Project Jupyter or nbviewer.</p>
     </div>
   </main>
 
   <dialog id="settings">
     <form method="dialog" class="settings-form">
-      <h2>GitHub token</h2>
+      <h2>Private repos</h2>
+      <div id="oauth-block" hidden>
+        <button class="btn primary" id="oauth-btn" type="button">Sign in with GitHub</button>
+        <p class="hint">Signing in grants read access to all your repositories, because a classic sign-in has no per-repository option. For least privilege, use a fine-grained token below instead.</p>
+      </div>
       <p>To open notebooks from <strong>private repos</strong>, use a <strong>fine-grained token</strong> with <strong>Contents: Read-only</strong> access to those repos. A classic token with no scopes works for public repos and raises the folder-browsing limit.</p>
       <p>Folder browsing allows 60 requests an hour without a token and 5,000 with one; opening public notebooks does not use that limit. The token is stored in this browser only and sent only to api.github.com.</p>
-      <p class="hint" id="oauth-note" hidden>Signing in grants read access to all your repositories, because a classic sign-in has no per-repository option. For least privilege, use a fine-grained token below instead.</p>
-      <button class="btn" id="oauth-btn" type="button" hidden>Sign in with GitHub</button>
       <p class="hint"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained token</a></p>
       <input id="token-input" type="password" placeholder="github_pat_... or ghp_..." autocomplete="off" spellcheck="false" aria-label="GitHub token">
       <p id="token-error" class="form-error" role="alert" hidden>That doesn't look like a token. It has a space or a character a token can't have, often picked up when copying. Paste it again.</p>
@@ -101,6 +103,6 @@
   <script defer src="assets/vendor/purify.min.js?v=c2b28807"></script>
   <script defer src="assets/js/export.js?v=507cf0b0"></script>
   <script defer src="assets/js/diff.js?v=40f7b674"></script>
-  <script defer src="assets/js/app.js?v=ca0acd73"></script>
+  <script defer src="assets/js/app.js?v=87847cb7"></script>
 </body>
 </html>

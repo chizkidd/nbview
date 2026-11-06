@@ -13,6 +13,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - Press `/` on the home page to jump into the search box. Inside a notebook the same key still opens Find.
 
 ### Changed
+- **One control for GitHub access.** The top bar's "GitHub token" button is now **Private repos**, and the dialog leads with **Sign in with GitHub** where the deployment has an OAuth app, with the fine-grained token path below it. The button itself reads **@your-name** once signed in, **Token saved** for a pasted token, or **Private repos**, so the state of private-repo access is visible without opening anything, and the dialog's clear action says **Sign out** when the token came from a sign-in.
 - **New mark.** The tab icon is now nbview's own `[ ]` cell mark instead of the notebook emoji — SVG first, with 16/32/48/180/512 PNG and `.ico` fallbacks — and the wordmark in the top bar draws the same mark rather than the typed `[ ]` characters.
 
 - **Installable, with a new preview card.** `manifest.webmanifest` gives nbview a home-screen name and icon, a maskable PNG for Android and a themed status bar. The two `og-*.png` social images are regenerated with the drawn cell mark where the brackets used to be typed.
