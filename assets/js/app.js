@@ -14,6 +14,8 @@
 
   const API = 'https://api.github.com';
   const RAW = 'https://raw.githubusercontent.com';
+  // GitHub's own file hosts already know a notebook was opened, so images from them are not held back.
+  const IMG_OK = /(^|\.)githubusercontent\.com$/;
   const app = document.getElementById('app');
   // The embed shell (/embed/...) runs this same app without the toolbar; assets/js/embed-boot.js sets the flag.
   const EMBED = document.documentElement.dataset.embed === '1';
@@ -722,10 +724,13 @@
     const copy = document.getElementById('copy-link');
     if (copy) {
       copy.addEventListener('click', async () => {
-        const link = shareUrl();
-        try { await navigator.clipboard.writeText(link); copy.textContent = 'Copied'; }
+        copy.disabled = true;
+        const link = await pinnedShareUrl(ctx);
+        copy.disabled = false;
+        const at = link === shareUrl() ? 'Copied' : 'Copied, at this commit';
+        try { await navigator.clipboard.writeText(link); copy.textContent = at; }
         catch { copy.textContent = 'Press Ctrl+C'; window.prompt('Copy this link', link); }
-        setTimeout(() => { copy.textContent = 'Copy link'; }, 1800);
+        setTimeout(() => { copy.textContent = 'Copy link'; }, 2200);
       });
     }
 
@@ -828,6 +833,24 @@
     if (EMBED) return location.origin + '/' + location.hash.replace(/^#\//, '');
     return location.origin + location.pathname + location.search + location.hash;
   }
+
+  const COMMIT_SHA = /^[0-9a-f]{40}$/;
+
+  // A link that keeps working: built on the commit the notebook has now instead of the branch it was read from, so a
+  // link pasted into a paper, a chat or a class still shows the same notebook after the branch moves on. This costs one
+  // API request, and none at all when the address already names a commit.
+  async function pinnedShareUrl(ctx) {
+    const here = shareUrl();
+    if (!ctx || !ctx.owner || !/\/blob\//.test(here) || COMMIT_SHA.test(String(ctx.ref))) return here;
+    let sha = null;
+    try {
+      const first = await gh(`/repos/${enc(ctx.owner)}/${enc(ctx.repo)}/commits?path=${enc(ctx.path)}&sha=${enc(ctx.ref)}&per_page=1`);
+      sha = first && COMMIT_SHA.test(first.sha) ? first.sha : null;
+    } catch { /* offline, rate-limited, or a file with no history: the branch link still works */ }
+    if (!sha) return here;
+    return location.origin + '/' + hashFor(ctx.owner, ctx.repo, 'blob', sha, ctx.path).slice(2);
+  }
+
 
   // The iframe snippet. The height is fixed because a frame cannot resize itself from inside without a script on the
   // host page; readers scroll the notebook inside it.
@@ -1289,6 +1312,7 @@
         const d = document.createElement('div');
         d.className = `html-out ${scope}`;
         d.innerHTML = clean;
+        guardImages(d);
         d.querySelectorAll('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
         wrap.append(d);
         return true;
@@ -1564,6 +1588,18 @@
       cleanDecls(node.style);
       if (!node.style.length) node.removeAttribute('style');
     });
+    // An image from a host other than GitHub's is parked in data-nbv-src before the HTML reaches the page. A browser
+    // fetches an img the moment it has a src attribute, so replacing the element afterwards still leaks the request.
+    DOMPurify.addHook('afterSanitizeAttributes', node => {
+      if (!node.tagName || node.tagName !== 'IMG') return;
+      const src = node.getAttribute('src');
+      if (!src || !/^https?:/i.test(src)) return;   // relative paths are resolved, and then checked, by fixLinks
+      let host;
+      try { host = new URL(src).hostname; } catch { return; }
+      if (IMG_OK.test(host)) return;
+      node.setAttribute('data-nbv-src', src);
+      node.removeAttribute('src');
+    });
   }
 
   // Returns sanitized HTML; the caller adds the same `scope` class to the element that receives it.
@@ -1801,6 +1837,51 @@
     if (t) t.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' });
   }
 
+  // An image in a notebook calls the server named in its src the moment the page shows it, which hands that server the
+  // reader's address and, in the Referer, the notebook they are reading. So every image from any other host is replaced
+  // by a button that names the host, and the picture is fetched only if the reader asks for it.
+  function guardImages(el) {
+    for (const img of el.querySelectorAll('img')) {
+      if (img.dataset.imgGuard) continue;
+      const src = img.getAttribute('src') || img.getAttribute('data-nbv-src');
+      if (!src) continue;
+      img.dataset.imgGuard = '1';
+      let u;
+      try { u = new URL(src, location.href); } catch { continue; }
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') continue;   // data: and blob: never leave the page
+      img.referrerPolicy = 'no-referrer';
+      if (IMG_OK.test(u.hostname)) { img.loading = 'lazy'; continue; }
+      blockImage(img, u);
+    }
+  }
+
+  function blockImage(img, u) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'img-blocked';
+    btn.title = `Load this image from ${u.host}? It will see your IP address.`;
+    btn.setAttribute('aria-label', `Show the image from ${u.host}`);
+    const host = document.createElement('span');
+    host.textContent = `Image from ${u.host}`;
+    const go = document.createElement('span');
+    go.className = 'img-blocked-go';
+    go.textContent = 'Show';
+    btn.append(host, go);
+    btn.addEventListener('click', () => {
+      const out = new Image();
+      out.alt = img.alt || '';
+      out.referrerPolicy = 'no-referrer';
+      out.loading = 'lazy';
+      if (img.width) out.width = img.width;
+      if (img.height) out.height = img.height;
+      if (img.title) out.title = img.title;
+      if (img.className) out.className = img.className;
+      out.src = u.href;
+      btn.replaceWith(out);
+    });
+    img.replaceWith(btn);
+  }
+
   // Makes relative images and links in markdown point at the right place.
   function fixLinks(el, ctx) {
     el.querySelectorAll('img[src]').forEach(img => {
@@ -1808,6 +1889,7 @@
       if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(src) || !ctx.rawBase) return;
       try { img.src = new URL(src, ctx.rawBase).href; } catch { /* leave as is */ }
     });
+    guardImages(el);
 
     el.querySelectorAll('a[href]').forEach(a => {
       const href = a.getAttribute('href');

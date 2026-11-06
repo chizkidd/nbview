@@ -5,6 +5,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ## [Unreleased]
 
 ### Added
+- **Remote images wait for a click.** Images in a notebook live anywhere the author pointed them, and loading one hands that server the reader's IP address (and, in the `Referer`, which notebook they are reading) the moment the page opens. Images from GitHub's own file hosts load as before; every other image is now a button naming its host, and the picture is fetched only when it is clicked. This closes the last way reading a notebook could reach out on its own.
 - **Works offline.** An installed nbview keeps the page shell and its own CSS, JS and icons in a service worker cache, so a repeat visit paints from disk and the app still opens with no network. Notebook content still comes from GitHub, so a notebook it has not cached shows a short explanation instead.
 - **Download a clean copy.** The Export menu now saves the notebook itself with outputs and execution counts removed, or with only its markdown cells. Like the other exports it is built in the browser, so cleaning a notebook never uploads it.
 - **Embed a notebook.** The Embed button copies an `<iframe>` snippet pointing at `/embed/...`, which shows the notebook without the toolbar and may be framed by any site. Only that path allows framing; the rest of the site still can't be.
@@ -13,6 +14,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - Press `/` on the home page to jump into the search box. Inside a notebook the same key still opens Find.
 
 ### Changed
+- **"Copy link" copies the commit, not the branch.** On a GitHub notebook the copied address now names the exact commit the notebook was read at, resolved in one API request (and skipped when the address already names a commit), so a link pasted into a paper, a chat or a class still shows the same notebook after the branch moves on. If the request fails, the branch link is copied as before.
 - **One control for GitHub access.** The top bar's "GitHub token" button is now **Private repos**, and the dialog leads with **Sign in with GitHub** where the deployment has an OAuth app, with the fine-grained token path below it. The button itself reads **@your-name** once signed in, **Token saved** for a pasted token, or **Private repos**, so the state of private-repo access is visible without opening anything, and the dialog's clear action says **Sign out** when the token came from a sign-in.
 - **New mark.** The tab icon is now nbview's own `[ ]` cell mark instead of the notebook emoji — SVG first, with 16/32/48/180/512 PNG and `.ico` fallbacks — and the wordmark in the top bar draws the same mark rather than the typed `[ ]` characters.
 
