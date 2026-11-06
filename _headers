@@ -1,5 +1,5 @@
 /*
-  Content-Security-Policy: default-src 'none'; script-src 'self' https://nbview.org https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src * data: blob:; media-src https: data: blob:; connect-src https:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; frame-src 'self'; object-src 'none'
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://nbview.org https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src * data: blob:; manifest-src 'self'; media-src https: data: blob:; connect-src https:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; frame-src 'self'; object-src 'none'
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()

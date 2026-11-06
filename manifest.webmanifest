@@ -14,5 +14,8 @@
     { "src": "/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/assets/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ],
+  "screenshots": [
+    { "src": "/assets/screenshots/home-narrow.png", "sizes": "864x1606", "type": "image/png", "form_factor": "narrow", "label": "Search a GitHub repo and open a notebook" }
   ]
 }
