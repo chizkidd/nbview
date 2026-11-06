@@ -119,8 +119,11 @@ code, pre { font-family: var(--mono); }
   color: var(--ink);
   text-decoration: none;
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
 }
-.brand::before { content: "[ ]"; color: var(--in); margin-right: 0.45em; }
+.brand-mark { width: 1.54em; height: 1em; flex: none; color: var(--in); fill: currentColor; }
 .jump { flex: 1; max-width: 560px; }
 .jump input {
   width: 100%;

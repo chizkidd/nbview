@@ -68,6 +68,7 @@ nbview/
 │   │   ├── embed-boot.js  turns an /embed/... address into the viewer's route
 │   │   ├── auth-callback.js  hands a sign-in token to the page that opened it
 │   │   └── theme.js     restores light/dark theme before first paint
+│   ├── icon.svg         the [ ] cell mark, used for the tab icon and the wordmark (with favicon-16/32/48, apple-touch-icon, icon-512)
 │   ├── fonts/           JetBrains Mono and Source Serif 4 (self-hosted, Latin)
 │   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
