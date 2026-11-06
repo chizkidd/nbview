@@ -21,6 +21,7 @@ All notable changes to nbview. Dates are when the release's last change landed o
 - The "Skip to content" link. It was invisible until it received keyboard focus, easy to miss, and the top bar is only a few controls wide, so it caused more confusion than it saved. Focus still moves to the main content when the view changes, so keyboard and screen reader users keep their place.
 
 ### Fixed
+- **Your own private repositories appear in your repository list.** The list came from GitHub's public-only endpoint, so signing in changed nothing on that page. When the saved token belongs to the account being viewed it is now built from the authenticated endpoint instead, private repos are tagged, and the count no longer claims every row is public.
 - The home page's search box no longer takes focus when the page loads, so Tab starts at the top of the page instead of in the box (and phones no longer raise the keyboard on arrival).
 
 ### Internal
