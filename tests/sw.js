@@ -1,6 +1,5 @@
-// Tests for the offline shell (sw.js), the registration in assets/js/theme.js, and the header rule that keeps the
-// worker fresh. No browser: the worker is checked as source, with its regexes evaluated so the policies are tested
-// as behaviour rather than as strings.
+// Tests for the offline shell (sw.js) and the registration in assets/js/theme.js. No browser: the worker is checked
+// as source, with its regexes evaluated so the policies are tested as behaviour rather than as strings.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -77,9 +76,10 @@ test('the worker is registered once, from the top page, and not inside embeds', 
   assert(/load/.test(THEME) && /catch/.test(THEME), 'registration must not delay the page or throw');
 });
 
-test('the worker itself is revalidated, and the CSP allows a same-origin worker', () => {
-  assert(/\/sw\.js\s*\n\s*Cache-Control: public, max-age=0, must-revalidate/.test(HEADERS), 'stale worker policy');
+test('the CSP allows a same-origin worker, and caching is not claimed where Pages ignores it', () => {
   assert(/worker-src 'self'/.test(HEADERS), 'worker-src missing from the CSP');
+  // Pages sends its own Cache-Control for these paths, so a rule here would read as a promise it cannot keep.
+  assert(!/^\/(?:assets\/(?:css|js)\/\*|sw\.js)\s*\n\s*Cache-Control:/m.test(HEADERS), 'Pages ignores Cache-Control for these paths');
 });
 
 (async () => {
