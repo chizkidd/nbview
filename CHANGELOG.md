@@ -14,6 +14,8 @@ All notable changes to nbview. Dates are when the release's last change landed o
 ### Changed
 - **New mark.** The tab icon is now nbview's own `[ ]` cell mark instead of the notebook emoji — SVG first, with 16/32/48/180/512 PNG and `.ico` fallbacks — and the wordmark in the top bar draws the same mark rather than the typed `[ ]` characters.
 
+- **Installable, with a new preview card.** `manifest.webmanifest` gives nbview a home-screen name and icon, a maskable PNG for Android and a themed status bar. The two `og-*.png` social images are regenerated with the drawn cell mark where the brackets used to be typed.
+
 ### Removed
 - The "Skip to content" link. It was invisible until it received keyboard focus, easy to miss, and the top bar is only a few controls wide, so it caused more confusion than it saved. Focus still moves to the main content when the view changes, so keyboard and screen reader users keep their place.
 

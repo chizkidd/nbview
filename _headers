@@ -11,3 +11,6 @@
 
 /assets/fonts/*
   Access-Control-Allow-Origin: *
+
+/manifest.webmanifest
+  Content-Type: application/manifest+json
