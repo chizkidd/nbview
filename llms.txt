@@ -15,6 +15,8 @@
 ## Docs
 
 - [Home page and viewer](https://nbview.org/): paste a repo, notebook link or gist
+- [View .ipynb files from GitHub](https://nbview.org/view-ipynb-from-github): how to open a notebook from a repo, a gist or a link
+- [Compare two Jupyter notebooks](https://nbview.org/compare-jupyter-notebooks): cell and line diff of two .ipynb files
 - [README](https://github.com/chizkidd/nbview#readme): features, limits and privacy
 - [Changelog](https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md): what changed in each release
 - [Security policy](https://nbview.org/.well-known/security.txt): how to report a problem
