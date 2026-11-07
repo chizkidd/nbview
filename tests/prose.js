@@ -45,14 +45,14 @@ const PAGES = [
   ['privacy.js', '/privacy'],
   [path.join('count', '[[path]].js'), '/count'],
 ];
-// Only what a reader sees: no scripts, no styles, no code samples, no attributes.
+// Only what a reader sees: no scripts, no styles, no code samples, no attributes. The elements whose contents are
+// markup rather than prose close loosely: </script >, </CODE> and a stray attribute all still end the element, and an
+// element that never closes falls through to the plain tag strip. Both rules scan the same tree the browser parses.
+const OPAQUE = '<(script|style|pre|code)\\b[^>]*>[\\s\\S]*?<\\/\\1\\s*>';
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': '\'' };
 const visibleText = html => html
-  .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-  .replace(/<pre[\s\S]*?<\/pre>/gi, ' ')
-  .replace(/<code[\s\S]*?<\/code>/gi, ' ')
-  .replace(/<[^>]+>/g, ' ')
+  .replace(new RegExp(OPAQUE, 'gi'), ' ')
+  .replace(/<[^>]*>/g, ' ')
   .replace(/&(amp|lt|gt|quot|#39);/g, (match, name) => ENTITIES[name])
   .replace(/\s+/g, ' ');
 
