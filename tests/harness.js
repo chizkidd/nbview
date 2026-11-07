@@ -104,6 +104,22 @@ async function open(opts = {}) {
   return { page, ctx, requests, errors, base };
 }
 
+// The words a reader sees, with the notebook's own words left out: source, output, rendered markdown and diff lines
+// belong to the file being read, and a quote there is the author's or the syntax of code. KaTeX is skipped for the same
+// reason the vendor bundle is: its math spacing characters are not our copy. Hidden panels, closed dialogs and
+// collapsed details have no boxes, so only what is on screen is read.
+const visibleCopy = page => page.evaluate(() => {
+  const SKIP = 'script, style, pre, code, textarea, template, .katex, .katex-display, .prose, .dtext';
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const parts = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node.parentElement;
+    if (!el || el.closest(SKIP) || !el.getClientRects().length) continue;
+    parts.push(node.nodeValue);
+  }
+  return parts.join('\n');
+});
+
 const state = page => page.evaluate(() => ({
   cells: document.querySelectorAll('.cell').length,
   err: (document.querySelector('.error-box h1') || {}).textContent || null,
@@ -112,4 +128,4 @@ const state = page => page.evaluate(() => ({
   title: document.title,
 }));
 
-module.exports = { start, stop, open, state, nb, md, code, hostOf, get base() { return base; } };
+module.exports = { start, stop, open, state, visibleCopy, nb, md, code, hostOf, get base() { return base; } };
