@@ -263,6 +263,9 @@ function addresses(html) {
       assert(src.includes('href="/privacy"'), `${what} does not link the privacy note`);
     }
     for (const p of PAGES) assert(rendered[p.name].includes('href="/privacy"'), `${p.path} does not link the privacy note`);
+    // And from the dialog that asks for a token, which is where a reader starts wondering what it keeps.
+    const dialog = /<dialog id="settings">[\s\S]*?<\/dialog>/.exec(html);
+    assert(dialog && dialog[0].includes('href="/privacy"'), 'the Private repos dialog does not link the privacy note');
     for (const href of addresses(html).links) await expectReachable(href, ctx);
   });
 
