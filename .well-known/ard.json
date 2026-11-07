@@ -1,0 +1,4 @@
+{
+  "entries": [],
+  "description": "nbview publishes no agentic resources: it is a viewer that runs entirely in the reader's browser, with no MCP server, agent or API. Notebook contents belong to GitHub, so automated readers should fetch the raw file. How nbview builds notebook addresses for agents is documented in https://nbview.org/llms.txt."
+}
