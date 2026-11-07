@@ -30,10 +30,10 @@ and <code>?cell=N</code> opens it scrolled to cell N.</li>
 <p>GitHub can display many notebooks in its web interface. nbview adds the things a review, a paper or a blog post usually needs:</p>
 <ul>
   <li>a diff against another version of the same file, or against a different notebook</li>
-  <li>an embeddable frame at <code>/embed/{owner}/{repo}/blob/{branch}/{path}.ipynb</code> that other sites may frame</li>
-  <li>exports: a clean <code>.ipynb</code> without outputs, a <code>.py</code> script, Markdown, a standalone HTML page, and print or Save as PDF</li>
+  <li>an embeddable frame at <code>/embed/github/{owner}/{repo}/blob/{branch}/{path}.ipynb</code> that other sites may frame</li>
+  <li>exports: a clean <code>.ipynb</code> without outputs, a <code>.py</code> script, Markdown, and a standalone HTML page that the browser prints or saves as PDF</li>
   <li>notebooks from private repos without installing a GitHub App, using a read-only token you create</li>
-  <li>an installable app that reopens the last notebook offline, with light and dark themes</li>
+  <li>an installable app whose page still opens with no network, in either theme; the notebook itself always comes from GitHub</li>
 </ul>
 
 <h2>What it cannot do</h2>
