@@ -1,8 +1,8 @@
 /* Landing page for "view ipynb from github": real HTML, not the app shell. See functions/_lib/landing.mjs. */
 
-import { page, respond } from './_lib/landing.mjs';
+import { render } from './_lib/landing.mjs';
 
-const HTML = page({
+const SPEC = {
   path: '/view-ipynb-from-github',
   title: 'View .ipynb files from GitHub in the browser | nbview',
   description: 'Open a .ipynb file from GitHub, a gist or any link in your browser. Saved outputs, math and images render as written. No upload, no install, no token for public repos.',
@@ -52,6 +52,6 @@ and <code>?cell=N</code> opens it scrolled to cell N.</li>
 </div>
 
 <p class="doc-foot">nbview is a free, open-source notebook viewer. It is an independent project and is not affiliated with Project Jupyter or nbviewer. Read the <a href="https://github.com/chizkidd/nbview#readme">README</a>, or see <a href="https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md">what changed</a>.</p>`,
-});
+};
 
-export const onRequest = ({ request }) => respond(request, HTML);
+export const onRequest = ({ request, env }) => render(request, env, SPEC);

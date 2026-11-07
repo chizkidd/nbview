@@ -1,4 +1,4 @@
-// Tests for the two rendered landing pages: every address they print has to resolve.
+// Tests for the two rendered pages: they are documents inside the app's shell, and every address they print resolves.
 // No browser and no network: the pages, the Functions, _redirects and the app's router are all read from the repo.
 //
 // This exists because two wrong addresses shipped once. `/compare/github/...` was printed without its "#" — which
@@ -10,6 +10,9 @@ const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
 const ORIGIN = 'https://nbview.org';
+// The pages are built from the app shell, so they are served the shell the way the deployment serves it.
+const SHELL = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const env = { ASSETS: { fetch: async () => new Response(SHELL) } };
 const PAGES = [
   { name: 'compare', file: ['functions', 'compare-jupyter-notebooks.js'], path: '/compare-jupyter-notebooks' },
   { name: 'view', file: ['functions', 'view-ipynb-from-github.js'], path: '/view-ipynb-from-github' },
@@ -169,18 +172,36 @@ function addresses(html) {
   const rendered = {};
   for (const p of PAGES) {
     const fn = await load(...p.file);
-    const res = await fn.onRequest({ request: new Request(ORIGIN + p.path) });
+    const res = await fn.onRequest({ request: new Request(ORIGIN + p.path), env });
     assert(res.status === 200, `${p.path} answered ${res.status}`);
     rendered[p.name] = await res.text();
   }
 
-  test('both pages are documents: one h1, a canonical URL, no script', () => {
+  test('both pages are documents inside the app shell: their own head, the app top bar, no home hero', () => {
     for (const p of PAGES) {
       const html = rendered[p.name];
       assert((html.match(/<h1[\s>]/g) || []).length === 1, `${p.path} should have exactly one h1`);
-      assert(!/<script/i.test(html), `${p.path} serves script`);
+      assert((html.match(/<title>[^<]*<\/title>/g) || []).length === 1, `${p.path} title`);
       assert(html.includes(`<link rel="canonical" href="${ORIGIN}${p.path}">`), `${p.path} canonical`);
+      assert(html.includes(`<meta property="og:url" content="${ORIGIN}${p.path}">`), `${p.path} og:url`);
+      assert(/<body class="is-doc">/.test(html), `${p.path} body class`);
+      assert(!html.includes('class="is-home"'), `${p.path} still carries the home body class`);
+      assert(/<main id="app" tabindex="-1" class="doc">[\s\S]*?<h1/.test(html), `${p.path} document is not inside <main>`);
+      assert(!/class="home-title"/.test(html), `${p.path} kept the home hero`);
+      // The point of the shell: the bar and the dialog behind its button are the app's, not a second copy.
+      assert(html.includes('id="jump-input"') && html.includes('id="theme-btn"') && html.includes('id="settings-btn"'), `${p.path} is missing the app top bar`);
+      assert(html.includes('id="settings"'), `${p.path} is missing the dialog the bar opens`);
+      assert(html.includes('assets/js/theme.js?v=') && html.includes('assets/js/app.js?v='), `${p.path} does not load the app's scripts`);
     }
+  });
+
+  test('the pages serve the same policy as the rest of the site', async () => {
+    const site = /^\s*Content-Security-Policy:\s*(.+)$/m.exec(read('_headers'));
+    assert(site, '_headers has no Content-Security-Policy');
+    const fn = await load(...PAGES[0].file);
+    const res = await fn.onRequest({ request: new Request(ORIGIN + PAGES[0].path), env });
+    const served = res.headers.get('content-security-policy');
+    assert(served === site[1].trim(), `the policy these pages send has drifted from _headers:\n      ${served}`);
   });
 
   test('each page still prints addresses for this test to check', () => {
