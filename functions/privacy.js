@@ -6,7 +6,7 @@ import { render } from './_lib/landing.mjs';
 const SPEC = {
   path: '/privacy',
   title: 'Privacy: what nbview stores in your browser | nbview',
-  description: 'nbview keeps a GitHub token, your recently opened list and your theme in this browser, sends notebook traffic to GitHub, and records page views without cookies. No accounts, no uploads.',
+  description: 'nbview keeps a GitHub token, your recently opened list and your theme in this browser, sends notebook traffic to GitHub, and records page views without cookies, and counts notebook opens with one word and no identifiers. No accounts, no uploads.',
   body: `<h1>Privacy</h1>
 <p class="lede">nbview renders notebooks in your browser. There is no nbview server that receives them, nothing to sign up for, and no cookie banner, because there is nothing to consent to.</p>
 
@@ -31,6 +31,11 @@ const SPEC = {
 <h2>What nbview.org records</h2>
 <p>nbview has no server of its own: the site is static files served by Cloudflare. Cloudflare's privacy-focused analytics count page views, with no cookies.</p>
 <p>The only cookie nbview sets is a sign-in cookie, limited to <code>/auth</code>, that lasts ten minutes and is removed when GitHub sends you back. If you never sign in, nbview sets no cookie at all.</p>
+
+<h2>What nbview counts</h2>
+<p>The viewer routes on the address fragment, so a page-view counter cannot see a notebook being opened: ten notebooks read in one tab are one page view. To answer that, the page sends one word to this site's own <code>/count</code> endpoint — <code>open</code> when a notebook is rendered, <code>compare</code> when a comparison is shown, <code>embed</code> when a notebook is opened inside an embed. Nothing goes with it: no notebook, no repository, no address, no user agent, no timestamp.</p>
+<p>Those requests move a single number per event, and that number is all nbview stores: no row per visit, no cookie, nothing that could follow you between pages, notebooks or visits. Cloudflare serves the request the way it serves any other request to this site. Counting is skipped entirely when your browser sends Do Not Track or Global Privacy Control.</p>
+<p>On a deployment with no counter storage configured, the endpoint answers and records nothing.</p>
 
 <h2>Signing in with GitHub</h2>
 <p>Signing in asks GitHub for a token. The one step that touches a server is swapping GitHub's one-time code for that token; the token is then stored in your browser, not on a server. Signing out revokes it with GitHub.</p>
