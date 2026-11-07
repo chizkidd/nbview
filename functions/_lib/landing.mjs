@@ -71,6 +71,9 @@ export function page({ path, title, description, body }) {
 <link rel="icon" href="/assets/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
+<link rel="ard" href="/.well-known/ard.json">
+<link rel="preload" href="/assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
 <meta name="theme-color" content="#2D52CF">
 <link rel="stylesheet" href="/assets/css/style.css">
 <style>${STYLE}</style>

@@ -62,6 +62,8 @@ nbview/
 ├── llms.txt             plain-language summary and link formats for AI agents (llmstxt.org)
 ├── sitemap.xml          the home page and the two rendered pages
 ├── .well-known/
+│   ├── ard.json         an empty Agentic Resource Discovery manifest: nbview publishes no MCP server or agent,
+│   │                    so the endpoint says so instead of answering with the app shell
 │   └── security.txt     how to report a security problem
 ├── assets/
 │   ├── css/style.css
