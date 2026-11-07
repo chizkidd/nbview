@@ -50,6 +50,16 @@
   const isNbName = n => /\.ipynb$/i.test(n);
   const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+  // Aggregate counts for the two things a page-view counter cannot see, because this app routes on the hash: one
+  // word from a fixed list, posted to this site's own /count endpoint. No cookie, no identifier, and nothing is sent
+  // when the browser asks not to be tracked. See functions/count/[[path]].js.
+  function count(name) {
+    try {
+      if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl === true || !navigator.sendBeacon) return;
+      navigator.sendBeacon('/count/' + name);
+    } catch { /* counting is never worth breaking the page over */ }
+  }
+
   class ViewError extends Error {
     constructor(title, detail, opts = {}) {
       super(title);
@@ -656,6 +666,7 @@
   async function showNotebook(nb, ctx, info, id) {
     await ensureRenderLibs(); // syntax colors and math load when a notebook opens, not with the home page
     if (stale(id)) return;
+    if (EMBED) count('embed'); else count('open');
     const { cells, meta } = normalize(nb);
     const wstate = meta.widgets && meta.widgets['application/vnd.jupyter.widget-state+json'];
     ctx.widgets = wstate && wstate.state && typeof wstate.state === 'object' ? wstate.state : null;
@@ -2331,6 +2342,7 @@
   const textLines = (text, t) => (text === '' ? [] : numberLines(text.split('\n').map(x => ({ t, text: x }))));
 
   function renderDiff(d) {
+    count('compare');
     const entries = d.entries;
     const sum = nbvDiff.summarize(entries);
     const saved = store.get('nbv.diffLayout');
