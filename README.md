@@ -40,7 +40,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 - Images in a notebook are held back unless they come from GitHub's own file hosts, the normal case for saved plots and relative paths. Anything else is shown as **Image from example.com — Show** and is fetched only when clicked, so a third-party host learns neither your IP address nor which notebook you are reading; every image is also requested without a Referer. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
 - The optional GitHub token, your recently opened list and (after a sign-in) your GitHub account name stay in this browser's local storage. The token is sent only to api.github.com, never to raw.githubusercontent.com or to notebook image hosts. Use a fine-grained token limited to the repos you need, with Contents: Read-only.
 - nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies). The same points, at more length, are on `/privacy`, linked from the home page.
-- Page-view analytics cannot see a notebook screen, because the viewer is one hash-routed page. So the page posts one word to `/count` (`open`, `compare`, `embed`) and the Function adds one to a counter in the KV binding `COUNTS`; totals are at `/count`. Nothing about the visitor is stored, no cookie is set, and a browser sending Do Not Track or Global Privacy Control is not counted. Bind the namespace once (Workers & Pages → the project → Settings → Bindings → KV namespace, variable name `COUNTS`); without it the endpoint answers 204 and records nothing.
+- Page-view analytics cannot see a notebook screen, because the viewer is one hash-routed page. So the page posts one word to `/count` (`open`, `compare`, `embed`) and the Function adds one to a counter in the KV binding `COUNTS`; totals print at `/count`, a page anyone can open, and the same numbers are JSON at `/count?format=json`. Nothing about the visitor is stored, no cookie is set, and a browser sending Do Not Track or Global Privacy Control is not counted. Bind the namespace once (Workers & Pages → the project → Settings → Bindings → KV namespace, variable name `COUNTS`); without it the endpoint answers 204 and records nothing.
 
 ## Development
 
@@ -57,7 +57,8 @@ nbview/
 │                        /compare-jupyter-notebooks and /view-ipynb-from-github: rendered pages for the two searches the
 │                        viewer answers, since the app itself is one hash-routed page a crawler cannot index;
 │                        /privacy: what stays in the browser, what goes to GitHub, what the site records
-│                        /count: one word per notebook opened, comparison shown or embed, and nothing else
+│                        /count: one word per notebook opened, comparison shown or embed, and nothing else;
+│                        the totals it holds, printed as a page for anyone who asks
 ├── manifest.webmanifest  name, colours and icon for a home screen install
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
 ├── sandbox/plotly/      the page inside the isolated chart frame

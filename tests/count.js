@@ -74,14 +74,52 @@ const get = (fn, p, env) => fn.onRequest({ request: new Request(ORIGIN + p), env
     assert(store.data.size === 0, 'a GET wrote something');
   });
 
-  test('GET /count reports the totals, uncached, and says so when nothing is configured', async () => {
-    const on = await get(fn, '/count', { COUNTS: kv({ 'counts:open': '7', 'counts:embed': '2' }) });
+  test('GET /count?format=json reports the totals, uncached, and says so when nothing is configured', async () => {
+    const on = await get(fn, '/count?format=json', { COUNTS: kv({ 'counts:open': '7', 'counts:embed': '2' }) });
     const body = await on.json();
     assert(body.enabled === true, JSON.stringify(body));
     assert(body.totals.open === 7 && body.totals.embed === 2 && body.totals.compare === 0, JSON.stringify(body.totals));
     assert(on.headers.get('cache-control') === 'no-store', 'the totals are cacheable');
-    const off = await (await get(fn, '/count', {})).json();
+    const off = await (await get(fn, '/count?format=json', {})).json();
     assert(off.enabled === false && off.totals.open === 0, JSON.stringify(off));
+    // A script that asks for JSON by header, rather than by query, gets the same body.
+    const asked = await fn.onRequest({
+      request: new Request(ORIGIN + '/count', { headers: { accept: 'application/json' } }),
+      env: { COUNTS: kv({ 'counts:open': '3' }) },
+    });
+    assert((asked.headers.get('content-type') || '').includes('application/json'), asked.headers.get('content-type'));
+    assert((await asked.json()).totals.open === 3, 'the accept header was ignored');
+  });
+
+  test('GET /count prints the totals as a page: one h1, the three events, and nothing cached', async () => {
+    const shell = read('index.html');
+    const env = {
+      COUNTS: kv({ 'counts:open': '1200', 'counts:compare': '34' }),
+      ASSETS: { fetch: async () => new Response(shell, { headers: { 'content-type': 'text/html' } }) },
+    };
+    const res = await fn.onRequest({ request: new Request(ORIGIN + '/count', { headers: { accept: 'text/html,application/xhtml+xml' } }), env });
+    const html = await res.text();
+    assert(res.status === 200, `status ${res.status}`);
+    assert((res.headers.get('content-type') || '').startsWith('text/html'), res.headers.get('content-type'));
+    assert(res.headers.get('cache-control') === 'no-store', 'a page of live numbers is cacheable');
+    assert((res.headers.get('content-security-policy') || '').includes("default-src 'none'"), 'no CSP on the counters page');
+    assert(/<main id="app"[^>]*class="doc"/.test(html), 'the counters are not a document in the app shell');
+    assert((html.match(/<h1[\s>]/g) || []).length === 1, 'the counters page should have exactly one h1');
+    assert(html.includes('>1,200<') && html.includes('>34<'), 'the totals are not printed');
+    for (const event of ['open', 'compare', 'embed']) {
+      assert(new RegExp(`<code>${event}</code>`).test(html), `${event} is missing from the page`);
+    }
+    assert(!/not configured/i.test(html), 'a configured deployment claims the counters are off');
+    assert(!res.headers.get('set-cookie'), 'a cookie was set');
+  });
+
+  test('the counters page stands on its own without the shell, and admits when nothing is configured', async () => {
+    const res = await fn.onRequest({ request: new Request(ORIGIN + '/count'), env: {} });
+    const html = await res.text();
+    assert(res.status === 200, `status ${res.status}`);
+    assert(/<h1[\s>]/.test(html), 'no heading without the shell');
+    assert(/not configured/i.test(html), 'it does not say the counters are off');
+    assert(html.includes('>0<'), 'an unconfigured counter is not zero');
   });
 
   test('a deployment without counter storage still answers 204, and sets no cookie', async () => {

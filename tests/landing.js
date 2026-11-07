@@ -36,7 +36,7 @@ const load = (...p) => import(pathToFileURL(path.join(ROOT, ...p)).href);
 
 /* ---------- what the deployment can answer, read from the repo ---------- */
 
-// functions/<name>.js answers /<name>; functions/<dir>/[[path]].js answers everything under /<dir>/.
+// functions/<name>.js answers /<name>; functions/<dir>/[[path]].js answers /<dir> itself and everything under it.
 function functionRoutes() {
   const exact = new Set(), prefix = [];
   for (const entry of fs.readdirSync(path.join(ROOT, 'functions'), { withFileTypes: true })) {
@@ -68,7 +68,8 @@ function router() {
 function resolvePath(addr, ctx) {
   const bare = addr.split('?')[0];
   if (ctx.functions.exact.has(bare)) return { via: 'function' };
-  const dir = ctx.functions.prefix.find(p => bare.startsWith(p));
+  // An optional catch-all also answers the bare path: functions/count/[[path]].js serves /count as well as /count/...
+  const dir = ctx.functions.prefix.find(p => bare.startsWith(p) || bare === p.slice(0, -1));
   if (dir) return { via: 'function', dir };
   const rule = ctx.redirects.find(r => r.re.test(bare));
   if (rule) return { via: 'redirect', to: rule.to };
