@@ -142,7 +142,9 @@ async function expectReachable(addr, ctx) {
 
 /* ---------- what the pages print ---------- */
 
-const unescape = s => s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+// One pass with a map, so `&amp;lt;` decodes once to `&lt;` and never twice to `<`.
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
+const unescape = s => s.replace(/&(amp|lt|gt|quot|#39);/g, (m, name) => ENTITIES[name]);
 
 function addresses(html) {
   const pre = [...html.matchAll(/<pre><code>([\s\S]*?)<\/code><\/pre>/g)]
