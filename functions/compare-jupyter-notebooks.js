@@ -11,7 +11,7 @@ const SPEC = {
 
 <h2>How to compare</h2>
 <ol>
-  <li>Open <a href="/#/compare">nbview's compare page</a>, or choose <strong>Compare</strong> in the toolbar of any notebook you already have open.</li>
+  <li>Open <a href="/#/compare">nbview’s compare page</a>, or choose <strong>Compare</strong> in the toolbar of any notebook you already have open.</li>
   <li>Paste a link to each notebook, or pick two <code>.ipynb</code> files from your disk. The two can sit in different repositories, branches or folders.</li>
   <li>Read the diff. Each changed cell is shown with the version it came from, and a swap button above it flips the two sides.</li>
 </ol>
