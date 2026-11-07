@@ -11,7 +11,7 @@ npm test
 ## Options
 
 - `npm test -- <text>` runs only the tests whose name contains that text.
-- `BROWSER=firefox npm test` and `BROWSER=webkit npm test` run them in Firefox and Safari's engine. Install them first with `npx playwright install firefox webkit` (WebKit may also need `npx playwright install-deps webkit` on Linux).
+- `BROWSER=firefox npm test` and `BROWSER=webkit npm test` run them in Firefox and Safari’s engine. Install them first with `npx playwright install firefox webkit` (WebKit may also need `npx playwright install-deps webkit` on Linux).
 - `CHROMIUM_PATH=/path/to/chromium npm test` uses a Chromium you already have.
 - `node tests/live.js` is an optional smoke test against the real GitHub and needs network access. Add `LIVE_VIA_CURL=1` if the browser itself has no internet access. Unauthenticated GitHub API calls are limited to 60 an hour.
 
@@ -19,7 +19,7 @@ npm test
 
 - `preview.js`: Node tests for the link-preview function in `functions/` (it makes no network requests; no browser).
 - `landing.js`: Node tests that every address the two rendered pages print actually resolves: a route with a missing `#` or a missing path segment fails here, not in production.
-- `dashes.js`: Node test that no tracked text file outside `assets/vendor/` contains an em dash, so the docs and the page copy keep the punctuation they were rewritten to use.
+- `prose.js`: Node tests that no tracked text file outside `assets/vendor/` uses an em dash or en dash, and that the Markdown prose keeps its curly quotes and plain spaces, so the docs cannot drift back to straight punctuation.
 - `harness.js`: starts the server (sending the headers from `_headers`, so tests run under the real CSP) and browser and stubs GitHub (`open()`), plus small notebook builders.
 - `run.js`: the tests, one `test(name, fn)` each.
 - `live.js`: the optional real-GitHub smoke test.

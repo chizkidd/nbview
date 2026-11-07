@@ -26,6 +26,6 @@ Chores that are easy to forget. There is no build step, so there is little else 
 
 ## Releasing
 
-1. Move the "Unreleased" entries in `CHANGELOG.md` under a new version heading with the date, and merge.
+1. Move the “Unreleased” entries in `CHANGELOG.md` under a new version heading with the date, and merge.
 2. Tag the merge commit (`git tag -a vX.Y.Z -m "vX.Y.Z"`, `git push origin vX.Y.Z`).
 3. Publish a GitHub release with the same notes (`gh release create vX.Y.Z --notes-file notes.md --latest`).
