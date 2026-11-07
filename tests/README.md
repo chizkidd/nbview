@@ -19,6 +19,7 @@ npm test
 
 - `preview.js`: Node tests for the link-preview function in `functions/` (it makes no network requests; no browser).
 - `landing.js`: Node tests that every address the two rendered pages print actually resolves: a route with a missing `#` or a missing path segment fails here, not in production.
+- `dashes.js`: Node test that no tracked text file outside `assets/vendor/` contains an em dash, so the docs and the page copy keep the punctuation they were rewritten to use.
 - `harness.js`: starts the server (sending the headers from `_headers`, so tests run under the real CSP) and browser and stubs GitHub (`open()`), plus small notebook builders.
 - `run.js`: the tests, one `test(name, fn)` each.
 - `live.js`: the optional real-GitHub smoke test.
