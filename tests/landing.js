@@ -1,9 +1,9 @@
-// Tests for the rendered pages — the two guides and the privacy note: they are documents inside the app's shell, and
+// Tests for the rendered pages, the two guides and the privacy note: they are documents inside the app's shell, and
 // every address they print resolves.
 // No browser and no network: the pages, the Functions, _redirects and the app's router are all read from the repo.
 //
-// This exists because two wrong addresses shipped once. `/compare/github/...` was printed without its "#" — which
-// does not 404, it quietly returns the app shell and the home page — and the embed path was printed without its
+// This exists because two wrong addresses shipped once. `/compare/github/...` was printed without its "#" (which
+// does not 404, it quietly returns the app shell and the home page), and the embed path was printed without its
 // `github` segment, which does 404. Both looked fine to a smoke test and to a diff.
 const fs = require('fs');
 const path = require('path');
@@ -58,7 +58,7 @@ function redirectRules() {
 // The viewer is one page: which route kinds does it actually handle, and which of those have sub-kinds?
 function router() {
   const app = read('assets/js', 'app.js');
-  assert(/location\.hash/.test(app), 'the app no longer routes on location.hash — this test has to be rewritten');
+  assert(/location\.hash/.test(app), 'the app no longer routes on location.hash, so this test has to be rewritten');
   return {
     kinds: new Set([...app.matchAll(/parts\[0\] === '([^']+)'/g)].map(m => m[1])),
     sub: new Set([...app.matchAll(/parts\[1\] === '([^']+)'/g)].map(m => m[1])),
@@ -95,7 +95,7 @@ function check(addr, ctx) {
   const hit = resolvePath(addr, ctx);
   if (hit) return hit;
   if (ctx.router.kinds.has(first)) {
-    throw new Error(`${addr} looks like a hash route missing its "#" — the router only serves /#/${first}/…, so this address lands on the home page`);
+    throw new Error(`${addr} looks like a hash route missing its "#": the router only serves /#/${first}/…, so this address lands on the home page`);
   }
   throw new Error(`${addr} matches no Function, no _redirects rule and no file, so Cloudflare would answer with the app shell`);
 }
