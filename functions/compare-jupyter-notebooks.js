@@ -13,17 +13,17 @@ const HTML = page({
 <ol>
   <li>Open <a href="/#/compare">nbview's compare page</a>, or choose <strong>Compare</strong> in the toolbar of any notebook you already have open.</li>
   <li>Paste a link to each notebook, or pick two <code>.ipynb</code> files from your disk. The two can sit in different repositories, branches or folders.</li>
-  <li>Read the diff. Each changed cell is shown with the version it came from, and a <strong>Swap versions</strong> button flips the two sides.</li>
+  <li>Read the diff. Each changed cell is shown with the version it came from, and a swap button above it flips the two sides.</li>
 </ol>
-<p>A link can carry the comparison itself, so a review comment or a class note can point at it:</p>
-<pre><code>/compare/github/{owner}/{repo}/{older}...{newer}/{path}.ipynb
-/compare/links/{first-notebook-link}/{second-notebook-link}</code></pre>
+<p>A link can carry the comparison itself, so a review comment or a class note can point at it. The <code>#</code> is part of the address: the viewer routes on it, so a link without one lands on the home page.</p>
+<pre><code>/#/compare/github/{owner}/{repo}/{older}...{newer}/{path}.ipynb
+/#/compare/links/{first-notebook-link}/{second-notebook-link}</code></pre>
 
 <h2>What the diff shows</h2>
 <ul>
   <li>Cells that were added, removed or modified, kept in their original order so the story of the notebook still reads top to bottom.</li>
   <li>Line-level changes inside a modified code cell, rather than the whole cell marked as replaced.</li>
-  <li>Changed outputs. A cell whose code is identical but whose printed result, table, chart or traceback differs shows up as a change, which is often the only evidence that a run went differently.</li>
+  <li>Changed outputs, once <strong>Show output changes</strong> is pressed. A cell whose code is identical but whose printed result, table, chart or traceback differs then shows up as a change, which is often the only evidence that a run went differently.</li>
   <li>Markdown edits, next to the code edits, in the same view.</li>
 </ul>
 
