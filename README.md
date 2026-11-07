@@ -61,7 +61,7 @@ nbview/
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
 ├── llms.txt             plain-language summary and link formats for AI agents (llmstxt.org)
-├── sitemap.xml          the home page, the two rendered pages and the privacy note
+├── sitemap.xml          the home page, the two guide pages and the privacy page
 ├── .well-known/
 │   ├── ard.json         an empty Agentic Resource Discovery manifest: nbview publishes no MCP server or agent,
 │   │                    so the endpoint says so instead of answering with the app shell
