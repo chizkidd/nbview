@@ -88,7 +88,15 @@ ${body}
 // Both pages are static text, so the only per-request work is the method check and the headers.
 export function respond(request, html) {
   if (request.method !== 'GET' && request.method !== 'HEAD') {
-    return new Response('Method not allowed', { status: 405, headers: { allow: 'GET, HEAD' } });
+    return new Response('Method not allowed', {
+      status: 405,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        allow: 'GET, HEAD',
+        'content-security-policy': CSP,
+        'x-content-type-options': 'nosniff',
+      },
+    });
   }
   return new Response(request.method === 'HEAD' ? null : html, {
     headers: {
