@@ -23,7 +23,7 @@ const SPEC = {
 <h2>What leaves the browser, and where it goes</h2>
 <ul>
   <li><strong>GitHub.</strong> Folder listings and private notebooks go to <code>api.github.com</code>; public notebook files come from <code>raw.githubusercontent.com</code>. GitHub sees your IP address and, on API calls, your token.</li>
-  <li><strong>Images inside a notebook</strong> are held back unless they come from GitHub's own file hosts. Anything else is shown as <em>Image from example.com — Show</em> and is fetched only when you click it, without a Referer, so that host learns neither your address nor which notebook you are reading.</li>
+  <li><strong>Images inside a notebook</strong> are held back unless they come from GitHub's own file hosts. Anything else is shown as <em>Image from example.com</em> with a <em>Show</em> button, and is fetched only when you click it, without a Referer, so that host learns neither your address nor which notebook you are reading.</li>
   <li><strong>Interactive Plotly charts</strong> run in a frame the browser isolates from this page: no access to your token, storage or cookies, and no network.</li>
 </ul>
 <p>Files you choose from your disk are read in the page and never uploaded anywhere.</p>
@@ -33,8 +33,14 @@ const SPEC = {
 <p>The only cookie nbview sets is a sign-in cookie, limited to <code>/auth</code>, that lasts ten minutes and is removed when GitHub sends you back. If you never sign in, nbview sets no cookie at all.</p>
 
 <h2>What nbview counts</h2>
-<p>The viewer routes on the address fragment, so a page-view counter cannot see a notebook being opened: ten notebooks read in one tab are one page view. To answer that, the page sends one word to this site's own <code>/count</code> endpoint — <code>open</code> when a notebook is rendered, <code>compare</code> when a comparison is shown, <code>embed</code> when a notebook is opened inside an embed. Nothing goes with it: no notebook, no repository, no address, no user agent, no timestamp.</p>
-<p>Those requests move a single number per event, and that number is all nbview stores: no row per visit, no cookie, nothing that could follow you between pages, notebooks or visits. Cloudflare serves the request the way it serves any other request to this site. Counting is skipped entirely when your browser sends Do Not Track or Global Privacy Control.</p>
+<p>The viewer routes on the address fragment, so a page-view counter cannot see a notebook being opened: ten notebooks read in one tab are one page view. So the page tells this site's own <code>/count</code> endpoint what happened, using one of three words:</p>
+<ul>
+  <li><code>open</code> when a notebook is rendered;</li>
+  <li><code>compare</code> when a comparison is shown;</li>
+  <li><code>embed</code> when a notebook is opened inside an embed.</li>
+</ul>
+<p>One word, and nothing else: no notebook, no repository, no address, no user agent, no timestamp.</p>
+<p>Each request moves a single number, and that number is all nbview stores: no row per visit, no cookie, nothing that could follow you between pages, notebooks or visits. Cloudflare serves the request the way it serves any other request to this site. The three totals are public: anyone can read them at <a href="/count">/count</a>. Counting is skipped entirely when your browser sends Do Not Track or Global Privacy Control.</p>
 <p>On a deployment with no counter storage configured, the endpoint answers and records nothing.</p>
 
 <h2>Signing in with GitHub</h2>

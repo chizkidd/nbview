@@ -8,7 +8,7 @@
  *                 An unstamped file (icon, font, favicon) is served from cache and refreshed behind the scenes.
  *
  * Never cached: /auth/* (a sign-in response must not be replayable), /embed/* (rendered per notebook), anything
- * that is not a GET, and every other origin — GitHub API responses can be private or authorised by a token.
+ * that is not a GET, and every other origin: GitHub API responses can be private or authorised by a token.
  *
  * Notebook content still needs the network; it is fetched from GitHub by the page, not by this worker.
  */
