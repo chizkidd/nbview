@@ -210,6 +210,18 @@ main { padding: 1.75rem 1.25rem 5rem; }
 .hero-cell input:focus { outline: none; }
 .hint { color: var(--muted); font-size: 0.95rem; margin: 0.9rem 0 0; }
 .hint code { font-size: 0.85em; background: var(--code-bg); padding: 0.1em 0.3em; border-radius: 3px; }
+/* The two rendered pages, linked from the one address people and crawlers land on. It sits outside
+   main because the router replaces main's contents, and it is hidden once a notebook is open. */
+body.is-home main { padding-bottom: 1rem; }
+.foot {
+  max-width: 760px;
+  margin: 2rem auto 0;
+  padding: 0 1.25rem 3rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.foot p { margin: 0; }
+body:not(.is-home) .foot { display: none; }
 .drop {
   margin-top: 2rem;
   padding: 1.1rem;
@@ -531,6 +543,8 @@ html[data-embed] main { padding-top: 0.5rem; }
   .bar { gap: 0.6rem; padding-left: 0.9rem; padding-right: 0.9rem; }
   #settings-btn { font-size: 12px; padding: 0.35rem 0.55rem; }
   main { padding: 1.25rem 0.9rem 4rem; }
+  /* The footer sits outside main, so it has to copy the same narrow-screen gutter by hand. */
+  .foot { padding-left: 0.9rem; padding-right: 0.9rem; }
   .row { grid-template-columns: minmax(0, 1fr); }
   .prompt { text-align: left; padding: 0 0 0.2rem; }
   .prompt:empty { display: none; }
