@@ -1,4 +1,5 @@
-// Tests for the two rendered pages: they are documents inside the app's shell, and every address they print resolves.
+// Tests for the rendered pages — the two guides and the privacy note: they are documents inside the app's shell, and
+// every address they print resolves.
 // No browser and no network: the pages, the Functions, _redirects and the app's router are all read from the repo.
 //
 // This exists because two wrong addresses shipped once. `/compare/github/...` was printed without its "#" — which
@@ -244,6 +245,25 @@ function addresses(html) {
     assert(res.status === 302, res.status);
     assert(location.endsWith('#/github/o/r/blob/main/nb.ipynb?cell=3'), location);
     assert(resolveHash(location, ctx).via === 'hash', location);
+  });
+
+  test('the privacy note is a page of its own, linked from the home page and from both guides', async () => {
+    const fn = await load('functions', 'privacy.js');
+    const res = await fn.onRequest({ request: new Request(ORIGIN + '/privacy'), env });
+    assert(res.status === 200, `/privacy answered ${res.status}`);
+    const html = await res.text();
+    assert(/<body class="is-doc">/.test(html), '/privacy is not a document in the app shell');
+    assert(!/class="is-home"/.test(html), '/privacy carries the home body class');
+    assert(html.includes('id="jump-input"') && html.includes('id="settings"'), '/privacy has no app top bar');
+    assert((html.match(/<h1[\s>]/g) || []).length === 1, '/privacy should have exactly one h1');
+    assert(html.includes(`<link rel="canonical" href="${ORIGIN}/privacy">`), '/privacy canonical');
+    // The point of the page is that a reader can find it: from the home column, in the markup and in the render,
+    // and from the guides it is meant to answer for.
+    for (const [what, src] of [['index.html', read('index.html')], ['renderHome()', read('assets', 'js', 'app.js')]]) {
+      assert(src.includes('href="/privacy"'), `${what} does not link the privacy note`);
+    }
+    for (const p of PAGES) assert(rendered[p.name].includes('href="/privacy"'), `${p.path} does not link the privacy note`);
+    for (const href of addresses(html).links) await expectReachable(href, ctx);
   });
 
   let failed = 0;

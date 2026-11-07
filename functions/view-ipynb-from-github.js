@@ -51,7 +51,7 @@ and <code>?cell=N</code> opens it scrolled to cell N.</li>
   <a class="btn" href="/compare-jupyter-notebooks">Compare two notebooks</a>
 </div>
 
-<p class="doc-foot">nbview is a free, open-source notebook viewer. It is an independent project and is not affiliated with Project Jupyter or nbviewer. Read the <a href="https://github.com/chizkidd/nbview#readme">README</a>, or see <a href="https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md">what changed</a>.</p>`,
+<p class="doc-foot">nbview is a free, open-source notebook viewer. It is an independent project and is not affiliated with Project Jupyter or nbviewer. Read the <a href="https://github.com/chizkidd/nbview#readme">README</a>, or see <a href="https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md">what changed</a>, or read the <a href="/privacy">privacy note</a>.</p>`,
 };
 
 export const onRequest = ({ request, env }) => render(request, env, SPEC);

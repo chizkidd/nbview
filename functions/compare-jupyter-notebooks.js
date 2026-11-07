@@ -45,7 +45,7 @@ const SPEC = {
   <a class="btn" href="/view-ipynb-from-github">View .ipynb files from GitHub</a>
 </div>
 
-<p class="doc-foot">nbview is a free, open-source notebook viewer. It is an independent project and is not affiliated with Project Jupyter or nbviewer. <a href="/">Open the viewer</a>, read the <a href="https://github.com/chizkidd/nbview#readme">README</a>, or see <a href="https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md">what changed</a>.</p>`,
+<p class="doc-foot">nbview is a free, open-source notebook viewer. It is an independent project and is not affiliated with Project Jupyter or nbviewer. <a href="/">Open the viewer</a>, read the <a href="https://github.com/chizkidd/nbview#readme">README</a>, or see <a href="https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md">what changed</a>, or read the <a href="/privacy">privacy note</a>.</p>`,
 };
 
 export const onRequest = ({ request, env }) => render(request, env, SPEC);
