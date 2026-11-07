@@ -39,7 +39,7 @@ nbview is an independent project and is not affiliated with Project Jupyter or n
 - Notebooks are fetched and rendered in your browser. There is no nbview server that sees them. Link previews are built from the address alone (file name and repo), never from the notebook's contents.
 - Images in a notebook are held back unless they come from GitHub's own file hosts, the normal case for saved plots and relative paths. Anything else is shown as **Image from example.com — Show** and is fetched only when clicked, so a third-party host learns neither your IP address nor which notebook you are reading; every image is also requested without a Referer. Everything else (scripts, math fonts, page fonts) is served from nbview.org itself.
 - The optional GitHub token, your recently opened list and (after a sign-in) your GitHub account name stay in this browser's local storage. The token is sent only to api.github.com, never to raw.githubusercontent.com or to notebook image hosts. Use a fine-grained token limited to the repos you need, with Contents: Read-only.
-- nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies).
+- nbview.org uses Cloudflare's privacy-focused analytics (page views, no cookies). The same points, at more length, are on `/privacy`, linked from the home page.
 
 ## Development
 
@@ -54,13 +54,14 @@ nbview/
 ├── functions/           /github and /gist: redirect to the viewer, and answer link-preview crawlers with a card made from the link
 │                        /embed: the same page without the toolbar, framed by other sites; /auth: optional GitHub sign-in
 │                        /compare-jupyter-notebooks and /view-ipynb-from-github: rendered pages for the two searches the
-│                        viewer answers, since the app itself is one hash-routed page a crawler cannot index
+│                        viewer answers, since the app itself is one hash-routed page a crawler cannot index;
+│                        /privacy: what stays in the browser, what goes to GitHub, what the site records
 ├── manifest.webmanifest  name, colours and icon for a home screen install
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
 ├── llms.txt             plain-language summary and link formats for AI agents (llmstxt.org)
-├── sitemap.xml          the home page and the two rendered pages
+├── sitemap.xml          the home page, the two rendered pages and the privacy note
 ├── .well-known/
 │   ├── ard.json         an empty Agentic Resource Discovery manifest: nbview publishes no MCP server or agent,
 │   │                    so the endpoint says so instead of answering with the app shell

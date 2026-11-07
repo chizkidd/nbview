@@ -335,6 +335,7 @@
           Have the file already? Drop an .ipynb here or <label>choose one<input type="file" id="file-input" accept=".ipynb,application/json" hidden></label>.
         </div>
         <p class="hint guides">Two short guides: <a href="/view-ipynb-from-github">how to open a .ipynb from GitHub</a>, and <a href="/compare-jupyter-notebooks">how to compare two notebooks</a>.</p>
+        <p class="hint"><a href="/privacy">Privacy</a>: what nbview stores in this browser, and what leaves it.</p>
         ${recents.length ? `
           <section class="recent">
             <h2>Recently opened</h2>
