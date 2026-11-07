@@ -1,8 +1,8 @@
 /* Landing page for "compare two jupyter notebooks": real HTML, not the app shell. See functions/_lib/landing.mjs. */
 
-import { page, respond } from './_lib/landing.mjs';
+import { render } from './_lib/landing.mjs';
 
-const HTML = page({
+const SPEC = {
   path: '/compare-jupyter-notebooks',
   title: 'Compare two Jupyter notebooks in the browser | nbview',
   description: 'Diff two Jupyter notebooks cell by cell in the browser: added code, changed outputs and edited markdown, from two GitHub links, branches, tags or commits.',
@@ -46,6 +46,6 @@ const HTML = page({
 </div>
 
 <p class="doc-foot">nbview is a free, open-source notebook viewer. It is an independent project and is not affiliated with Project Jupyter or nbviewer. <a href="/">Open the viewer</a>, read the <a href="https://github.com/chizkidd/nbview#readme">README</a>, or see <a href="https://github.com/chizkidd/nbview/blob/main/CHANGELOG.md">what changed</a>.</p>`,
-});
+};
 
-export const onRequest = ({ request }) => respond(request, HTML);
+export const onRequest = ({ request, env }) => render(request, env, SPEC);

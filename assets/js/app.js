@@ -2469,6 +2469,12 @@
     targetCell = cellAt ? Number(cellAt[1]) : 0;
     const raw = location.hash.replace(/^#/, '').replace(/\?cell=\d+$/, '');
     const parts = raw.split('/').filter(Boolean).map(safeDecode);
+    // A guide page arrives with its document already in <main> (the Function marks it .doc): there is no hash to
+    // route, and the home view must not replace the server-rendered text. Only the top bar is live on those pages.
+    if (!parts.length && app.classList.contains('doc')) {
+      document.body.classList.remove('is-home');
+      return;
+    }
     document.body.classList.toggle('is-home', parts.length === 0);
     window.scrollTo(0, 0);
     clearFindHighlights();
