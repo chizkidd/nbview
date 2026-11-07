@@ -26,7 +26,7 @@ and <code>?cell=N</code> opens it scrolled to cell N.</li>
   <li>A link that keeps pointing at the right version: <strong>Copy link</strong> names the commit the notebook was read at, so a link still shows the same notebook after the branch moves on.</li>
 </ul>
 
-<h2>What GitHub's own file view does not do</h2>
+<h2>What GitHub’s own file view does not do</h2>
 <p>GitHub can display many notebooks in its web interface. nbview adds the things a review, a paper or a blog post usually needs:</p>
 <ul>
   <li>a diff against another version of the same file, or against a different notebook</li>
@@ -44,7 +44,7 @@ and <code>?cell=N</code> opens it scrolled to cell N.</li>
 </ul>
 
 <h2>What it does with your notebook</h2>
-<p>Public files are fetched from <code>raw.githubusercontent.com</code> by your browser, and private files from <code>api.github.com</code> with a token kept in this browser's storage. There is no nbview server holding a copy. Remote images inside a notebook are held behind a button that names their host, so opening a notebook does not contact the sites it embeds until you ask it to.</p>
+<p>Public files are fetched from <code>raw.githubusercontent.com</code> by your browser, and private files from <code>api.github.com</code> with a token kept in this browser’s storage. There is no nbview server holding a copy. Remote images inside a notebook are held behind a button that names their host, so opening a notebook does not contact the sites it embeds until you ask it to.</p>
 
 <div class="doc-cta">
   <a class="btn primary" href="/">Open a notebook</a>

@@ -66,7 +66,7 @@
       <p>Folder browsing allows 60 requests an hour without a token and 5,000 with one; opening public notebooks does not use that limit. The token is stored in this browser only and sent only to api.github.com. The <a href="/privacy">privacy page</a> lists everything nbview keeps.</p>
       <p class="hint"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained token</a></p>
       <input id="token-input" type="password" placeholder="github_pat_... or ghp_..." autocomplete="off" spellcheck="false" aria-label="GitHub token">
-      <p id="token-error" class="form-error" role="alert" hidden>That doesn't look like a token. It has a space or a character a token can't have, often picked up when copying. Paste it again.</p>
+      <p id="token-error" class="form-error" role="alert" hidden>That doesn’t look like a token. It has a space or a character a token can’t have, often picked up when copying. Paste it again.</p>
       <div class="dialog-actions">
         <button class="btn" value="clear">Remove token</button>
         <button class="btn" value="cancel">Cancel</button>
@@ -96,7 +96,7 @@
   <dialog id="embed-dialog">
     <form method="dialog" class="settings-form">
       <h2>Embed this notebook</h2>
-      <p>Paste this into any page that allows iframes. The notebook is fetched and drawn by the reader's browser, so nothing is uploaded, and the frame always shows the latest version of the file.</p>
+      <p>Paste this into any page that allows iframes. The notebook is fetched and drawn by the reader’s browser, so nothing is uploaded, and the frame always shows the latest version of the file.</p>
       <label for="embed-code">HTML</label>
       <textarea id="embed-code" rows="4" readonly spellcheck="false"></textarea>
       <div class="dialog-actions">

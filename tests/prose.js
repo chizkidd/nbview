@@ -1,15 +1,21 @@
 // Typography tests for hand-written text: the docs and the page copy read without em dashes or en dashes, and the
-// Markdown uses curly quotes rather than straight ones. The prose was rewritten by hand to get there, so the check runs
-// on the repo rather than on a list of files, and a dash or a straight quote in a new guide, README sentence or worker
-// comment is caught here.
+// Markdown and the rendered pages use curly quotes rather than straight ones. The prose was rewritten by hand to get
+// there, so the check runs on the repo rather than on a list of files, and a dash or a straight quote in a new guide,
+// README sentence or worker comment is caught here.
 //
 // Only tracked text is read, and assets/vendor/ is skipped: KaTeX and highlight.js ship their own strings, and their
 // punctuation is not ours to change. Characters are written as escapes so this file does not trip over itself.
+//
+// Page copy lives inside JavaScript strings, where a straight quote is also syntax, so a text scan cannot separate
+// copy from code. The last test renders the pages through their Functions and reads the visible text instead: the
+// app's shell (index.html) is part of every page, so its dialogs and top bar are covered by the same rule.
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const ROOT = path.join(__dirname, '..');
+const ORIGIN = 'https://nbview.org';
 const VENDOR = 'assets/vendor/';
 const EM_DASH = '\u2014';
 const EN_DASH = '\u2013';
@@ -32,6 +38,23 @@ const TEXT = new Set([
 const NO_EXTENSION = new Set(['LICENSE', 'LICENCE', '_redirects', '_headers', '.gitignore', '.gitattributes', '.editorconfig']);
 // Markdown and plain-text files are the prose: every character in them is copy once code is stripped out.
 const PROSE = new Set(['.md', '.markdown', '.txt']);
+// The documents built from the app's shell: two guides, the privacy note and the public counters.
+const PAGES = [
+  ['compare-jupyter-notebooks.js', '/compare-jupyter-notebooks'],
+  ['view-ipynb-from-github.js', '/view-ipynb-from-github'],
+  ['privacy.js', '/privacy'],
+  [path.join('count', '[[path]].js'), '/count'],
+];
+// Only what a reader sees: no scripts, no styles, no code samples, no attributes.
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': '\'' };
+const visibleText = html => html
+  .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+  .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+  .replace(/<pre[\s\S]*?<\/pre>/gi, ' ')
+  .replace(/<code[\s\S]*?<\/code>/gi, ' ')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/&(amp|lt|gt|quot|#39);/g, (match, name) => ENTITIES[name])
+  .replace(/\s+/g, ' ');
 
 // Code must stay ASCII: fenced blocks, inline spans, link destinations and raw HTML tags are not prose, and a straight
 // quote inside backticks is correct there. Replacing matches with spaces keeps line numbers and offsets intact, so a
@@ -100,6 +123,37 @@ test('Markdown prose uses curly quotes and plain spaces', () => {
   return `${files.length} prose files`;
 });
 
+test('the rendered pages read like the docs', async () => {
+  const shell = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const env = { ASSETS: { fetch: async () => new Response(shell) } };
+  const hits = [];
+  let shortest = Infinity;
+  for (const [file, route] of PAGES) {
+    const page = await import(pathToFileURL(path.join(ROOT, 'functions', file)).href);
+    const res = await page.onRequest({ request: new Request(ORIGIN + route), env });
+    assert(res.status === 200, `${route} answered ${res.status}, so this scan is not reading the page`);
+    const text = visibleText(await res.text());
+    assert(text.length > 400, `${route} rendered only ${text.length} characters of visible text`);
+    shortest = Math.min(shortest, text.length);
+    for (const [needle, label] of [...Object.entries(STRAIGHT_QUOTES), ...Object.entries(INVISIBLE)]) {
+      for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
+        hits.push(`${route}  ${label}  ...${text.slice(Math.max(0, at - 40), at + 40).trim()}...`);
+      }
+    }
+    // Guards the extractor: if the shell or the page stops rendering, this drops instead of the scan passing vacuously.
+    if (route === '/privacy') assert(text.includes('What nbview counts'), '/privacy rendered without its copy, so the pages were not read');
+    if (route === '/count') assert(text.includes('notebook is rendered'), '/count rendered without its table, so the pages were not read');
+  }
+  assert(!hits.length, [
+    report(hits),
+    '',
+    'Page copy is the same prose as the docs: write an apostrophe as U+2019 and a quoted label as U+201C and U+201D.',
+    'Code spans and code blocks are stripped first, so an address or an example keeps its straight quotes.',
+    'index.html is the shell every page is built from, so its dialog copy is checked here too.',
+  ].join('\n'));
+  return `${PAGES.length} rendered pages, ${shortest}+ characters of visible text each`;
+});
+
 test('the prose scan covers the files it claims to', () => {
   const files = trackedFiles();
   const text = files.filter(file => !file.startsWith(VENDOR) && isText(file));
@@ -108,19 +162,22 @@ test('the prose scan covers the files it claims to', () => {
     assert(text.includes(expected), `${expected} was not scanned, so these tests are not covering the copy they claim to`);
   }
   assert(files.filter(isProse).length >= 5, 'the prose list lost files, so the quote test would pass by reading nothing');
+  for (const [, route] of PAGES) assert(route.startsWith('/'), `${route} is not an address, so the page scan has nothing to render`);
   return 'README, changelog, maintenance note, llms.txt, worker, shell and privacy page are in scope';
 });
 
-let failed = 0;
-for (const { name, fn } of tests) {
-  try {
-    const detail = fn();
-    console.log(`PASS  ${name}${detail ? ` (${detail})` : ''}`);
-  } catch (error) {
-    failed += 1;
-    console.log(`FAIL  ${name}`);
-    for (const line of String(error.message).split('\n')) console.log(`      ${line}`);
+(async () => {
+  let failed = 0;
+  for (const { name, fn } of tests) {
+    try {
+      const detail = await fn();
+      console.log(`PASS  ${name}${detail ? ` (${detail})` : ''}`);
+    } catch (error) {
+      failed += 1;
+      console.log(`FAIL  ${name}`);
+      for (const line of String(error.message).split('\n')) console.log(`      ${line}`);
+    }
   }
-}
-console.log(failed ? `\n${failed} failed` : '\nall passed');
-process.exit(failed ? 1 : 0);
+  console.log(failed ? `\n${failed} failed` : '\nall passed');
+  process.exit(failed ? 1 : 0);
+})();
