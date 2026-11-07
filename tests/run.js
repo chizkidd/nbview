@@ -2,7 +2,7 @@
 // (set CHROMIUM_PATH to use an existing Chromium; set BROWSER=firefox or BROWSER=webkit to test another engine). Everything runs offline against a local server.
 const fs = require('fs');
 const path = require('path');
-const { start, stop, open, state, nb, md, code, hostOf } = require('./harness');
+const { start, stop, open, state, visibleCopy, nb, md, code, hostOf } = require('./harness');
 
 const H = '#/github/o/r/blob/main/t.ipynb';
 const OUT = path.join(__dirname, 'out');
@@ -10,7 +10,34 @@ const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 const assert = (cond, detail) => { if (!cond) throw new Error(detail === undefined ? 'assertion failed' : typeof detail === 'string' ? detail : JSON.stringify(detail)); };
 const good = nb([md('hello')]);
-const run = async (opts, fn) => { const s = await open(opts); try { return await fn(s); } finally { await s.ctx.close(); } };
+// The viewer builds its copy in JavaScript, so the rendered page is the only place those strings can be read. Every
+// browser test hands over the text it leaves on screen and the last test below checks the lot, so a message that only
+// appears after a click is covered by whichever test made it appear.
+const COPY_STRAYS = {
+  '"': 'straight double quote',
+  "'": 'straight apostrophe',
+  '\u00a0': 'non-breaking space',
+  '\u202f': 'narrow non-breaking space',
+  '\u2009': 'thin space',
+  '\u200b': 'zero-width space',
+  '\u00ad': 'soft hyphen',
+  '\ufeff': 'byte order mark',
+};
+const copyStrays = [];
+let copyPages = 0;
+let running = '';
+async function readCopy(page) {
+  if (page.isClosed()) return;
+  const text = await visibleCopy(page);
+  if (text.length < 200) return; // a blank or half-rendered page says nothing about the copy
+  copyPages += 1;
+  for (const [needle, label] of Object.entries(COPY_STRAYS)) {
+    for (let at = text.indexOf(needle); at !== -1; at = text.indexOf(needle, at + 1)) {
+      copyStrays.push(`${running}: ${label} ...${text.slice(Math.max(0, at - 40), at + 40).replace(/\s+/g, ' ').trim()}...`);
+    }
+  }
+}
+const run = async (opts, fn) => { const s = await open(opts); try { const value = await fn(s); await readCopy(s.page); return value; } finally { await s.ctx.close(); } };
 
 /* ---------- security ---------- */
 
@@ -863,7 +890,7 @@ test('compare: a file that is not a notebook is reported, not crashed on', () =>
   await page.setInputFiles('#file-b', { name: 'b.ipynb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(good)) });
   await page.click('#compare-go');
   await page.waitForTimeout(200);
-  assert(await page.evaluate(() => !document.querySelector('#compare-msg').hidden && /isn't valid JSON/.test(document.querySelector('#compare-msg').textContent)), 'no message');
+  assert(await page.evaluate(() => !document.querySelector('#compare-msg').hidden && /isn\u2019t valid JSON/.test(document.querySelector('#compare-msg').textContent)), 'no message');
 }));
 
 const rawOf = (o, r, ref, path) => `https://raw.githubusercontent.com/${o}/${r}/${ref}/${path}`;
@@ -898,7 +925,7 @@ test('compare by link: the form accepts GitHub links, raw links, shorthand and p
 });
 
 test('compare by link: unusable input is explained on the form', async () => {
-  const bad = [['', 'alice/one/a.ipynb', /Enter a notebook link/i], ['https://github.com/alice/one', 'alice/one/a.ipynb', /repo or folder/], ['ftp://example.com/a.ipynb', 'alice/one/a.ipynb', /isn't a GitHub notebook link/], ['javascript:alert(1)', 'alice/one/a.ipynb', /isn't a GitHub notebook link/]];
+  const bad = [['', 'alice/one/a.ipynb', /Enter a notebook link/i], ['https://github.com/alice/one', 'alice/one/a.ipynb', /repo or folder/], ['ftp://example.com/a.ipynb', 'alice/one/a.ipynb', /isn\u2019t a GitHub notebook link/], ['javascript:alert(1)', 'alice/one/a.ipynb', /isn\u2019t a GitHub notebook link/]];
   for (const [a, b, re] of bad) {
     await run({ hash: '#/compare', settle: 300 }, async ({ page, requests }) => {
       await page.fill('#link-a', a); await page.fill('#link-b', b);
@@ -915,7 +942,7 @@ test('compare by link: unreachable and missing notebooks give clear messages', a
     const s = await state(page); assert(/Not found: bob\/two@main/.test(s.err), s);
   });
   await run({ hash: l(rawOf('alice', 'one', 'main', 'nb.ipynb'), 'https://blocked.example/nb.ipynb'), raw: twoRepos, other: () => ({ abort: true }), settle: 300 }, async ({ page }) => {
-    const s = await state(page); assert(/Couldn't load blocked\.example/.test(s.err) && /CORS/.test(s.errText), s);
+    const s = await state(page); assert(/Couldn\u2019t load blocked\.example/.test(s.err) && /CORS/.test(s.errText), s);
   });
   await run({ hash: l('javascript:alert(1)', rawOf('alice', 'one', 'main', 'nb.ipynb')), raw: twoRepos, settle: 300 }, async ({ page, requests }) => {
     const s = await state(page); assert(/Unsupported link/.test(s.err) && !requests.some(u => /^javascript:/i.test(u)), s);
@@ -1001,6 +1028,20 @@ test('compare pages pass axe', async () => {
   }
 });
 
+/* ---------- typography ---------- */
+
+test('viewer copy: the interface reads like the docs', () => {
+  assert(!copyStrays.length, [
+    'Straight punctuation in the text the viewer renders:',
+    ...copyStrays.slice(0, 6),
+    copyStrays.length > 6 ? `... and ${copyStrays.length - 6} more` : '',
+    '',
+    'Write an apostrophe as U+2019 and a quoted label as U+201C and U+201D. Notebook source and output are not site copy and are left out.',
+  ].filter(Boolean).join('\n      '));
+  // Guards the scan: a filtered run reads too few pages to prove anything.
+  assert(copyPages >= 20, `only ${copyPages} pages were read, so this test needs the rest of the suite: run npm test without a name filter`);
+});
+
 /* ---------- runner ---------- */
 
 (async () => {
@@ -1009,6 +1050,7 @@ test('compare pages pass axe', async () => {
   let failed = 0;
   for (const t of tests.filter(t => !only || t.name.includes(only))) {
     const t0 = Date.now();
+    running = t.name;
     try { await t.fn(); console.log(`PASS  ${t.name}  (${Date.now() - t0} ms)`); } catch (e) { failed++; console.log(`FAIL  ${t.name}\n      ${String(e.message).slice(0, 600)}`); }
   }
   await stop();

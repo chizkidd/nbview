@@ -191,7 +191,7 @@
     } catch (e) {
       throw e && e.name === 'TimeoutError'
         ? new ViewError('GitHub took too long to answer', 'Try again in a moment.')
-        : new ViewError("Couldn't reach GitHub", 'The network request failed. Check your connection and try again.');
+        : new ViewError("Couldn’t reach GitHub", 'The network request failed. Check your connection and try again.');
     }
     if (res.ok) {
       const data = await res.json();
@@ -204,18 +204,18 @@
       const mins = Math.max(1, Math.ceil((reset - Date.now()) / 60000));
       throw new ViewError(
         'GitHub rate limit reached',
-        `Folder browsing is paused for about ${mins} min. Add a GitHub token to raise the limit, or paste a notebook link directly, since opening notebooks doesn't count.`,
+        `Folder browsing is paused for about ${mins} min. Add a GitHub token to raise the limit, or paste a notebook link directly, since opening notebooks doesn’t count.`,
         { token: true }
       );
     }
     if (res.status === 401) {
-      throw new ViewError('Token rejected', "GitHub didn't accept the saved token. Update or remove it.", { token: true });
+      throw new ViewError('Token rejected', "GitHub didn’t accept the saved token. Update or remove it.", { token: true });
     }
     if (res.status === 403) {
       throw new ViewError('No access to this repository', 'The saved token cannot read it. Give the token Contents: Read access to this repo.', { token: true });
     }
     if (res.status === 404) {
-      throw new ViewError('Not found', "That repo, branch or folder doesn't exist, or the saved token can't see it. For a private repo, give the token Contents: Read access.");
+      throw new ViewError('Not found', "That repo, branch or folder doesn’t exist, or the saved token can’t see it. For a private repo, give the token Contents: Read access.");
     }
     throw new ViewError(`GitHub returned ${res.status}`, 'The request was refused. Try again in a moment.');
   }
@@ -225,7 +225,7 @@
   // A failed raw or Contents API response, as the error the page should show.
   function ghTextError(r, title, detail, opts) {
     if (r.status === 401) {
-      return new ViewError('Token rejected', "GitHub didn't accept the saved token. Update or remove it.", { token: true });
+      return new ViewError('Token rejected', "GitHub didn’t accept the saved token. Update or remove it.", { token: true });
     }
     if (r.status === 403 && r.remaining === '0') {
       const mins = Math.max(1, Math.ceil((r.reset - Date.now()) / 60000));
@@ -484,7 +484,7 @@
     if (stale(id)) return;
     const files = Object.values(g.files || {});
     const file = files.find(f => isNbName(f.filename));
-    if (!file) throw new ViewError('No notebook in this gist', "The gist doesn't contain an .ipynb file.");
+    if (!file) throw new ViewError('No notebook in this gist', "The gist doesn’t contain an .ipynb file.");
     location.replace('#/url/' + encodeURIComponent(file.raw_url));
   }
 
@@ -525,7 +525,7 @@
       let h = '';
       try { h = new URL(src.url).hostname; } catch { /* the fetch below reports it */ }
       if (/^(colab\.research\.google\.com|drive\.google\.com|docs\.google\.com)$/i.test(h)) {
-        throw new ViewError("Google Drive and Colab files can't be opened", 'Those links need a Google sign-in, so nbview cannot read them. Download the .ipynb and drop it on the home page, or use a link to the notebook on GitHub.');
+        throw new ViewError("Google Drive and Colab files can’t be opened", 'Those links need a Google sign-in, so nbview cannot read them. Download the .ipynb and drop it on the home page, or use a link to the notebook on GitHub.');
       }
     }
 
@@ -537,7 +537,7 @@
       } catch (e) {
         if (e instanceof ViewError) throw e;
         if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
-        throw new ViewError("Couldn't load the file", 'The network request failed. Check your connection and try again.');
+        throw new ViewError("Couldn’t load the file", 'The network request failed. Check your connection and try again.');
       }
       if (r.text == null) throw ghTextError(r, 'Notebook not found', `Check the path and branch. ${privateHint}`, { token: true });
       text = r.text;
@@ -547,7 +547,7 @@
         res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
       } catch (e) {
         if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
-        throw new ViewError("Couldn't load the file", "The site hosting this file doesn't let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
+        throw new ViewError("Couldn’t load the file", "The site hosting this file doesn’t let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
       }
       if (!res.ok) {
         throw res.status === 404
@@ -566,7 +566,7 @@
 
     let nb;
     try { nb = JSON.parse(text); } catch {
-      throw new ViewError('Not a readable notebook', "The file isn't valid JSON, so it can't be opened as .ipynb.");
+      throw new ViewError('Not a readable notebook', "The file isn’t valid JSON, so it can’t be opened as .ipynb.");
     }
 
     const host = isGh ? null : new URL(url).host;
@@ -607,7 +607,7 @@
         try {
           let nb;
           try { nb = JSON.parse(text); } catch {
-            throw new ViewError('Not a readable notebook', `${file.name} isn't valid JSON, so it can't be opened as .ipynb.`);
+            throw new ViewError('Not a readable notebook', `${file.name} isn’t valid JSON, so it can’t be opened as .ipynb.`);
           }
           await showNotebook(nb, {}, {
             name: file.name,
@@ -629,7 +629,7 @@
 
   function normalize(nb) {
     if (!nb || typeof nb !== 'object' || Array.isArray(nb)) {
-      throw new ViewError('Not a notebook', "The file is valid JSON, but it doesn't look like a Jupyter notebook.");
+      throw new ViewError('Not a notebook', "The file is valid JSON, but it doesn’t look like a Jupyter notebook.");
     }
     if (Array.isArray(nb.cells)) return { cells: nb.cells, meta: nb.metadata || {} };
     if (Array.isArray(nb.worksheets)) {
@@ -1102,7 +1102,7 @@
     const row = makeRow('', '');
     const box = row.lastChild;
     box.classList.add('cell-error');
-    box.append(document.createTextNode("This cell couldn't be displayed."));
+    box.append(document.createTextNode("This cell couldn’t be displayed."));
     let src = '';
     try { src = cell && typeof cell === 'object' ? join(cell.source) : ''; } catch { /* unreadable source */ }
     if (src) {
@@ -1121,7 +1121,7 @@
   function failedOutput() {
     const d = document.createElement('div');
     d.className = 'output output-failed';
-    d.textContent = "This output couldn't be displayed.";
+    d.textContent = "This output couldn’t be displayed.";
     return d;
   }
 
@@ -1538,7 +1538,7 @@
         if (!m || typeof m !== 'object') return;
         if (m.type === 'ready') frame.contentWindow.postMessage({ type: 'render', ...payload, height }, '*');
         else if (m.type === 'rendered') { clearTimeout(timer); note.textContent = 'Interactive chart running in an isolated frame.'; }
-        else if (m.type === 'error') stop("This chart couldn't be drawn.");
+        else if (m.type === 'error') stop("This chart couldn’t be drawn.");
       };
       window.addEventListener('message', listener);
       timer = setTimeout(() => stop('The chart took too long to start.'), 20000);
@@ -1981,7 +1981,7 @@
   function parseCells(text, label) {
     if (text.length > BIG_NB) throw new ViewError('Too large to compare', `${label} is over ${fmtSize(BIG_NB)}. Open it on its own instead.`);
     let parsed;
-    try { parsed = JSON.parse(text); } catch { throw new ViewError('Not a readable notebook', `${label} isn't valid JSON, so it can't be compared.`); }
+    try { parsed = JSON.parse(text); } catch { throw new ViewError('Not a readable notebook', `${label} isn’t valid JSON, so it can’t be compared.`); }
     return normalize(parsed).cells;
   }
 
@@ -1991,10 +1991,10 @@
       r = await githubText(owner, repo, ref, path, AbortSignal.timeout(60000));
     } catch (e) {
       if (e instanceof ViewError) throw e;
-      throw new ViewError("Couldn't load a version", e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
+      throw new ViewError("Couldn’t load a version", e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
     }
     if (r.text == null) {
-      if (r.status === 404) throw ghTextError(r, `Not found at ${shortRef(ref)}`, `The file ${path} doesn't exist at "${ref}", or that branch, tag or commit doesn't exist. ${privateHint}`, { token: true });
+      if (r.status === 404) throw ghTextError(r, `Not found at ${shortRef(ref)}`, `The file ${path} doesn’t exist at “${ref}”, or that branch, tag or commit doesn’t exist. ${privateHint}`, { token: true });
       throw ghTextError(r);
     }
     return parseCells(r.text, shortRef(ref));
@@ -2036,7 +2036,7 @@
     let m = text.match(/^([^/\s:]+)\/([^/\s:]+)\/(.+\.ipynb)$/i);
     if (m && GH_OWNER.test(m[1]) && GH_REPO.test(m[2]) && !/^(blob|tree)\//.test(m[3])) return rawUrl(m[1], m[2], 'HEAD', safeDecode(m[3]));
     if ((/^[a-z][a-z0-9+.-]*:\/\//i.test(text) && !/^https?:/i.test(text)) || /^(javascript|data|file|vbscript):/i.test(text)) {
-      throw new ViewError("That link can't be used", `"${clip(text, 80)}" isn't a GitHub notebook link or an http(s) link to an .ipynb file.`);
+      throw new ViewError("That link can’t be used", `“${clip(text, 80)}” isn’t a GitHub notebook link or an http(s) link to an .ipynb file.`);
     }
     m = text.match(/^(?:https?:\/\/)?gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]+)\/([0-9a-f]{40})(?:[/?#].*)?$/i);
     if (m) return `gist:${m[1]}@${m[2]}`;
@@ -2046,11 +2046,11 @@
       const [, owner, repo, kind, ref, ...rest] = parts;
       const path = rest.join('/');
       if (kind === 'blob' && ref && isNbName(path)) return rawUrl(owner, repo, ref, path);
-      throw new ViewError('That is not a notebook link', `"${clip(text, 80)}" points to a repo or folder. Use a link to one .ipynb file, or owner/repo/path/to/notebook.ipynb.`);
+      throw new ViewError('That is not a notebook link', `“${clip(text, 80)}” points to a repo or folder. Use a link to one .ipynb file, or owner/repo/path/to/notebook.ipynb.`);
     }
     if (parts[0] === 'gist' && parts[1]) return `gist:${parts[1]}`;
     if (parts[0] === 'url' && /^https?:\/\//i.test(parts[1] || '')) return parts[1];
-    throw new ViewError("That link can't be used", `"${clip(text, 80)}" isn't a GitHub notebook link or an http(s) link to an .ipynb file.`);
+    throw new ViewError("That link can’t be used", `“${clip(text, 80)}” isn’t a GitHub notebook link or an http(s) link to an .ipynb file.`);
   }
 
   const GIST_SRC = /^gist:([0-9a-f]+)(?:@([0-9a-f]{7,40}))?$/i;
@@ -2074,7 +2074,7 @@
     if (!g) return { url: src, name: fileNameOf(src), label: labelOf(src) };
     const data = await gh(`/gists/${encodeURIComponent(g[1])}${g[2] ? '/' + g[2] : ''}`);
     const file = Object.values((data && data.files) || {}).find(f => f && isNbName(String(f.filename)) && typeof f.raw_url === 'string');
-    if (!file) throw new ViewError('No notebook in this gist', `${labelOf(src)} doesn't contain an .ipynb file.`);
+    if (!file) throw new ViewError('No notebook in this gist', `${labelOf(src)} doesn’t contain an .ipynb file.`);
     return { url: file.raw_url, name: file.filename, label: labelOf(src) };
   }
 
@@ -2088,7 +2088,7 @@
         r = await githubText(gh.owner, gh.repo, gh.ref, gh.path, AbortSignal.timeout(60000));
       } catch (e) {
         if (e instanceof ViewError) throw e;
-        throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
+        throw new ViewError(`Couldn’t load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.' : 'The network request failed. Check your connection and try again.');
       }
       if (r.text == null) {
         if (r.status === 404) throw ghTextError(r, `Not found: ${label}`, `Check the link, branch and path. ${privateHint}`, { token: true });
@@ -2100,8 +2100,8 @@
     try {
       res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
     } catch (e) {
-      throw new ViewError(`Couldn't load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.'
-        : "The site hosting this file doesn't let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
+      throw new ViewError(`Couldn’t load ${label}`, e && e.name === 'TimeoutError' ? 'The server took too long to answer.'
+        : "The site hosting this file doesn’t let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
     }
     if (res.status === 404) throw new ViewError(`Not found: ${label}`, 'Check the link, branch and path.');
     if (!res.ok) throw new ViewError(`Request failed (${res.status})`, `${label} could not be loaded. Try again in a moment.`);
@@ -2494,7 +2494,7 @@
     clearFindHighlights();
 
     if (!window.marked || !window.DOMPurify) {
-      renderError(new ViewError("Couldn't load the rendering libraries", 'A script failed to load. Reload the page, or check for content blockers.'));
+      renderError(new ViewError("Couldn’t load the rendering libraries", 'A script failed to load. Reload the page, or check for content blockers.'));
       return;
     }
 
@@ -2527,7 +2527,7 @@
           showLoading('Finding the default branch');
           const info = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
           if (!info || typeof info.default_branch !== 'string' || !info.default_branch) {
-            throw new ViewError("Couldn't find the default branch", 'GitHub gave an unexpected answer for this repo. Try again later.');
+            throw new ViewError("Couldn’t find the default branch", 'GitHub gave an unexpected answer for this repo. Try again later.');
           }
           if (!stale(id)) location.replace(hashFor(owner, repo, 'tree', info.default_branch, ''));
           return;

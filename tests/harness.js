@@ -57,10 +57,37 @@ async function stop() {
   if (server) server.close();
 }
 
+// The site asks for Helvetica for notebook text and the system stack elsewhere, which a bare Linux box does not have, so
+// text there lays out with no glyph metrics at all: every line box collapses and scroll, wrap and position tests measure
+// zero. The repo's own faces stand in for the system stacks, so a test measures the same layout on every machine instead
+// of depending on the fonts a host happens to have installed.
+const TEST_FONTS = `
+@font-face { font-family: 'nbv-test-serif'; font-style: normal; font-weight: 400 700; src: url('/assets/fonts/source-serif-4-latin.woff2') format('woff2'); }
+@font-face { font-family: 'nbv-test-serif'; font-style: italic; font-weight: 400; src: url('/assets/fonts/source-serif-4-italic-latin.woff2') format('woff2'); }
+@font-face { font-family: 'nbv-test-mono'; font-style: normal; font-weight: 400 600; src: url('/assets/fonts/jetbrains-mono-latin.woff2') format('woff2'); }
+:root {
+  --serif: "Source Serif 4", 'nbv-test-serif', serif;
+  --mono: "JetBrains Mono", 'nbv-test-mono', monospace;
+  --nb-sans: 'nbv-test-serif', sans-serif;
+  --nb-mono: 'nbv-test-mono', monospace;
+}`;
+// Runs in the page, so the CSS comes in as an argument: the function is serialized, not called in this process.
+const useBundledFonts = (css) => {
+  // Only the page itself: the sandboxed chart frame allows data: fonts alone, and it is not site layout.
+  if (window !== window.top) return;
+  const style = document.createElement('style');
+  style.textContent = css;
+  // An init script runs before the parser has made <html>, so wait for it rather than throwing the fonts away.
+  const add = () => (document.head || document.documentElement).append(style);
+  if (document.documentElement) add();
+  else document.addEventListener('DOMContentLoaded', add, { once: true });
+};
+
 // opts: { hash, raw, api, other, viewport, init, settle, timeout, waitFor, scheme }
 // raw/api/other: a value (JSON body) or a function(url) returning { status, body, type, abort } or null.
 async function open(opts = {}) {
   const ctx = await browser.newContext({ viewport: opts.viewport || { width: 1100, height: 800 }, colorScheme: opts.scheme || 'light', acceptDownloads: true });
+  await ctx.addInitScript(useBundledFonts, TEST_FONTS);
   if (opts.init) await ctx.addInitScript(opts.init);
   const requests = [];
   await ctx.route('**/*', route => {
@@ -104,6 +131,22 @@ async function open(opts = {}) {
   return { page, ctx, requests, errors, base };
 }
 
+// The words a reader sees, with the notebook's own words left out: source, output, rendered markdown and diff lines
+// belong to the file being read, and a quote there is the author's or the syntax of code. KaTeX is skipped for the same
+// reason the vendor bundle is: its math spacing characters are not our copy. Hidden panels, closed dialogs and
+// collapsed details have no boxes, so only what is on screen is read.
+const visibleCopy = page => page.evaluate(() => {
+  const SKIP = 'script, style, pre, code, textarea, template, .katex, .katex-display, .prose, .dtext';
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  const parts = [];
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const el = node.parentElement;
+    if (!el || el.closest(SKIP) || !el.getClientRects().length) continue;
+    parts.push(node.nodeValue);
+  }
+  return parts.join('\n');
+});
+
 const state = page => page.evaluate(() => ({
   cells: document.querySelectorAll('.cell').length,
   err: (document.querySelector('.error-box h1') || {}).textContent || null,
@@ -112,4 +155,4 @@ const state = page => page.evaluate(() => ({
   title: document.title,
 }));
 
-module.exports = { start, stop, open, state, nb, md, code, hostOf, get base() { return base; } };
+module.exports = { start, stop, open, state, visibleCopy, nb, md, code, hostOf, get base() { return base; } };
