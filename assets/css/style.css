@@ -543,6 +543,8 @@ html[data-embed] main { padding-top: 0.5rem; }
   .bar { gap: 0.6rem; padding-left: 0.9rem; padding-right: 0.9rem; }
   #settings-btn { font-size: 12px; padding: 0.35rem 0.55rem; }
   main { padding: 1.25rem 0.9rem 4rem; }
+  /* The footer sits outside main, so it has to copy the same narrow-screen gutter by hand. */
+  .foot { padding-left: 0.9rem; padding-right: 0.9rem; }
   .row { grid-template-columns: minmax(0, 1fr); }
   .prompt { text-align: left; padding: 0 0 0.2rem; }
   .prompt:empty { display: none; }
