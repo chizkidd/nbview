@@ -97,7 +97,7 @@ nbview/
 
 ### Tests
 
-`npm install && npx playwright install chromium && npm test`. More options (other browsers, a single test, the live smoke test) are in [tests/README.md](tests/README.md).
+`npm install && npx playwright install --with-deps chromium && npm test` (there is no lockfile: the two dev dependencies are pinned exactly in `package.json`). More options, other browsers and the setup for a bare machine or CI are in [tests/README.md](tests/README.md).
 
 CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. The hash is what does the work: Cloudflare Pages sends its own four-hour `Cache-Control` for assets and ignores one set in `_headers`, so a repeat visit revalidates because the URL changed, not because a header asked it to.
 

@@ -4,7 +4,7 @@ Regression tests for the sanitizer, size limits, input parsing, accessibility an
 
 ```
 npm install
-npx playwright install chromium
+npx playwright install --with-deps chromium
 npm test
 ```
 
@@ -14,6 +14,41 @@ npm test
 - `BROWSER=firefox npm test` and `BROWSER=webkit npm test` run them in Firefox and Safari’s engine. Install them first with `npx playwright install firefox webkit` (WebKit may also need `npx playwright install-deps webkit` on Linux).
 - `CHROMIUM_PATH=/path/to/chromium npm test` uses a Chromium you already have.
 - `node tests/live.js` is an optional smoke test against the real GitHub and needs network access. Add `LIVE_VIA_CURL=1` if the browser itself has no internet access. Unauthenticated GitHub API calls are limited to 60 an hour.
+
+## A fresh machine, and CI
+
+Node 20 or newer. There is no lockfile on purpose: `package-lock.json` is ignored, and the two dev dependencies are pinned to exact versions in `package.json`. Install with `npm install`; `npm ci` has nothing to read and fails.
+
+```
+npm install
+npx playwright install --with-deps chromium
+npm test
+```
+
+`--with-deps` installs the libraries Chromium needs, and a set of fonts, through the platform package manager, so those three commands work on a bare image. That step needs `sudo` on Linux, which CI images have. If it is refused, install the libraries separately with `npx playwright install-deps chromium`, or point the tests at a browser you already have:
+
+```
+CHROMIUM_PATH=/path/to/chrome npm test
+```
+
+A browser unpacked by hand also needs its libraries on the loader path:
+
+```
+LD_LIBRARY_PATH=/path/to/usr/lib/x86_64-linux-gnu CHROMIUM_PATH=/path/to/chrome npm test
+```
+
+GitHub Actions, in full:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version: 20
+- run: npm install
+- run: npx playwright install --with-deps chromium
+- run: npm test
+```
+
+Every test runs offline except `node tests/live.js`, which is not part of `npm test`.
 
 ## Fonts
 
@@ -25,7 +60,7 @@ Opening the app yourself on a bare Linux machine is the case that needs one: ins
 sudo apt-get install -y --no-install-recommends fonts-dejavu-core
 ```
 
-`npx playwright install-deps chromium` also pulls in fonts, along with the browser’s other system libraries.
+`npx playwright install-deps chromium`, or the `--with-deps` flag above, also pulls in fonts, along with the browser’s other system libraries.
 
 ## Files
 
