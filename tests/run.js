@@ -1066,6 +1066,22 @@ test('harness: the bundled faces reach the page, so text has real metrics', () =
   assert(r.h > 0 && r.lines > 1 && r.codeH > 0, say(`Prose box: ${r.h}px over ${r.lines} line(s). Code box: ${r.codeH}px.`));
 }));
 
+// Once the worker takes over it answers every same-origin request itself, and its own fetch is bound by the policy
+// delivered with sw.js. Production is https, where `connect-src https:` covers the site; the tests serve http, so
+// harness.js names the test origin too. Without that line the worker's fetch dies, the page is handed Response.error(),
+// and the request shows up as net::ERR_FAILED with no server hit and no route event. This asks for a file the page has
+// not already loaded, after the worker is in control, so it exercises that path instead of the preload cache.
+test('harness: the worker can still fetch the site once it takes over', () => run({ hash: '', settle: 400 }, async ({ page }) => {
+  await page.waitForFunction(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 10000 });
+  const r = await page.evaluate(async () => {
+    const src = document.querySelector('link[rel="preload"][as="font"]').getAttribute('href');
+    const face = new FontFace('nbv-test-late', `url(${src}?late=1)`);
+    document.fonts.add(face);
+    return face.load().then(() => 'loaded', e => 'error: ' + (e && e.name));
+  });
+  assert(r === 'loaded', 'A font requested after the worker took over did not load: ' + r + '.\n      tests/harness.js must keep the test origin in the CSP it serves (connect-src), or the worker cannot fetch the site\u2019s own files once it controls the page.');
+}));
+
 /* ---------- typography ---------- */
 
 test('viewer copy: the interface reads like the docs', () => {
