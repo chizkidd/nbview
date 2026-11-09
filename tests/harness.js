@@ -57,18 +57,19 @@ async function stop() {
   if (server) server.close();
 }
 
-// The site asks for Helvetica for notebook text and the system stack elsewhere, which a bare Linux box does not have, so
-// text there lays out with no glyph metrics at all: every line box collapses and scroll, wrap and position tests measure
+// The site's font stacks end in system faces, which a bare Linux box does not have, so text there lays out with no glyph
+// metrics at all: every line box collapses and scroll, wrap and position tests measure
 // zero. The repo's own faces stand in for the system stacks, so a test measures the same layout on every machine instead
 // of depending on the fonts a host happens to have installed.
 const TEST_FONTS = `
+@font-face { font-family: 'nbv-test-sans'; font-style: normal; font-weight: 400 700; src: url('/assets/fonts/inter-latin.woff2') format('woff2'); }
 @font-face { font-family: 'nbv-test-serif'; font-style: normal; font-weight: 400 700; src: url('/assets/fonts/source-serif-4-latin.woff2') format('woff2'); }
 @font-face { font-family: 'nbv-test-serif'; font-style: italic; font-weight: 400; src: url('/assets/fonts/source-serif-4-italic-latin.woff2') format('woff2'); }
 @font-face { font-family: 'nbv-test-mono'; font-style: normal; font-weight: 400 600; src: url('/assets/fonts/jetbrains-mono-latin.woff2') format('woff2'); }
 :root {
   --serif: "Source Serif 4", 'nbv-test-serif', serif;
   --mono: "JetBrains Mono", 'nbv-test-mono', monospace;
-  --nb-sans: 'nbv-test-serif', sans-serif;
+  --nb-sans: 'nbv-test-sans', sans-serif;
   --nb-mono: 'nbv-test-mono', monospace;
 }`;
 // Runs in the page, so the CSS comes in as an argument: the function is serialized, not called in this process.
