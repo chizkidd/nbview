@@ -77,6 +77,9 @@ function fromShell(shell, { title, description, canonical, body }) {
   html = replace(html, '</head>', `<style>${STYLE}</style>\n</head>`, 'head close');
   // Not is-home: the search box shows, the footer hides, and app.js knows not to draw the home view.
   html = replace(html, /<body class="is-home">/, '<body class="is-doc">', 'home body class');
+  // The shell's brand is a hash link, which means "home" only on the viewer's own page. A document served at /privacy
+  // or /view-ipynb-from-github needs a real address, or the link is a fragment of itself and clicking it does nothing.
+  html = replace(html, /<a class="brand" href="#\/">/, '<a class="brand" href="/">', 'brand link');
   html = replace(html, /<main id="app" tabindex="-1">[\s\S]*?<\/main>/, `<main id="app" tabindex="-1" class="doc">\n${body}\n</main>`, 'main region');
   return html;
 }
