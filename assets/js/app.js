@@ -2747,7 +2747,12 @@
   const cmpOther = document.getElementById('compare-other');
   const cmpList = document.getElementById('compare-commits');
   const cmpErr = document.getElementById('compare-error');
+  const cmpMore = document.getElementById('compare-load');
+  const CMP_PAGE = 50; // commits per request; Load more fetches the next page
   let cmpCtx = null;
+  let cmpPage = 0;
+  let cmpMoreLeft = false;
+  let cmpBusy = false;
 
   function openCompare(c) {
     cmpCtx = c;
@@ -2756,33 +2761,41 @@
     document.getElementById('compare-head').textContent = gist ? `gist ${c.gist.slice(0, 7)}` : shortRef(c.ref);
     document.getElementById('compare-base-label').textContent = gist ? 'An earlier revision of this gist (commit id)' : 'Another version (branch, tag or commit)';
     cmpBase.placeholder = gist ? 'a revision id, or pick one below' : 'main, v1.0 or a commit';
-    document.getElementById('compare-load').textContent = gist ? 'Show revisions of this gist' : 'Show recent commits of this file';
+    cmpBusy = false;
+    cmpMore.textContent = gist ? 'Load more revisions' : 'Load more commits';
+    cmpMore.hidden = true;
+    cmpMore.disabled = false;
     cmpBase.value = '';
     cmpOther.value = '';
-    cmpList.replaceChildren();
+    cmpList.textContent = 'Loading...';
     cmpErr.hidden = true;
-    document.getElementById('compare-load').disabled = false;
     cmpDlg.showModal();
     cmpBase.focus();
+    loadCommits();
   }
 
-  document.getElementById('compare-load').addEventListener('click', async e => {
-    const btn = e.currentTarget;
-    btn.disabled = true;
-    cmpErr.hidden = true;
-    cmpList.textContent = 'Loading...';
+  // The history is paged rather than capped, so every earlier version of the file is reachable, fifty at a time.
+  async function loadCommits(more = false) {
+    if (!cmpCtx || cmpBusy || (more && !cmpMoreLeft)) return;
+    cmpBusy = true;
+    const ctx = cmpCtx; // a dialog closed and reopened mid-request must not fill the new list
+    const page = more ? cmpPage + 1 : 1;
+    if (more) { cmpMore.disabled = true; cmpMore.textContent = 'Loading...'; }
     try {
       let items;
       if (cmpCtx.gist) {
-        const revs = await gh(`/gists/${encodeURIComponent(cmpCtx.gist)}/commits?per_page=30`);
+        const revs = await gh(`/gists/${encodeURIComponent(cmpCtx.gist)}/commits?per_page=${CMP_PAGE}&page=${page}`);
         if (!Array.isArray(revs)) throw new ViewError('Unexpected answer from GitHub', 'The revision list was not in the expected format.');
         items = revs.map(r => ({ sha: r && r.version, commit: { message: r && r.change_status ? `+${r.change_status.additions || 0} -${r.change_status.deletions || 0}` : '', author: { date: r && r.committed_at } } }));
       } else {
         const { owner, repo, ref, path } = cmpCtx;
-        items = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(ref)}&per_page=30`);
+        items = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits?path=${encodeURIComponent(path)}&sha=${encodeURIComponent(ref)}&per_page=${CMP_PAGE}&page=${page}`);
         if (!Array.isArray(items)) throw new ViewError('Unexpected answer from GitHub', 'The commit list was not in the expected format.');
       }
-      cmpList.replaceChildren();
+      if (ctx !== cmpCtx) return;
+      if (page === 1) cmpList.replaceChildren();
+      cmpPage = page;
+      cmpMoreLeft = items.length >= CMP_PAGE;
       for (const it of items) {
         if (!it || typeof it.sha !== 'string' || !/^[0-9a-f]{40}$/i.test(it.sha)) continue;
         const c = it.commit || {};
@@ -2790,18 +2803,34 @@
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'commit-item';
+        b.setAttribute('aria-pressed', String(cmpBase.value.trim().toLowerCase() === it.sha.toLowerCase()));
         b.textContent = `${it.sha.slice(0, 7)}  ${clip(String(c.message || '').split('\n')[0], 70)}  ${when}`;
-        b.addEventListener('click', () => { cmpBase.value = it.sha; cmpBase.focus(); });
+        b.addEventListener('click', () => {
+          cmpBase.value = it.sha;
+          for (const other of cmpList.querySelectorAll('.commit-item')) other.setAttribute('aria-pressed', String(other === b));
+          cmpBase.focus();
+        });
         cmpList.append(b);
       }
-      if (!cmpList.children.length) cmpList.textContent = 'No earlier commits found for this file.';
+      if (!cmpList.children.length) {
+        cmpMoreLeft = false;
+        cmpList.textContent = cmpCtx.gist ? 'This gist has no earlier revisions.' : 'This file has no earlier commits.';
+      }
+      cmpMore.hidden = !cmpMoreLeft;
     } catch (err) {
-      cmpList.replaceChildren();
-      cmpErr.textContent = err.detail || err.message || 'Could not load commits.';
+      if (page === 1) cmpList.replaceChildren();
+      cmpErr.textContent = err.detail || err.message || 'Could not load the commit history. A branch, tag or commit can still be typed above.';
       cmpErr.hidden = false;
-      btn.disabled = false;
+      cmpMoreLeft = false;
+      cmpMore.hidden = true;
+    } finally {
+      cmpBusy = false;
+      cmpMore.disabled = false;
+      cmpMore.textContent = cmpCtx && cmpCtx.gist ? 'Load more revisions' : 'Load more commits';
     }
-  });
+  }
+
+  cmpMore.addEventListener('click', () => loadCommits(true));
 
   document.getElementById('compare-form').addEventListener('submit', e => {
     e.preventDefault();

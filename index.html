@@ -26,7 +26,7 @@
   <link rel="preload" href="assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="theme-color" content="#2D52CF">
   <meta name="apple-mobile-web-app-title" content="nbview">
-  <link rel="stylesheet" href="assets/css/style.css?v=ecd0a4a0">
+  <link rel="stylesheet" href="assets/css/style.css?v=2fd29f7d">
   <script src="assets/js/theme.js?v=5331cfe1"></script>
 </head>
 <body class="is-home">
@@ -82,7 +82,7 @@
       <p>Compare <code id="compare-file"></code> at <code id="compare-head"></code> with another version of it, or with a different notebook.</p>
       <label for="compare-base" id="compare-base-label">Another version (branch, tag or commit)</label>
       <input id="compare-base" type="text" placeholder="main, v1.0 or a commit" autocomplete="off" spellcheck="false">
-      <button class="btn" id="compare-load" type="button">Show recent commits of this file</button>
+      <button class="btn" id="compare-load" type="button" hidden>Load more commits</button>
       <div id="compare-commits" class="commit-list"></div>
       <label for="compare-other" class="compare-or">Or a different notebook (link or owner/repo/path.ipynb)</label>
       <input id="compare-other" type="text" placeholder="https://github.com/owner/repo/blob/main/other.ipynb" autocomplete="off" spellcheck="false">
@@ -111,6 +111,6 @@
   <script defer src="assets/vendor/purify.min.js?v=c2b28807"></script>
   <script defer src="assets/js/export.js?v=507cf0b0"></script>
   <script defer src="assets/js/diff.js?v=40f7b674"></script>
-  <script defer src="assets/js/app.js?v=8d944381"></script>
+  <script defer src="assets/js/app.js?v=32c68d16"></script>
 </body>
 </html>
