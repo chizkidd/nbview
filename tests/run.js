@@ -865,7 +865,7 @@ test('compare dialog: the file history loads on open, and picking a commit lands
     const q = requests.find(u => /\/commits\?/.test(u)) || '';
     assert(/per_page=50/.test(q) && /[?&]page=1/.test(q) && /path=/.test(q), q);
     assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 1 && /Tidy the intro/.test(document.querySelector('.commit-item').textContent)), 'commit list');
-    assert(await page.evaluate(() => document.querySelector('#compare-load').hidden), 'Load more should stay hidden for a short history');
+    assert(await page.evaluate(() => { const b = document.querySelector('#compare-load'); return b.hidden && getComputedStyle(b).display === 'none'; }), 'Load more must be hidden, not merely marked hidden');
     await page.click('.commit-item');
     assert(await page.evaluate(() => document.querySelector('.commit-item').getAttribute('aria-pressed') === 'true'), 'picked commit is not marked');
     await page.click('#compare-form button[type="submit"]');
