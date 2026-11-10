@@ -412,6 +412,23 @@ test('settings: GitHub sign-in stays hidden when the deployment has no OAuth app
   assert(await page.evaluate(() => !document.getElementById('token-input').hidden), 'token box hidden');
 }));
 
+test('settings: a failed sign-in says why in the dialog that started it', () => run({ hash: '', settle: 300 }, async ({ page }) => {
+  await page.click('#settings-btn');
+  await page.evaluate(() => {
+    document.getElementById('oauth-block').hidden = false;
+    window.postMessage({ type: 'nbv-signin-error', error: 'The code passed is incorrect or expired.' }, location.origin);
+  });
+  await page.waitForTimeout(150);
+  const s = await page.evaluate(() => {
+    const el = document.getElementById('oauth-error');
+    return { hidden: el.hidden, shown: getComputedStyle(el).display !== 'none', text: el.textContent };
+  });
+  assert(!s.hidden && s.shown, 'the reason is not visible: ' + JSON.stringify(s));
+  assert(/incorrect or expired/.test(s.text), s.text);
+  await page.click('#oauth-btn');
+  assert(await page.evaluate(() => document.getElementById('oauth-error').hidden), 'the reason stayed after a new attempt');
+}));
+
 test('settings: a second click on Sign in brings the open tab forward instead of restarting it', () => run({ hash: '', settle: 300 }, async ({ page }) => {
   await page.click('#settings-btn');
   await page.evaluate(() => {

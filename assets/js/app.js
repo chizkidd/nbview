@@ -2654,6 +2654,7 @@
   function openSettings() {
     tokInput.value = store.get('nbv.token') || '';
     tokError.hidden = true;
+    hideSignInError();
     // Clearing is one action, so its label says which one it means here.
     clearBtn.textContent = store.get('nbv.oauth') ? 'Sign out' : 'Remove token';
     dlg.showModal();
@@ -2680,7 +2681,9 @@
 
   // The sign-in tab hands the token back here, so it never travels in a URL.
   window.addEventListener('message', e => {
-    if (e.origin !== location.origin || !e.data || e.data.type !== 'nbv-token') return;
+    if (e.origin !== location.origin || !e.data) return;
+    if (e.data.type === 'nbv-signin-error') { showSignInError(String(e.data.error || '')); return; }
+    if (e.data.type !== 'nbv-token') return;
     const t = String(e.data.token || '');
     if (!TOKEN_OK.test(t)) return;
     store.set('nbv.token', t);
@@ -2688,6 +2691,7 @@
     store.del('nbv.login'); // a new sign-in can be a different account
     tokInput.value = t;
     syncSettingsBtn();
+    hideSignInError();
     loadLogin();
     resetSignInLabel(); // the sign-in tab may stay open after handing the token over
     if (dlg.open) dlg.close('cancel'); // the close handler must not overwrite what just arrived
@@ -2699,7 +2703,23 @@
   // like it needs several tries. So an open tab is brought forward instead, and the button says what is
   // happening until that tab closes.
   const OAUTH_LABEL = 'Sign in with GitHub';
+  const oauthErr = document.getElementById('oauth-error');
   let oauthWin = null;
+
+  function hideSignInError() {
+    if (!oauthErr) return;
+    oauthErr.hidden = true;
+    oauthErr.textContent = '';
+  }
+
+  // A sign-in GitHub refused says why in the dialog that started it, so the reason is not left in a popup that
+  // closes. The popup keeps its own retry link for the same reason.
+  function showSignInError(message) {
+    if (!oauthErr) return;
+    if (!dlg.open) openSettings();
+    oauthErr.textContent = message || 'Sign-in failed.';
+    oauthErr.hidden = false;
+  }
   let oauthWatch = 0;
 
   function resetSignInLabel() {
@@ -2724,6 +2744,7 @@
 
   if (oauthBtn) {
     oauthBtn.addEventListener('click', () => {
+      hideSignInError();
       if (oauthWin && !oauthWin.closed) {
         try { oauthWin.focus(); } catch { /* the tab is gone, so open a fresh one below */ }
         return;
