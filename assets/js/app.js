@@ -2621,11 +2621,14 @@
 
   function syncSettingsBtn() {
     const hasToken = Boolean(store.get('nbv.token'));
-    const signedIn = hasToken && Boolean(store.get('nbv.oauth'));
+    const stale = hasToken && Boolean(store.get('nbv.stale'));
+    const signedIn = hasToken && !stale && Boolean(store.get('nbv.oauth'));
     const login = signedIn ? String(store.get('nbv.login') || '') : '';
-    settingsBtn.textContent = login ? '@' + shortLogin(login)
+    settingsBtn.textContent = stale ? 'Sign in again'
+      : login ? '@' + shortLogin(login)
       : signedIn ? 'Signed in' : hasToken ? 'Token saved' : 'Private repos';
-    settingsBtn.title = login ? `Signed in as ${login}`
+    settingsBtn.title = stale ? 'GitHub no longer accepts the saved token. Sign in again or paste a new one.'
+      : login ? `Signed in as ${login}`
       : signedIn ? 'Signed in with GitHub'
       : hasToken ? 'A GitHub token is saved in this browser'
       : 'Sign in or add a token for private repos';
@@ -2645,16 +2648,38 @@
     } catch { return ''; /* a revoked or expired token leaves the public listing alone */ }
   }
 
-  // After a sign-in, name the account on the button. A revoked token keeps the generic label.
-  async function loadLogin() {
-    if (!store.get('nbv.oauth') || store.get('nbv.login')) return;
-    if (await whoami()) syncSettingsBtn();
+  // A saved token can be revoked or expire between visits, and the button used to keep saying Token saved for a
+  // credential GitHub refuses. One request per load decides: a 401 means the token is dead, and anything else (an
+  // outage, the rate limit) leaves the label alone.
+  async function checkSavedToken() {
+    const token = store.get('nbv.token');
+    if (!token) return;
+    let res;
+    try {
+      res = await fetch('https://api.github.com/user', {
+        headers: { accept: 'application/vnd.github+json', authorization: `Bearer ${token}` },
+      });
+    } catch { return; /* offline: what the button says is still the best guess */ }
+    if (res.status === 401) {
+      store.set('nbv.stale', true);
+      syncSettingsBtn();
+      if (dlg.open) showStaleToken(true);
+      return;
+    }
+    if (!res.ok) return;
+    let user = null;
+    try { user = await res.json(); } catch { return; }
+    if (!user || !user.login) return;
+    store.set('nbv.login', String(user.login));
+    store.del('nbv.stale');
+    syncSettingsBtn();
   }
 
   function openSettings() {
     tokInput.value = store.get('nbv.token') || '';
     tokError.hidden = true;
     hideSignInError();
+    showStaleToken(Boolean(store.get('nbv.token')) && Boolean(store.get('nbv.stale')));
     // Clearing is one action, so its label says which one it means here.
     clearBtn.textContent = store.get('nbv.oauth') ? 'Sign out' : 'Remove token';
     dlg.showModal();
@@ -2688,11 +2713,12 @@
     if (!TOKEN_OK.test(t)) return;
     store.set('nbv.token', t);
     store.set('nbv.oauth', true);
+    store.del('nbv.stale'); // a fresh token is checked like any other
     store.del('nbv.login'); // a new sign-in can be a different account
     tokInput.value = t;
     syncSettingsBtn();
     hideSignInError();
-    loadLogin();
+    checkSavedToken();
     resetSignInLabel(); // the sign-in tab may stay open after handing the token over
     if (dlg.open) dlg.close('cancel'); // the close handler must not overwrite what just arrived
     route();
@@ -2710,6 +2736,13 @@
     if (!oauthErr) return;
     oauthErr.hidden = true;
     oauthErr.textContent = '';
+  }
+
+  const staleNote = document.getElementById('token-stale');
+
+  // A token GitHub refused is reported where it is managed, so it is clear which credential needs replacing.
+  function showStaleToken(on) {
+    if (staleNote) staleNote.hidden = !on;
   }
 
   // A sign-in GitHub refused says why in the dialog that started it, so the reason is not left in a popup that
@@ -2773,7 +2806,7 @@
 
   settingsBtn.addEventListener('click', openSettings);
   syncSettingsBtn();
-  loadLogin();
+  checkSavedToken();
   saveBtn.addEventListener('click', e => {
     const t = tokInput.value.trim();
     if (!t || TOKEN_OK.test(t)) { tokError.hidden = true; return; }
@@ -2790,10 +2823,12 @@
       const t = tokInput.value.trim();
       if (t) store.set('nbv.token', t); else store.del('nbv.token');
       store.del('nbv.oauth');
+      store.del('nbv.stale');
     } else if (v === 'clear') {
       if (store.get('nbv.oauth')) revokeToken();
       store.del('nbv.token');
       store.del('nbv.oauth');
+      store.del('nbv.stale');
     } else {
       return;
     }

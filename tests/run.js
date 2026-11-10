@@ -286,7 +286,11 @@ test('private repo: a saved token opens a notebook through the Contents API', as
   await run({
     hash: H, init: tokenInit,
     raw: (u, req) => { seen.raw.push(req.headers()['authorization'] || ''); return { status: 404, body: 'Not Found', type: 'text/plain' }; },
-    api: (u, req) => { seen.api.push({ u, auth: req.headers()['authorization'] || '' }); return { body, type: 'application/vnd.github.raw' }; },
+    api: (u, req) => {
+      if (/\/user$/.test(u)) return { body: { login: 'me' } };
+      seen.api.push({ u, auth: req.headers()['authorization'] || '' });
+      return { body, type: 'application/vnd.github.raw' };
+    },
   }, async ({ page }) => {
     const s = await state(page);
     assert(s.cells === 1 && /private hello/.test(await page.textContent('.cells')), s);
@@ -298,7 +302,7 @@ test('private repo: a saved token opens a notebook through the Contents API', as
 
 test('private repo: the token is not sent to raw.githubusercontent.com, and public files stay on the raw host', async () => {
   let api = 0;
-  await run({ hash: H, raw: good, api: () => { api++; return { body: '{}' }; }, init: tokenInit }, async ({ page }) => {
+  await run({ hash: H, raw: good, api: u => { if (!/\/user$/.test(u)) api++; return { body: '{}' }; }, init: tokenInit }, async ({ page }) => {
     await page.waitForSelector('.cell');
   });
   assert(api === 0, api);
@@ -326,6 +330,48 @@ test('private repo: a rejected token is explained and offers the token dialog', 
   assert(s.h1 === 'Token rejected' && s.button, s);
 }));
 
+// init runs in the page, so it may only use what the browser has: helpers from this file are not in scope there.
+const signedInInit = () => {
+  localStorage.setItem('nbv.token', JSON.stringify('ghp_private_test'));
+  localStorage.setItem('nbv.oauth', 'true');
+  localStorage.setItem('nbv.login', JSON.stringify('me'));
+};
+
+test('private repo: a revoked saved token stops claiming it is signed in', () => run({
+  hash: '', init: signedInInit,
+  api: u => (/\/user$/.test(u) ? { status: 401, body: { message: 'Bad credentials' } } : { body: '{}' }),
+}, async ({ page }) => {
+  await page.waitForFunction(() => document.getElementById('settings-btn').textContent === 'Sign in again', null, { timeout: 5000 });
+  const s = await page.evaluate(() => ({
+    text: document.getElementById('settings-btn').textContent,
+    title: document.getElementById('settings-btn').title,
+    kept: Boolean(JSON.parse(localStorage.getItem('nbv.token') || 'null')),
+  }));
+  assert(/no longer accepts/i.test(s.title), s.title);
+  assert(s.kept, 'the token was thrown away instead of being reported');
+  await page.click('#settings-btn');
+  await page.waitForTimeout(150);
+  const note = await page.evaluate(() => {
+    const el = document.getElementById('token-stale');
+    return { hidden: el.hidden, shown: getComputedStyle(el).display !== 'none', text: el.textContent };
+  });
+  assert(!note.hidden && note.shown && /no longer accepts/i.test(note.text), note);
+}));
+
+test('private repo: a working saved token still names the account', () => run({
+  hash: '', init: signedInInit,
+  api: u => (/\/user$/.test(u) ? { body: { login: 'octocat' } } : { body: '{}' }),
+}, async ({ page }) => {
+  await page.waitForFunction(() => localStorage.getItem('nbv.login') === '"octocat"', null, { timeout: 5000 });
+  const s = await page.evaluate(() => ({
+    text: document.getElementById('settings-btn').textContent,
+    title: document.getElementById('settings-btn').title,
+    note: document.getElementById('token-stale').hidden,
+  }));
+  assert(s.text === '@octocat' && s.title === 'Signed in as octocat', s);
+  assert(s.note, 'a working token showed the stale note');
+}));
+
 test('private repos: compare notebooks from two different private repos', async () => {
   const a = JSON.stringify(nb([md('from repo alpha')]));
   const b = JSON.stringify(nb([md('from repo beta')]));
@@ -337,6 +383,7 @@ test('private repos: compare notebooks from two different private repos', async 
     init: tokenInit,
     raw: () => ({ status: 404, body: 'Not Found', type: 'text/plain' }),
     api: (u, req) => {
+      if (/\/user$/.test(u)) return { body: { login: 'me' } };
       calls.push({ u, auth: req.headers()['authorization'] || '' });
       return { body: /\/me\/alpha\//.test(u) ? a : b, type: 'application/vnd.github.raw' };
     },
