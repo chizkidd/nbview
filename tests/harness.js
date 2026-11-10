@@ -43,6 +43,10 @@ async function start() {
     for (const rule of rules) if (matches(rule.pattern, p)) Object.assign(headers, rule.headers);
     // Safari does not match 'self' inside the sandboxed chart frame, so the policy also names the site; here the site is the test server.
     for (const k of Object.keys(headers)) headers[k] = headers[k].replace('https://nbview.org', base);
+    // Production is https, where `connect-src https:` already allows the worker to fetch the site's own files. These tests
+    // serve over http, so name the test origin too, or the worker's fetch of its precache list fails and anything the page
+    // asks for after the worker takes over (the notebook's fonts among them) is answered with Response.error().
+    if (headers['Content-Security-Policy']) headers['Content-Security-Policy'] = headers['Content-Security-Policy'].replace('connect-src https:', `connect-src https: ${base}`);
     res.writeHead(200, headers);
     fs.createReadStream(file).pipe(res);
   });

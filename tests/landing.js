@@ -100,6 +100,11 @@ function check(addr, ctx) {
   throw new Error(`${addr} matches no Function, no _redirects rule and no file, so Cloudflare would answer with the app shell`);
 }
 
+// A hash href in a served document is a fragment of that document, not a destination. The shell's brand link shipped
+// that way, and every other link the pages inherit (the bar, the dialogs) comes from the same shell, so this looks at
+// the whole page rather than at the one element that broke.
+const fragmentLinks = html => [...html.matchAll(/<a\b[^>]*\shref="(#[^"]*)"/g)].map(m => m[1]);
+
 // Substitute the {placeholders} the pages use with values that keep the same shape.
 const SAMPLES = {
   owner: 'o', repo: 'r', branch: 'main', older: 'main', newer: 'dev', path: 'nb',
@@ -193,6 +198,11 @@ function addresses(html) {
       // The point of the shell: the bar and the dialog behind its button are the app's, not a second copy.
       assert(html.includes('id="jump-input"') && html.includes('id="theme-btn"') && html.includes('id="settings-btn"'), `${p.path} is missing the app top bar`);
       assert(html.includes('id="settings"'), `${p.path} is missing the dialog the bar opens`);
+      // The brand is a hash link in the shell, where "#/" is home. On a document that is a fragment of itself, so the
+      // click looks like a link, changes the address, and stays on the page.
+      assert(html.includes('<a class="brand" href="/">'), `${p.path} keeps the shell's hash-only brand link, so the logo goes nowhere`);
+      const fragments = fragmentLinks(html);
+      assert(!fragments.length, `${p.path} links to ${fragments.join(' ')}, which is a fragment of the same page, so the click goes nowhere`);
       assert(html.includes('assets/js/theme.js?v=') && html.includes('assets/js/app.js?v='), `${p.path} does not load the app's scripts`);
     }
   });
@@ -256,6 +266,9 @@ function addresses(html) {
     assert(/<body class="is-doc">/.test(html), '/privacy is not a document in the app shell');
     assert(!/class="is-home"/.test(html), '/privacy carries the home body class');
     assert(html.includes('id="jump-input"') && html.includes('id="settings"'), '/privacy has no app top bar');
+    assert(html.includes('<a class="brand" href="/">'), '/privacy keeps the shell\u2019s hash-only brand link, so the logo goes nowhere');
+    const fragments = fragmentLinks(html);
+    assert(!fragments.length, `/privacy links to ${fragments.join(' ')}, which is a fragment of the same page, so the click goes nowhere`);
     assert((html.match(/<h1[\s>]/g) || []).length === 1, '/privacy should have exactly one h1');
     assert(html.includes(`<link rel="canonical" href="${ORIGIN}/privacy">`), '/privacy canonical');
     // The point of the page is that a reader can find it: from the home column, in the markup and in the render,
