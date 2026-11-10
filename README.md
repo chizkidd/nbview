@@ -1,5 +1,7 @@
 # nbview
 
+[![tests](https://github.com/chizkidd/nbview/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/chizkidd/nbview/actions/workflows/tests.yml)
+
 A client-side Jupyter notebook viewer for GitHub repos (public, and private with a read-only token). No server: the browser fetches the `.ipynb` straight from GitHub and renders it, so there’s nothing to crash or queue.
 
 **Live at [nbview.org](https://nbview.org)**
