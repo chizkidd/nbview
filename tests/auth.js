@@ -131,6 +131,41 @@ test('the client only stores a token that looks like one', () => {
   assert(/revokeToken\(\)/.test(app), 'revocation on clear');
 });
 
+test('a second sign-in attempt does not cancel the first', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ access_token: 'ghu_two' }), { headers: { 'content-type': 'application/json' } });
+  const first = await api.onRequest({ request: req('/auth/login'), env: ENV });
+  const a = new URL(first.headers.get('location')).searchParams.get('state');
+  const second = await api.onRequest({ request: req('/auth/login', { headers: { cookie: first.headers.get('set-cookie').split(';')[0] } }), env: ENV });
+  const b = new URL(second.headers.get('location')).searchParams.get('state');
+  const both = second.headers.get('set-cookie').split(';')[0];
+  assert(a !== b, 'two attempts share a state');
+  assert(both.includes(a) && both.includes(b), both);
+  const html = await (await api.onRequest({ request: req(`/auth/callback?code=c&state=${a}`, { headers: { cookie: both } }), env: ENV })).text();
+  assert(/ghu_two/.test(html), 'the earlier attempt was cancelled by the later one');
+});
+
+test('only the five most recent attempts stay valid', async () => {
+  let cookie = '';
+  const states = [];
+  for (let i = 0; i < 7; i++) {
+    const res = await api.onRequest({ request: req('/auth/login', { headers: cookie ? { cookie } : {} }), env: ENV });
+    states.push(new URL(res.headers.get('location')).searchParams.get('state'));
+    cookie = res.headers.get('set-cookie').split(';')[0];
+  }
+  const kept = cookie.replace(/^nbv_oauth=/, '').split('.');
+  assert(kept.length === 5, kept.length);
+  assert(kept.includes(states[6]) && !kept.includes(states[0]), kept);
+});
+
+test('a code GitHub will not exchange offers a retry instead of a dead end', async () => {
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: 'bad_verification_code' }), { headers: { 'content-type': 'application/json' } });
+  const login = await api.onRequest({ request: req('/auth/login'), env: ENV });
+  const state = new URL(login.headers.get('location')).searchParams.get('state');
+  const html = await (await api.onRequest({ request: req(`/auth/callback?code=c&state=${state}`, { headers: { cookie: 'nbv_oauth=' + state } }), env: ENV })).text();
+  assert(/bad_verification_code/.test(html), html.slice(0, 300));
+  assert(/href="\/auth\/login"/.test(html), 'no retry link');
+});
+
 (async () => {
   api = await import(pathToFileURL(path.join(ROOT, 'functions', 'auth', '[[path]].js')).href);
   const realFetch = globalThis.fetch;

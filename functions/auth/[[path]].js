@@ -37,6 +37,21 @@ function newState() {
 
 const clearCookie = `${COOKIE}=; Path=/auth; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
 
+// More than one attempt can be in flight: a second click on Sign in, or the same link opened twice. Each keeps
+// its own state and the cookie carries the recent ones, so an older attempt still finishes instead of being
+// cancelled by whichever attempt was started last.
+const STATE_MAX = 5;
+const STATE_OK = /^[0-9a-f]{32}$/;
+
+function statesIn(request) {
+  const raw = stateCookie(request);
+  return raw ? raw.split('.').filter(s => STATE_OK.test(s)) : [];
+}
+
+function stateCookieFor(states) {
+  return `${COOKIE}=${states.slice(-STATE_MAX).join('.')}; Path=/auth; Max-Age=600; HttpOnly; Secure; SameSite=Lax`;
+}
+
 // The page that closes the popup. The token travels in a meta tag rather than the URL, so it never lands in a
 // history entry or a referrer.
 function callbackPage({ result, site }) {
@@ -50,7 +65,8 @@ function callbackPage({ result, site }) {
 <style>body{font:14px/1.5 system-ui,sans-serif;margin:2rem;color:#1a1a1a}p{margin:0 0 .75rem}a{color:#0b5cad}</style>
 </head><body>
 <p id="oauth-status">${result.token ? 'Signed in. Finishing…' : esc(result.error || 'Sign-in failed.')}</p>
-${result.token ? '' : `<p><a href="${esc(site)}/#/">Back to nbview</a></p>`}
+${result.token ? '' : `<p><a href="/auth/login">Try again with GitHub</a></p>
+<p><a href="${esc(site)}/#/">Back to nbview</a></p>`}
 <script src="/assets/js/auth-callback.js"></script>
 </body></html>
 `;
@@ -84,7 +100,7 @@ export async function onRequest({ request, env }) {
       status: 302,
       headers: {
         location: target.toString(),
-        'set-cookie': `${COOKIE}=${state}; Path=/auth; Max-Age=600; HttpOnly; Secure; SameSite=Lax`,
+        'set-cookie': stateCookieFor([...statesIn(request).filter(s => s !== state), state]),
         'cache-control': 'no-store',
       },
     });
@@ -108,7 +124,7 @@ export async function onRequest({ request, env }) {
     const code = url.searchParams.get('code') || '';
     const denied = url.searchParams.get('error');
     if (denied) return html(callbackPage({ result: { error: 'Sign-in was cancelled.' }, site }));
-    if (!code || !state || state !== stateCookie(request) || state.length < 16) {
+    if (!code || !state || !STATE_OK.test(state) || !statesIn(request).includes(state)) {
       return html(callbackPage({ result: { error: 'That sign-in link is incomplete or expired. Try again.' }, site }));
     }
 
@@ -124,7 +140,10 @@ export async function onRequest({ request, env }) {
       return html(callbackPage({ result: { error: "Couldn't reach GitHub to finish signing in." }, site }));
     }
     if (!data || !data.access_token) {
-      return html(callbackPage({ result: { error: (data && data.error_description) || 'GitHub did not return a token.' }, site }));
+      // Say what GitHub answered: usually a code already used, or one that expired while the sign-in tab sat open.
+      const why = (data && (data.error_description || data.error)) || 'GitHub did not return a token.';
+      console.warn('github sign-in exchange failed:', (data && data.error) || 'no access_token');
+      return html(callbackPage({ result: { error: why }, site }));
     }
     return html(callbackPage({ result: { token: String(data.access_token), scope: String(data.scope || '') }, site }));
   }

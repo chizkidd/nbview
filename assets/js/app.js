@@ -2689,14 +2689,53 @@
     tokInput.value = t;
     syncSettingsBtn();
     loadLogin();
+    resetSignInLabel(); // the sign-in tab may stay open after handing the token over
     if (dlg.open) dlg.close('cancel'); // the close handler must not overwrite what just arrived
     route();
   });
 
+  // Sign in with GitHub opens a tab of its own. A second click must not restart it: every /auth/login mints a
+  // new state and replaces the one the open tab is about to come back with, which is what makes sign-in look
+  // like it needs several tries. So an open tab is brought forward instead, and the button says what is
+  // happening until that tab closes.
+  const OAUTH_LABEL = 'Sign in with GitHub';
+  let oauthWin = null;
+  let oauthWatch = 0;
+
+  function resetSignInLabel() {
+    clearInterval(oauthWatch);
+    oauthWatch = 0;
+    oauthWin = null;
+    if (!oauthBtn) return;
+    oauthBtn.textContent = OAUTH_LABEL;
+    oauthBtn.title = 'Sign in with GitHub for private repositories';
+  }
+
+  function watchSignIn(w) {
+    clearInterval(oauthWatch);
+    oauthBtn.textContent = 'Waiting for GitHub';
+    oauthBtn.title = 'Finish signing in in the GitHub tab that just opened';
+    oauthWatch = setInterval(() => {
+      let closed = true;
+      try { closed = w.closed; } catch { /* a window from another context counts as closed */ }
+      if (closed) resetSignInLabel();
+    }, 500);
+  }
+
   if (oauthBtn) {
     oauthBtn.addEventListener('click', () => {
+      if (oauthWin && !oauthWin.closed) {
+        try { oauthWin.focus(); } catch { /* the tab is gone, so open a fresh one below */ }
+        return;
+      }
       const w = window.open('/auth/login', 'nbview-github-signin', 'width=520,height=680');
-      if (!w) oauthBtn.title = 'Allow pop-ups for this site, then try again';
+      if (!w) {
+        oauthBtn.textContent = 'Allow pop-ups, then sign in';
+        oauthBtn.title = 'The browser blocked the sign-in tab. Allow pop-ups for this site, then try again.';
+        return;
+      }
+      oauthWin = w;
+      watchSignIn(w);
     });
   }
 
