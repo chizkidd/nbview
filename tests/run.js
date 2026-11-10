@@ -849,26 +849,101 @@ test('compare: a file missing at one version, an unknown ref and a bad link expl
   });
 });
 
-test('compare dialog: pick a recent commit, submit, and land on the diff', () => {
+test('compare dialog: the file history loads on open, and picking a commit lands on the diff', () => {
   const sha = 'a'.repeat(40);
   return run({
     hash: H, settle: 400,
     raw: u => ({ body: JSON.stringify(u.includes(sha) ? oldNb : newNb) }),
     api: u => (/\/commits\?/.test(u) ? { body: JSON.stringify([{ sha, commit: { message: 'Tidy the intro\n\nlong body', author: { date: '2026-01-02T03:04:05Z' } } }, { sha: 'bad', commit: {} }]) } : null),
-  }, async ({ page }) => {
+  }, async ({ page, requests }) => {
     await page.click('#compare-btn');
     assert(await page.evaluate(() => document.querySelector('#compare-dialog').open), 'dialog did not open');
     await page.fill('#compare-base', 'two words');
     await page.click('#compare-form button[type="submit"]');
     assert(await page.evaluate(() => document.querySelector('#compare-dialog').open && !document.querySelector('#compare-error').hidden), 'bad ref accepted');
-    await page.click('#compare-load');
     await page.waitForSelector('.commit-item');
+    const q = requests.find(u => /\/commits\?/.test(u)) || '';
+    assert(/per_page=50/.test(q) && /[?&]page=1/.test(q) && /path=/.test(q), q);
     assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 1 && /Tidy the intro/.test(document.querySelector('.commit-item').textContent)), 'commit list');
+    assert(await page.evaluate(() => document.querySelector('#compare-load').hidden), 'Load more should stay hidden for a short history');
     await page.click('.commit-item');
+    assert(await page.evaluate(() => document.querySelector('.commit-item').getAttribute('aria-pressed') === 'true'), 'picked commit is not marked');
     await page.click('#compare-form button[type="submit"]');
     await page.waitForSelector('.diffview');
     const r = await page.evaluate(() => ({ hash: decodeURIComponent(location.hash), sum: document.querySelector('#d-summary').textContent }));
     assert(r.hash === `#/compare/github/o/r/${sha}...main/t.ipynb` && /modified/.test(r.sum), r);
+  });
+});
+
+test('compare dialog: older commits load a page at a time, to the end of the history', () => {
+  const mk = i => ({ sha: i.toString(16).padStart(40, '0'), commit: { message: `v${i}`, author: { date: '2026-01-02T03:04:05Z' } } });
+  const first = Array.from({ length: 50 }, (_, i) => mk(i + 1));
+  return run({
+    hash: H, settle: 400,
+    raw: () => ({ body: JSON.stringify(newNb) }),
+    api: u => (/\/commits\?/.test(u) ? { body: JSON.stringify(/[?&]page=2/.test(u) ? [mk(51), mk(52)] : first) } : null),
+  }, async ({ page, requests }) => {
+    await page.click('#compare-btn');
+    await page.waitForSelector('.commit-item');
+    let r = await page.evaluate(() => ({ n: document.querySelectorAll('.commit-item').length, hidden: document.querySelector('#compare-load').hidden, label: document.querySelector('#compare-load').textContent }));
+    assert(r.n === 50 && !r.hidden && /Load more commits/.test(r.label), r);
+    await page.click('#compare-load');
+    await page.waitForFunction(() => document.querySelectorAll('.commit-item').length === 52);
+    r = await page.evaluate(() => {
+      const items = [...document.querySelectorAll('.commit-item')];
+      return { n: items.length, hidden: document.querySelector('#compare-load').hidden, first: items[0].textContent, last: items[51].textContent };
+    });
+    assert(r.n === 52 && r.hidden && /v1\b/.test(r.first) && /v52\b/.test(r.last), r);
+    assert(requests.some(u => /\/commits\?/.test(u) && /[?&]page=2/.test(u)), 'page 2 was not requested');
+  });
+});
+
+test('compare dialog: a rate-limited history says so and links to GitHub', () => {
+  const reset = Math.floor((Date.now() + 4 * 60 * 1000) / 1000);
+  return run({
+    hash: H, settle: 400,
+    raw: () => ({ body: JSON.stringify(newNb) }),
+    api: u => (/\/commits\?/.test(u) ? { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) }, body: { message: 'API rate limit exceeded for 1.2.3.4.' } } : null),
+  }, async ({ page }) => {
+    await page.click('#compare-btn');
+    await page.waitForSelector('#compare-error:not([hidden])');
+    const r = await page.evaluate(() => {
+      const err = document.querySelector('#compare-error');
+      const a = err.querySelector('a');
+      return { text: err.textContent, href: a && a.getAttribute('href'), target: a && a.target, rel: a && a.rel, note: a && a.textContent, more: document.querySelector('#compare-load').hidden };
+    });
+    assert(/limit for signed-out requests is used up/.test(r.text) && /resets in about [1-5] min/.test(r.text), r);
+    assert(r.href === 'https://github.com/o/r/commits/main/t.ipynb' && r.target === '_blank' && /noopener/.test(r.rel), r);
+    assert(/open this file’s history on GitHub/.test(r.note), r);
+    assert(r.more && !/Folder browsing/.test(r.text), 'folder copy or a visible Load more leaked into the compare dialog');
+  });
+});
+
+test('compare dialog: the filter narrows the loaded history by message, author or date', () => {
+  const mk = (i, author) => ({ sha: i.toString(16).padStart(40, '0'), commit: { message: `Step ${i}`, author: { name: author, date: '2026-01-02T03:04:05Z' } } });
+  const list = Array.from({ length: 30 }, (_, i) => mk(i + 1, i % 2 ? 'Grace Hopper' : 'Ada Lovelace'));
+  return run({
+    hash: H, settle: 400,
+    raw: () => ({ body: JSON.stringify(newNb) }),
+    api: u => (/\/commits\?/.test(u) ? { body: JSON.stringify(list) } : null),
+  }, async ({ page }) => {
+    await page.click('#compare-btn');
+    await page.waitForSelector('.commit-item');
+    const shown = () => page.evaluate(() => [...document.querySelectorAll('.commit-item')].filter(b => !b.hidden).length);
+    const count = () => page.evaluate(() => ({ hidden: document.querySelector('#compare-count').hidden, text: document.querySelector('#compare-count').textContent }));
+    assert(await shown() === 30 && (await count()).hidden, 'the whole history should be visible and uncounted');
+    await page.fill('#compare-filter', 'ada');
+    assert(await shown() === 15, 'author filter');
+    const c = await count();
+    assert(!c.hidden && /15 of 30 loaded commits match/.test(c.text), c);
+    await page.fill('#compare-filter', '2026-01');
+    assert(await shown() === 30, 'date filter');
+    await page.fill('#compare-filter', 'step 25');
+    assert(await shown() === 1, 'message filter');
+    await page.fill('#compare-filter', 'no such commit');
+    assert(await shown() === 0 && /No loaded commit matches/.test((await count()).text), 'empty filter result');
+    await page.fill('#compare-filter', '');
+    assert(await shown() === 30 && (await count()).hidden, 'clearing the filter restores the list');
   });
 });
 
@@ -982,10 +1057,8 @@ test('compare with a gist: gist link vs a GitHub notebook', () => run({ hash: '#
 
 test('compare a gist with an earlier revision of itself', () => run({ hash: '#/url/' + encodeURIComponent(gistRaw(REV2)), settle: 400, api: gistApi, other: gistHosts }, async ({ page }) => {
   await page.click('#compare-btn');
-  assert(await page.evaluate(() => /revision of this gist/.test(document.querySelector('#compare-base-label').textContent)), 'dialog not in gist mode');
-  await page.click('#compare-load');
-  await page.waitForSelector('.commit-item');
-  assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 2), 'revision list');
+  assert(await page.evaluate(() => /revision of this gist/.test(document.querySelector('#compare-base-label').textContent)), 'dialog not in gist mode');    await page.waitForSelector('.commit-item');
+    assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 2), 'revision list');
   await page.click('.commit-item:nth-child(2)');
   await page.click('#compare-form button[type="submit"]');
   await page.waitForSelector('.diffview');

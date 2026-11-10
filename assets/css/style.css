@@ -656,7 +656,9 @@ html[data-embed] main { padding-top: 0.5rem; }
 .commit-list { max-height: 14rem; overflow-y: auto; margin-top: 0.6rem; display: flex; flex-direction: column; }
 .commit-item { font: 12px var(--mono); text-align: left; background: none; color: var(--ink); border: 0; border-radius: 3px; padding: 0.4rem 0.5rem; cursor: pointer; white-space: pre-wrap; overflow-wrap: anywhere; }
 .commit-item:hover, .commit-item:focus-visible { background: var(--code-bg); }
+.commit-item[aria-pressed="true"] { background: var(--code-bg); font-weight: 600; }
 #compare-load { margin-top: 0.75rem; }
+.compare-count { color: var(--muted); font-size: 0.85rem; margin: 0.35rem 0 0; }
 
 .compare-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
 .compare-slot { display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; text-align: center; }
