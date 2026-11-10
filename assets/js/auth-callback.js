@@ -9,7 +9,12 @@
   try { result = JSON.parse((meta && meta.getAttribute('content')) || '{}'); } catch (e) { /* no result */ }
 
   if (!result || !result.token) {
-    if (status) status.textContent = (result && result.error) || 'Sign-in failed.';
+    var why = String((result && result.error) || 'Sign-in failed.');
+    if (status) status.textContent = why;
+    // Say why on the page that opened this tab, so the reason is not left behind in a window that closes.
+    try {
+      if (window.opener && !window.opener.closed) window.opener.postMessage({ type: 'nbv-signin-error', error: why }, location.origin);
+    } catch (e) { /* opener went away */ }
     return;
   }
 

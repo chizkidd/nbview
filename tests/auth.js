@@ -164,6 +164,7 @@ test('a code GitHub will not exchange offers a retry instead of a dead end', asy
   const html = await (await api.onRequest({ request: req(`/auth/callback?code=c&state=${state}`, { headers: { cookie: 'nbv_oauth=' + state } }), env: ENV })).text();
   assert(/bad_verification_code/.test(html), html.slice(0, 300));
   assert(/href="\/auth\/login"/.test(html), 'no retry link');
+  assert(/nbv-oauth-result" content="[^"]*bad_verification_code/.test(html), 'the reason is not handed to the page that opened the tab');
 });
 
 (async () => {
