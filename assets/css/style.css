@@ -658,6 +658,7 @@ html[data-embed] main { padding-top: 0.5rem; }
 .commit-item:hover, .commit-item:focus-visible { background: var(--code-bg); }
 .commit-item[aria-pressed="true"] { background: var(--code-bg); font-weight: 600; }
 #compare-load { margin-top: 0.75rem; }
+.compare-count { color: var(--muted); font-size: 0.85rem; margin: 0.35rem 0 0; }
 
 .compare-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
 .compare-slot { display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; text-align: center; }

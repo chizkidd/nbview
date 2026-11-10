@@ -26,7 +26,7 @@
   <link rel="preload" href="assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="theme-color" content="#2D52CF">
   <meta name="apple-mobile-web-app-title" content="nbview">
-  <link rel="stylesheet" href="assets/css/style.css?v=2fd29f7d">
+  <link rel="stylesheet" href="assets/css/style.css?v=35705c16">
   <script src="assets/js/theme.js?v=5331cfe1"></script>
 </head>
 <body class="is-home">
@@ -82,8 +82,11 @@
       <p>Compare <code id="compare-file"></code> at <code id="compare-head"></code> with another version of it, or with a different notebook.</p>
       <label for="compare-base" id="compare-base-label">Another version (branch, tag or commit)</label>
       <input id="compare-base" type="text" placeholder="main, v1.0 or a commit" autocomplete="off" spellcheck="false">
-      <button class="btn" id="compare-load" type="button" hidden>Load more commits</button>
+      <label for="compare-filter">Filter these commits by message, author or date</label>
+      <input id="compare-filter" type="search" placeholder="e.g. tidy, Ada, 2026-01" autocomplete="off" spellcheck="false">
+      <p id="compare-count" class="compare-count" aria-live="polite" hidden></p>
       <div id="compare-commits" class="commit-list"></div>
+      <button class="btn" id="compare-load" type="button" hidden>Load more commits</button>
       <label for="compare-other" class="compare-or">Or a different notebook (link or owner/repo/path.ipynb)</label>
       <input id="compare-other" type="text" placeholder="https://github.com/owner/repo/blob/main/other.ipynb" autocomplete="off" spellcheck="false">
       <p id="compare-error" class="form-error" role="alert" hidden></p>
@@ -111,6 +114,6 @@
   <script defer src="assets/vendor/purify.min.js?v=c2b28807"></script>
   <script defer src="assets/js/export.js?v=507cf0b0"></script>
   <script defer src="assets/js/diff.js?v=40f7b674"></script>
-  <script defer src="assets/js/app.js?v=32c68d16"></script>
+  <script defer src="assets/js/app.js?v=eb4431b7"></script>
 </body>
 </html>

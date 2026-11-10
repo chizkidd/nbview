@@ -125,7 +125,10 @@ async function open(opts = {}) {
     else if (host === 'api.github.com') h = pick(opts.api);
     if (!h && opts.other) h = pick(opts.other);
     if (!h || h.abort) return route.abort();
-    return route.fulfill({ status: h.status || 200, body: h.body === undefined ? '' : h.body, contentType: h.type || 'application/json', headers: { 'access-control-allow-origin': '*' } });
+    const headers = { 'access-control-allow-origin': '*', ...(h.headers || {}) };
+    // Custom response headers (the rate limit ones) are unreadable to page JS unless the response exposes them, as GitHub does.
+    if (h.headers) headers['access-control-expose-headers'] = Object.keys(h.headers).join(', ');
+    return route.fulfill({ status: h.status || 200, body: h.body === undefined ? '' : h.body, contentType: h.type || 'application/json', headers });
   });
   const page = await ctx.newPage();
   const errors = [];
