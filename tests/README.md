@@ -17,7 +17,7 @@ npm test
 
 ## A fresh machine, and CI
 
-Node 20 or newer. There is no lockfile on purpose: `package-lock.json` is ignored, and the two dev dependencies are pinned to exact versions in `package.json`. Install with `npm install`; `npm ci` has nothing to read and fails.
+Node 20 or newer; the workflow pins 24. There is no lockfile on purpose: `package-lock.json` is ignored, and the two dev dependencies are pinned to exact versions in `package.json`. Install with `npm install`; `npm ci` has nothing to read and fails.
 
 ```
 npm install
@@ -37,16 +37,7 @@ A browser unpacked by hand also needs its libraries on the loader path:
 LD_LIBRARY_PATH=/path/to/usr/lib/x86_64-linux-gnu CHROMIUM_PATH=/path/to/chrome npm test
 ```
 
-GitHub Actions, in full:
-
-```yaml
-- uses: actions/setup-node@v4
-  with:
-    node-version: 20
-- run: npm install
-- run: npx playwright install --with-deps chromium
-- run: npm test
-```
+GitHub Actions: `.github/workflows/tests.yml` runs those commands in that order, on every pull request and every push to `main`.
 
 Every test runs offline except `node tests/live.js`, which is not part of `npm test`.
 

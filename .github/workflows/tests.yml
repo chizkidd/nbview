@@ -1,0 +1,34 @@
+# The test suite, run the way tests/README.md describes it for a fresh machine.
+#
+# No lockfile is tracked: the two dev dependencies are pinned exactly in package.json, so this installs with
+# `npm install` (`npm ci` has nothing to read) and setup-node's npm cache is deliberately not used, since it needs a
+# lockfile to key on. `--with-deps` installs the system libraries and fonts Chromium needs on a bare image.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push to a pull request makes the previous run pointless; a push to main is a record, so it is left to finish.
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    # ubuntu-latest moved to 26.04, which Playwright 1.56.1 refuses to install on; pin the image it supports.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
