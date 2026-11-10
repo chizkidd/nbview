@@ -412,6 +412,26 @@ test('settings: GitHub sign-in stays hidden when the deployment has no OAuth app
   assert(await page.evaluate(() => !document.getElementById('token-input').hidden), 'token box hidden');
 }));
 
+test('settings: a second click on Sign in brings the open tab forward instead of restarting it', () => run({ hash: '', settle: 300 }, async ({ page }) => {
+  await page.click('#settings-btn');
+  await page.evaluate(() => {
+    document.getElementById('oauth-block').hidden = false;
+    window.__opens = 0;
+    window.__focused = 0;
+    window.__win = { closed: false, focus() { window.__focused++; } };
+    window.open = () => { window.__opens++; return window.__win; };
+  });
+  await page.click('#oauth-btn');
+  await page.click('#oauth-btn');
+  const s = await page.evaluate(() => ({ opens: window.__opens, focused: window.__focused, label: document.getElementById('oauth-btn').textContent }));
+  assert(s.opens === 1, 'a second click restarted sign-in: ' + JSON.stringify(s));
+  assert(s.focused === 1, 'the open sign-in tab was not brought forward');
+  assert(s.label === 'Waiting for GitHub', s.label);
+  await page.evaluate(() => { window.__win.closed = true; });
+  await page.waitForTimeout(700);
+  assert(await page.evaluate(() => document.getElementById('oauth-btn').textContent) === 'Sign in with GitHub', 'the button did not go back to Sign in with GitHub');
+}));
+
 test('fonts are self-hosted: nothing leaves the site except GitHub', () => run({ hash: H, raw: good, settle: 600 }, async ({ page, requests }) => {
   const external = requests.filter(u => hostOf(u) !== 'raw.githubusercontent.com');
   assert(!external.length, external);
