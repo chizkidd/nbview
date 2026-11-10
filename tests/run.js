@@ -1028,6 +1028,44 @@ test('compare pages pass axe', async () => {
   }
 });
 
+/* ---------- harness ---------- */
+
+// If the injected faces stop reaching a page, text lays out with no glyph metrics: every line box collapses and a dozen
+// tests elsewhere fail over zero height and lines that never wrap. This names the fault once, and says which of the two
+// ways it happened: the injection stopped running, or the site stopped reading the variables it replaces.
+test('harness: the bundled faces reach the page, so text has real metrics', () => run({
+  hash: H, settle: 300,
+  raw: nb([md('word '.repeat(200)), code('print(1)')]),
+}, async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const face = el => (el ? getComputedStyle(el).fontFamily : 'not found');
+    const height = el => (el ? Math.round(el.getBoundingClientRect().height) : 0);
+    // Lines of a paragraph, counted by where the wrapped text starts a new row.
+    const lines = el => {
+      if (!el) return 0;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return new Set([...range.getClientRects()].map(x => Math.round(x.top))).size;
+    };
+    const p = document.querySelector('.cells p');
+    const pre = document.querySelector('.cells pre');
+    return {
+      sans: document.fonts.check('16px "nbv-test-sans"'),
+      mono: document.fonts.check('16px "nbv-test-mono"'),
+      prose: face(p), code: face(pre), h: height(p), lines: lines(p), codeH: height(pre),
+    };
+  });
+  const say = (...parts) => [
+    'The browser suite gives every page the repo’s own fonts, so notebook text has real metrics on a machine with none.',
+    'If tests/harness.js changed: TEST_FONTS must keep the @font-face rules and point --serif, --mono, --nb-sans and --nb-mono at them, and open() must keep injecting it before the page runs.',
+    'If the site changed: notebook prose and code must keep using those four variables, or the injected faces apply to nothing and layout depends on the host again.',
+    ...parts,
+  ].join('\n      ');
+  assert(r.sans && r.mono, say(`Bundled faces loaded: sans ${r.sans}, mono ${r.mono}.`));
+  assert(/nbv-test-sans/.test(r.prose) && /nbv-test-mono/.test(r.code), say(`Prose font: ${r.prose}. Code font: ${r.code}.`));
+  assert(r.h > 0 && r.lines > 1 && r.codeH > 0, say(`Prose box: ${r.h}px over ${r.lines} line(s). Code box: ${r.codeH}px.`));
+}));
+
 /* ---------- typography ---------- */
 
 test('viewer copy: the interface reads like the docs', () => {

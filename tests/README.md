@@ -17,7 +17,7 @@ npm test
 
 ## Fonts
 
-The browser tests need no font installed. `harness.js` gives every page the site’s own faces from `assets/fonts/`, so line boxes, wrapping and scrolling measure the same on a machine with none at all. Without that, notebook text falls back to Helvetica and Arial, a bare container has neither, and text collapses to zero height.
+The browser tests need no font installed. `harness.js` gives every page the site’s own faces from `assets/fonts/`, so line boxes, wrapping and scrolling measure the same on a machine with none at all. Without that, text falls back to the system faces at the end of each stack, a bare container has none of them, and it collapses to zero height.
 
 Opening the app yourself on a bare Linux machine is the case that needs one: install a font package first, or the page looks empty.
 

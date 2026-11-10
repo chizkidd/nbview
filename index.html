@@ -19,13 +19,14 @@
   <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="ard" href="/.well-known/ard.json">
-  <!-- Both fonts are drawn above the fold (body text and the wordmark's code), and the stylesheet only reveals
-       them after it loads, so start them now instead of two round trips later. -->
+  <!-- Every face drawn above the fold (body text, notebook text and the wordmark's code) is started now instead of
+       two round trips later, when the stylesheet would reveal it. -->
   <link rel="preload" href="assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="theme-color" content="#2D52CF">
   <meta name="apple-mobile-web-app-title" content="nbview">
-  <link rel="stylesheet" href="assets/css/style.css?v=3c9b7ede">
+  <link rel="stylesheet" href="assets/css/style.css?v=ecd0a4a0">
   <script src="assets/js/theme.js?v=5331cfe1"></script>
 </head>
 <body class="is-home">
