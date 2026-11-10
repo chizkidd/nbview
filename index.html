@@ -64,6 +64,7 @@
         <p class="hint">Signing in grants read access to all your repositories, because a classic sign-in has no per-repository option. For least privilege, use a fine-grained token below instead.</p>
         <p id="oauth-error" class="form-error" role="alert" hidden></p>
       </div>
+      <p id="token-stale" class="form-error" role="alert" hidden>GitHub no longer accepts the saved token. Sign in again, or paste a new token below.</p>
       <p>To open notebooks from <strong>private repos</strong>, use a <strong>fine-grained token</strong> with <strong>Contents: Read-only</strong> access to those repos. A classic token with no scopes works for public repos and raises the folder-browsing limit.</p>
       <p>Folder browsing allows 60 requests an hour without a token and 5,000 with one; opening public notebooks does not use that limit. The token is stored in this browser only and sent only to api.github.com. The <a href="/privacy">privacy page</a> lists everything nbview keeps.</p>
       <p class="hint"><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Create a fine-grained token</a></p>
@@ -115,6 +116,6 @@
   <script defer src="assets/vendor/purify.min.js?v=c2b28807"></script>
   <script defer src="assets/js/export.js?v=507cf0b0"></script>
   <script defer src="assets/js/diff.js?v=40f7b674"></script>
-  <script defer src="assets/js/app.js?v=cca132d2"></script>
+  <script defer src="assets/js/app.js?v=acb51969"></script>
 </body>
 </html>
