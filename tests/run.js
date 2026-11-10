@@ -1028,6 +1028,60 @@ test('compare pages pass axe', async () => {
   }
 });
 
+/* ---------- harness ---------- */
+
+// If the injected faces stop reaching a page, text lays out with no glyph metrics: every line box collapses and a dozen
+// tests elsewhere fail over zero height and lines that never wrap. This names the fault once, and says which of the two
+// ways it happened: the injection stopped running, or the site stopped reading the variables it replaces.
+test('harness: the bundled faces reach the page, so text has real metrics', () => run({
+  hash: H, settle: 300,
+  raw: nb([md('word '.repeat(200)), code('print(1)')]),
+}, async ({ page }) => {
+  const r = await page.evaluate(() => {
+    const face = el => (el ? getComputedStyle(el).fontFamily : 'not found');
+    const height = el => (el ? Math.round(el.getBoundingClientRect().height) : 0);
+    // Lines of a paragraph, counted by where the wrapped text starts a new row.
+    const lines = el => {
+      if (!el) return 0;
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      return new Set([...range.getClientRects()].map(x => Math.round(x.top))).size;
+    };
+    const p = document.querySelector('.cells p');
+    const pre = document.querySelector('.cells pre');
+    return {
+      sans: document.fonts.check('16px "nbv-test-sans"'),
+      mono: document.fonts.check('16px "nbv-test-mono"'),
+      prose: face(p), code: face(pre), h: height(p), lines: lines(p), codeH: height(pre),
+    };
+  });
+  const say = (...parts) => [
+    'The browser suite gives every page the repo’s own fonts, so notebook text has real metrics on a machine with none.',
+    'If tests/harness.js changed: TEST_FONTS must keep the @font-face rules and point --serif, --mono, --nb-sans and --nb-mono at them, and open() must keep injecting it before the page runs.',
+    'If the site changed: notebook prose and code must keep using those four variables, or the injected faces apply to nothing and layout depends on the host again.',
+    ...parts,
+  ].join('\n      ');
+  assert(r.sans && r.mono, say(`Bundled faces loaded: sans ${r.sans}, mono ${r.mono}.`));
+  assert(/nbv-test-sans/.test(r.prose) && /nbv-test-mono/.test(r.code), say(`Prose font: ${r.prose}. Code font: ${r.code}.`));
+  assert(r.h > 0 && r.lines > 1 && r.codeH > 0, say(`Prose box: ${r.h}px over ${r.lines} line(s). Code box: ${r.codeH}px.`));
+}));
+
+// Once the worker takes over it answers every same-origin request itself, and its own fetch is bound by the policy
+// delivered with sw.js. Production is https, where `connect-src https:` covers the site; the tests serve http, so
+// harness.js names the test origin too. Without that line the worker's fetch dies, the page is handed Response.error(),
+// and the request shows up as net::ERR_FAILED with no server hit and no route event. This asks for a file the page has
+// not already loaded, after the worker is in control, so it exercises that path instead of the preload cache.
+test('harness: the worker can still fetch the site once it takes over', () => run({ hash: '', settle: 400 }, async ({ page }) => {
+  await page.waitForFunction(() => !!(navigator.serviceWorker && navigator.serviceWorker.controller), null, { timeout: 10000 });
+  const r = await page.evaluate(async () => {
+    const src = document.querySelector('link[rel="preload"][as="font"]').getAttribute('href');
+    const face = new FontFace('nbv-test-late', `url(${src}?late=1)`);
+    document.fonts.add(face);
+    return face.load().then(() => 'loaded', e => 'error: ' + (e && e.name));
+  });
+  assert(r === 'loaded', 'A font requested after the worker took over did not load: ' + r + '.\n      tests/harness.js must keep the test origin in the CSP it serves (connect-src), or the worker cannot fetch the site\u2019s own files once it controls the page.');
+}));
+
 /* ---------- typography ---------- */
 
 test('viewer copy: the interface reads like the docs', () => {
