@@ -23,3 +23,7 @@ tests/out/
 tests/results/
 playwright-report/
 test-results/
+
+# Local test toolchain and scratch output
+.browser-libs/
+artifacts/
