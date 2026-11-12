@@ -4,6 +4,10 @@ All notable changes to nbview. Dates are when the release’s last change landed
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-12
+
+Compare a notebook against any earlier version in its own history, count the events a page view cannot see, and keep the whole site readable offline.
+
 ### Added
 - **Counts for the events a page view cannot see.** The viewer is one hash-routed page, so analytics counted the document that arrived and nothing else: opening ten notebooks in one tab looked like one visit. The page now posts one word (`open`, `compare` or `embed`) to `/count`, and the Function adds one to a counter in a KV namespace. No address, user agent, notebook, repo, cookie or timestamp is stored with it, Do Not Track and Global Privacy Control are honoured, and a deployment with no namespace bound answers 204 and records nothing. Totals print at `/count`, an ordinary public page in the app’s shell with no account or sign-in, and the same figures are JSON at `/count?format=json`; `tests/count.js` covers the allowlist, the writes, the page, the JSON and the opt-out.
 - **A privacy note at `/privacy`.** One page saying what stays in the browser (a GitHub token, the recently opened list, the theme, a five-minute folder cache in the tab), what goes to GitHub and where, that notebook images from other hosts wait for a click, that there is no nbview server and no account, what the analytics count, and the one sign-in cookie the site can set. Linked from the home column, from both guides and from the dialog that asks for a token, and listed in `sitemap.xml`.
@@ -232,6 +236,7 @@ First release.
 - JavaScript outputs (ipywidgets, Plotly, Bokeh) are not run; a note points to Colab.
 - Public GitHub repositories only.
 
+[0.12.0]: https://github.com/chizkidd/nbview/releases/tag/v0.12.0
 [0.11.0]: https://github.com/chizkidd/nbview/releases/tag/v0.11.0
 [0.10.0]: https://github.com/chizkidd/nbview/releases/tag/v0.10.0
 [0.9.0]: https://github.com/chizkidd/nbview/releases/tag/v0.9.0
