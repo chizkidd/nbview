@@ -57,6 +57,10 @@ sudo apt-get install -y --no-install-recommends fonts-dejavu-core
 
 - `preview.js`: Node tests for the link-preview function in `functions/` (it makes no network requests; no browser).
 - `landing.js`: Node tests that every address the two rendered pages print actually resolves: a route with a missing `#` or a missing path segment fails here, not in production.
+- `embed.js`: Node tests for the embed Function: which addresses may be embedded, and the headers and shell the frame receives.
+- `count.js`: Node tests for the counters: the fixed list of event names, the numbers written, the page and JSON totals, and the Do Not Track opt-out.
+- `auth.js`: Node tests for the sign-in Function: status, the redirect and its state cookie, the code exchange, revocation, and the failure message.
+- `sw.js`: Node tests for the offline shell: what it caches, what it never caches, and when a cached copy is refreshed.
 - `prose.js`: Node tests that no tracked text file outside `assets/vendor/` uses an em dash or en dash, and that the Markdown prose and the visible text of the rendered pages keep their curly quotes and plain spaces, so the docs and the page copy cannot drift back to straight punctuation.
 - `harness.js`: starts the server (sending the headers from `_headers`, so tests run under the real CSP) and browser and stubs GitHub (`open()`), gives every page the repo’s own fonts so layout does not depend on the fonts a machine has installed, plus small notebook builders.
 - `run.js`: the tests, one `test(name, fn)` each. Every test also hands the text it leaves on screen to a final test, which checks that the viewer’s own copy has no straight punctuation.

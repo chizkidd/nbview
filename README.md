@@ -17,7 +17,7 @@ A client-side Jupyter notebook viewer for GitHub repos (public, and private with
 - nbviewer links work too: paste one into the box, or just change `nbviewer.org` to `nbview.org` in the address bar
 - Shareable URLs, e.g. `nbview.org/github/owner/repo/blob/main/path/to/notebook.ipynb` (the `#/github/...` form works too), with a preview card (file name and repo) when pasted into Slack, Reddit, X and similar, plus a “Copy link” button on every notebook and a `#` button on every cell that copies a link straight to that cell (`...?cell=12`)
 - A Contents menu built from the notebook’s headings, Find in notebook (press `/`; matches highlight in code, text and outputs, even in very large notebooks, with next and previous), plus hide code, hide outputs, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
-- Compare notebooks: use Compare on any GitHub notebook (pick a branch, tag or commit, any earlier commit in the file’s history, filter that list by message, author or date, or a different notebook), on a gist (earlier revisions), on a local file or a notebook opened by URL; or compare any two notebooks by link, gist link or `owner/repo/path.ipynb` (different repos and branches are fine), or two local files. Changed lines highlight the changed words Changes show cell by cell, in one column (unified) or side by side, with optional output changes
+- Compare notebooks: use Compare on any GitHub notebook (pick a branch, tag or commit, any earlier commit in the file’s history, filter that list by message, author or date, or a different notebook), on a gist (earlier revisions), on a local file or a notebook opened by URL; or compare any two notebooks by link, gist link or `owner/repo/path.ipynb` (different repos and branches are fine), or two local files. Changed lines highlight the changed words, and changes show cell by cell, in one column (unified) or side by side, with optional output changes.
 - Plotly charts can run: a chart that was saved with its data shows a “Run interactive chart” button, and clicking it zooms, pans and hovers inside an isolated frame (off until you click)
 - Export a notebook as a Python script, Markdown, a standalone HTML page, or a PDF (via your browser’s print dialog), all built locally in your browser
 - Download a **clean copy** of the notebook itself: outputs and execution counts removed, or only the markdown cells, so a notebook can be shared without uploading it anywhere
@@ -62,7 +62,9 @@ nbview/
 │                        /count: one word per notebook opened, comparison shown or embed, and nothing else;
 │                        the totals it holds, printed as a page for anyone who asks
 ├── manifest.webmanifest  name, colours and icon for a home screen install
+├── favicon.ico          the tab icon browsers request by name, alongside the SVG and PNG ones
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
+├── sw.js                the service worker: an offline copy of the shell and its stamped CSS and JS
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
 ├── llms.txt             plain-language summary and link formats for AI agents (llmstxt.org)
@@ -81,10 +83,12 @@ nbview/
 │   │   ├── auth-callback.js  hands a sign-in token to the page that opened it
 │   │   └── theme.js     restores light/dark theme before first paint
 │   ├── icon.svg         the [ ] cell mark, used for the tab icon and the wordmark (with favicon-16/32/48, apple-touch-icon, icon-512)
-│   ├── fonts/           JetBrains Mono and Source Serif 4 (self-hosted, Latin)
+│   ├── fonts/           Inter, JetBrains Mono and Source Serif 4 (self-hosted, Latin)
 │   ├── vendor/          marked, DOMPurify, highlight.js, KaTeX, served from this site (no CDN)
+│   ├── screenshots/     captures of the home page for the install prompt
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
+├── scripts/stamp-assets.mjs  writes the ?v= content hash for CSS and JS into index.html
 ├── tests/               regression tests (Playwright)
 ├── package.json         dev dependencies for the tests only
 ├── CHANGELOG.md
@@ -95,7 +99,7 @@ nbview/
 
 ### Run locally
 
-`python -m http.server` in this folder, then open http://localhost:8000. The `_redirects` rules and the `functions/` link previews only apply on Cloudflare Pages, not locally.
+`python3 -m http.server` in this folder, then open http://localhost:8000. The `_redirects` rules and the `functions/` link previews only apply on Cloudflare Pages, not locally.
 
 ### Tests
 
