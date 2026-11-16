@@ -19,6 +19,9 @@ const SPEC = {
 <pre><code>/#/compare/github/{owner}/{repo}/{older}...{newer}/{path}.ipynb
 /#/compare/links/{first-notebook-link}/{second-notebook-link}</code></pre>
 
+<h2>Earlier versions, and renamed files</h2>
+<p><strong>Compare</strong> on a GitHub notebook lists that file’s own commits, so the notebook can be diffed against the version from three runs ago without leaving the page. The list is built from the file’s current path, because that is what GitHub’s commits API reports for a path, and a path does not follow a rename: after a notebook is moved or renamed, the list starts at the rename. The versions before it are still in the repository, so open the notebook at its old path and commit, and use the two-notebook comparison with that link on one side and the current notebook on the other.</p>
+
 <h2>What the diff shows</h2>
 <ul>
   <li>Cells that were added, removed or modified, kept in their original order so the story of the notebook still reads top to bottom.</li>
