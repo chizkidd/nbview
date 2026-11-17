@@ -251,12 +251,27 @@
       ai = i + 1; bi = j + 1;
     }
     flush(A.length, B.length);
-    // Two plots can share the same text marker, so the image data is part of what decides "outputs changed".
-    const imageKey = c => (c.images || []).map(i => i.mime + ':' + i.data).join('|');
+    // Two plots can share the same text marker, so the image data is part of what decides "outputs changed". The
+    // lists are compared in place: joining every plot into one key string would copy the whole image payload again,
+    // once per side, and a notebook of large plots is megabytes of base64.
+    const sameImages = (a, b) => {
+      const x = a.images || [], y = b.images || [];
+      if (x.length !== y.length) return false;
+      for (let i = 0; i < x.length; i++) {
+        if (x[i].mime !== y[i].mime || x[i].data !== y[i].data) return false;
+      }
+      return true;
+    };
     for (const e of out) {
       if (e.kind === 'modified') e.lines = diffLines(e.a.text, e.b.text);
-      if (e.a && e.b) e.outputsChanged = e.a.outputs !== e.b.outputs || imageKey(e.a) !== imageKey(e.b);
+      if (e.a && e.b) e.outputsChanged = e.a.outputs !== e.b.outputs || !sameImages(e.a, e.b);
       if (e.outputsChanged) e.outputLines = diffLines(e.a.outputs, e.b.outputs);
+      // Only a changed cell, or one added or removed, is ever drawn with its images; the rest would otherwise keep
+      // every plot of both notebooks alive for as long as the view is open.
+      if (e.kind === 'same' && !e.outputsChanged) {
+        if (e.a) e.a.images = [];
+        if (e.b) e.b.images = [];
+      }
     }
     return out;
   }
