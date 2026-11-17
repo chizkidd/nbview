@@ -7,6 +7,7 @@
 - GitHub notebook: https://nbview.org/github/{owner}/{repo}/blob/{branch}/{path}.ipynb
 - GitHub repo or folder: https://nbview.org/github/{owner}/{repo}
 - Gist: https://nbview.org/gist/{user}/{id}
+- Every notebook in a repository: https://nbview.org/#/github/{owner}/{repo}/notebooks/{branch}
 - Any direct .ipynb URL that allows cross-origin reads: https://nbview.org/#/url/{url}
 - Replace nbviewer.org with nbview.org in an existing nbviewer link and it works.
 - Add ?cell=N to a notebook link to open it scrolled to cell N.

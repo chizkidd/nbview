@@ -20,6 +20,10 @@ Chores that are easy to forget. There is no build step, so there is little else 
 - `sandbox/plotly/index.html` and `assets/sandbox/plotly-frame.js`: the isolated chart frame. Keep `sandbox="allow-scripts"` (never add `allow-same-origin`) on the iframe in `plotlyBox` in `assets/js/app.js`.
 - `_redirects` and `functions/`: make the nbviewer domain swap work. `/github/*` and `/gist/*` are answered by `functions/` (redirect for people, link preview for crawlers); Cloudflare Pages deploys `functions/` automatically with the site and Functions win over `_redirects`. The `/github/*` and `/gist/*` rules in `_redirects` are the backup for when no Function is invoked (a failed Functions deploy, or the project failing open), so keep them in step with `hashPathFor()` in `functions/_lib/preview.mjs`. Never let a Function failure bubble up: `handle()` falls back to the same plain redirect.
 
+## When a page changes on purpose
+
+- The home page, a notebook and a folder are compared against screenshots in `tests/visual/`. After a deliberate visual change, regenerate them with `UPDATE_VISUAL=1 npm test -- "visual"`, look at the images, and commit them with the change. A mismatch writes the actual screenshot to `tests/out/visual-<name>.png`.
+
 ## Cloudflare and GitHub settings (not in the repo)
 
 - Cloudflare: MFA on the account and HSTS on the zone.
@@ -29,4 +33,4 @@ Chores that are easy to forget. There is no build step, so there is little else 
 
 1. Move the “Unreleased” entries in `CHANGELOG.md` under a new version heading with the date, and merge.
 2. Tag the merge commit (`git tag -a vX.Y.Z -m "vX.Y.Z"`, `git push origin vX.Y.Z`).
-3. Publish a GitHub release with the same notes (`gh release create vX.Y.Z --notes-file notes.md --latest`).
+3. Publish a GitHub release with the same notes (`gh release create vX.Y.Z --notes-file notes.md --latest`). Use the new `CHANGELOG.md` section as the body and keep the tag on the merge commit.
