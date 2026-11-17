@@ -466,6 +466,45 @@ test('GitHub API: an expired history list revalidates and keeps its commits', as
   assert(seen.length === 2 && seen[0] === '' && seen[1] === '"history-v1"', seen);
 });
 
+test('GitHub API: a signed-out copy lasts half an hour, a signed-in one revalidates after five minutes', async () => {
+  const seen = [];
+  const body = [{ name: 't.ipynb', path: 't.ipynb', type: 'file', size: 12, sha: 'a'.repeat(40), html_url: 'https://github.com/o/r/blob/main/t.ipynb' }];
+  const age = (page, mins) => page.evaluate(m => {
+    for (const k of Object.keys(sessionStorage)) {
+      if (!k.startsWith('nbv.c:')) continue;
+      const v = JSON.parse(sessionStorage.getItem(k));
+      v.t -= m * 60000;
+      sessionStorage.setItem(k, JSON.stringify(v));
+    }
+  }, mins);
+  await run({
+    hash: '#/github/o/r/tree/main', settle: 400,
+    api: (u, req) => {
+      if (/\/repos\/o\/r$/.test(u.split('?')[0])) return { body: { default_branch: 'main' } };
+      if (!/\/contents(\?|\/|$)/.test(u)) return null;
+      seen.push({ inm: req.headers()['if-none-match'] || '', auth: Boolean(req.headers().authorization) });
+      return seen.length === 1 ? { body, headers: { etag: '"listing-v1"' } } : { status: 304, headers: { etag: '"listing-v1"' } };
+    },
+  }, async ({ page }) => {
+    await page.waitForSelector('.listing .entry');
+    const revisit = async (mins) => {
+      await age(page, mins);
+      await page.evaluate(() => { location.hash = '#/'; });
+      await page.waitForTimeout(150);
+      await page.evaluate(() => { location.hash = '#/github/o/r/tree/main'; });
+      await page.waitForSelector('.listing .entry');
+    };
+    await revisit(10);
+    assert(seen.length === 1, 'a signed-out copy older than five minutes was requested again');
+    assert(/t\.ipynb/.test(await page.textContent('#listing')), 'the reused copy did not render');
+    await page.evaluate(() => localStorage.setItem('nbv.token', JSON.stringify('ghp_' + 'a'.repeat(30))));
+    await revisit(10);
+    assert(seen.length === 2, 'a signed-in copy older than five minutes was not revalidated');
+    assert(seen[1].inm === '"listing-v1"', seen);
+    assert(seen[1].auth, 'the revalidation did not carry the token');
+  });
+});
+
 test('axe: no violations on home, notebook and error pages', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
   const wide = nb([code('x = "' + 'y'.repeat(400) + '"', [{ output_type: 'execute_result', execution_count: 1, metadata: {}, data: { 'text/plain': ['1'] } }], 1)]);
