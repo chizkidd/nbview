@@ -1315,6 +1315,37 @@ test('compare: a changed plot is shown old against new, with its size', () => {
   });
 });
 
+test('offline: a saved notebook still reads with no network, and the home page can clear it', () => {
+  const body = JSON.stringify(nb([md('saved text'), code('x = 1')]));
+  let offline = false;
+  return run({
+    hash: '#/github/o/r/blob/main/a.ipynb', settle: 500,
+    raw: () => offline ? { abort: true } : { body },
+  }, async ({ page }) => {
+    assert(await page.evaluate(() => document.querySelector('#cells').textContent.includes('saved text')), 'first load');
+    await page.waitForTimeout(400);
+    offline = true;
+    await page.reload();
+    await page.waitForSelector('#offline-note');
+    const r = await page.evaluate(() => ({
+      note: document.querySelector('#offline-note').textContent,
+      cells: document.querySelector('#cells').textContent,
+    }));
+    assert(/saved in this browser/.test(r.note), r.note);
+    assert(r.cells.includes('saved text'), 'the saved copy should render offline');
+    await page.evaluate(() => { location.hash = '#/'; });
+    await page.waitForSelector('#offline-home:not([hidden])');
+    const line = await page.evaluate(() => document.querySelector('#offline-home').textContent);
+    assert(/1 notebook saved in this browser/.test(line), line);
+    await page.click('#offline-clear');
+    await page.waitForFunction(() => document.querySelector('#offline-home').hidden === true);
+    offline = false;
+    await page.reload();
+    await page.waitForSelector('#hero-form');
+    assert(await page.evaluate(() => document.querySelector('#offline-home').hidden === true && document.querySelector('#offline-home').textContent === ''), 'cleared for good');
+  });
+});
+
 test('notebook index: every notebook in the repo, from one tree request', () => {
   const tree = {
     truncated: false,

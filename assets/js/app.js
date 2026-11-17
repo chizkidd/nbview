@@ -344,6 +344,63 @@
     if (!(e instanceof ViewError)) console.error(e);
   }
 
+  /* ---------- offline copies ----------
+   * A notebook opened once is kept in IndexedDB so it still reads with no network. The copy never leaves this
+   * browser, is never sent anywhere, and the home page can remove all of it. Two caps keep it small: at most
+   * OFF_MAX notebooks and OFF_MAX_BYTES of text, oldest dropped first, and very large notebooks are not kept. */
+  const OFF_DB = 'nbv-offline', OFF_MAX = 12, OFF_MAX_BYTES = 8 * 1024 * 1024, OFF_MAX_TEXT = 2 * 1024 * 1024;
+
+  function offOpen() {
+    return new Promise(resolve => {
+      if (!('indexedDB' in window)) return resolve(null);
+      let req;
+      try { req = indexedDB.open(OFF_DB, 1); } catch { return resolve(null); }
+      req.onupgradeneeded = () => { if (!req.result.objectStoreNames.contains('files')) req.result.createObjectStore('files', { keyPath: 'url' }); };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+      req.onblocked = () => resolve(null);
+    });
+  }
+
+  const offDone = req => new Promise(resolve => { req.onsuccess = () => resolve(req.result); req.onerror = () => resolve(null); });
+
+  async function offAll() {
+    const db = await offOpen();
+    if (!db) return [];
+    try { return (await offDone(db.transaction('files', 'readonly').objectStore('files').getAll())) || []; } catch { return []; }
+  }
+
+  async function offGet(url) {
+    const saved = await offAll();
+    return saved.find(f => f && f.url === url) || null;
+  }
+
+  const offCount = async () => (await offAll()).length;
+
+  async function offClear() {
+    const db = await offOpen();
+    if (!db) return;
+    try { await offDone(db.transaction('files', 'readwrite').objectStore('files').clear()); } catch { /* nothing to clear */ }
+  }
+
+  async function offPut(entry) {
+    if (!entry || typeof entry.text !== 'string' || !entry.text || entry.text.length > OFF_MAX_TEXT) return;
+    const db = await offOpen();
+    if (!db) return;
+    try { await offDone(db.transaction('files', 'readwrite').objectStore('files').put(entry)); } catch { return; }
+    const all = (await offAll()).sort((a, b) => (b.saved || 0) - (a.saved || 0));
+    const drop = [];
+    let bytes = 0;
+    all.forEach((f, i) => { bytes += (f.text || '').length; if (i >= OFF_MAX || bytes > OFF_MAX_BYTES) drop.push(f.url); });
+    if (!drop.length) return;
+    try {
+      const store = db.transaction('files', 'readwrite').objectStore('files');
+      for (const url of drop) store.delete(url);
+    } catch { /* the caps are best effort */ }
+  }
+
+  const offWhen = t => new Date(Number(t) || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+
   function renderHome() {
     document.title = 'nbview: Jupyter notebook viewer for GitHub';
     const recents = getRecents();
@@ -364,6 +421,7 @@
         </div>
         <p class="hint guides">Two short guides: <a href="/view-ipynb-from-github">how to open a .ipynb from GitHub</a>, and <a href="/compare-jupyter-notebooks">how to compare two notebooks</a>.</p>
         <p class="hint"><a href="/privacy">Privacy</a>: what nbview stores in this browser, and what leaves it.</p>
+        <p class="hint" id="offline-home" hidden></p>
         ${recents.length ? `
           <section class="recent">
             <h2>Recently opened</h2>
@@ -384,6 +442,19 @@
       if (ok) document.getElementById('hero-prompt').innerHTML = 'In [<span class="star">*</span>]:';
     });
     document.getElementById('file-input').addEventListener('change', e => openLocal(e.target.files[0]));
+
+    offCount().then(n => {
+      const line = document.getElementById('offline-home');
+      if (!line || !n) return;
+      line.hidden = false;
+      line.innerHTML = `${n} notebook${n === 1 ? '' : 's'} saved in this browser for offline reading. ` +
+        '<button class="btn" id="offline-clear" type="button">Clear saved notebooks</button>';
+      document.getElementById('offline-clear').addEventListener('click', async () => {
+        await offClear();
+        line.hidden = true;
+        line.textContent = '';
+      });
+    });
   }
 
   async function viewUser(owner, id) {
@@ -580,32 +651,44 @@
       }
     }
 
-    let text;
+    let text = '', offline = '';
     if (isGh) {
       let r;
       try {
         r = await githubText(src.owner, src.repo, src.ref, src.path, AbortSignal.timeout(60000));
       } catch (e) {
         if (e instanceof ViewError) throw e;
-        if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
-        throw new ViewError("Couldn’t load the file", 'The network request failed. Check your connection and try again.');
+        const saved = await offGet(url);
+        if (saved && saved.text) {
+          text = saved.text;
+          offline = `The network is unavailable, so this is the copy saved in this browser on ${offWhen(saved.saved)}.`;
+        } else if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
+        else throw new ViewError("Couldn’t load the file", 'The network request failed. Check your connection and try again.');
       }
-      if (r.text == null) throw ghTextError(r, 'Notebook not found', `Check the path and branch. ${privateHint}`, { token: true });
-      text = r.text;
+      if (!text) {
+        if (r.text == null) throw ghTextError(r, 'Notebook not found', `Check the path and branch. ${privateHint}`, { token: true });
+        text = r.text;
+      }
     } else {
       let res;
       try {
         res = await fetch(secureUrl(url), { signal: AbortSignal.timeout(60000) });
       } catch (e) {
-        if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
-        throw new ViewError("Couldn’t load the file", "The site hosting this file doesn’t let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
+        const saved = await offGet(url);
+        if (saved && saved.text) {
+          text = saved.text;
+          offline = `The network is unavailable, so this is the copy saved in this browser on ${offWhen(saved.saved)}.`;
+        } else if (e && e.name === 'TimeoutError') throw new ViewError('The server took too long', 'The file did not arrive within a minute. Try again later.');
+        else throw new ViewError("Couldn’t load the file", "The site hosting this file doesn’t let other pages read it (CORS). GitHub, GitLab raw and gist raw links work.");
       }
-      if (!res.ok) {
-        throw res.status === 404
-          ? new ViewError('Notebook not found', 'Check the link, path and branch.')
-          : new ViewError(`Request failed (${res.status})`, 'The server refused the request. Try again in a moment.');
+      if (!text) {
+        if (!res.ok) {
+          throw res.status === 404
+            ? new ViewError('Notebook not found', 'Check the link, path and branch.')
+            : new ViewError(`Request failed (${res.status})`, 'The server refused the request. Try again in a moment.');
+        }
+        text = await res.text();
       }
-      text = await res.text();
     }
     if (stale(id)) return;
 
@@ -628,10 +711,12 @@
       : { rawBase: url };
 
     addRecent({ kind: 'nb', hash: location.hash, title: name, sub: isGh ? `${src.owner}/${src.repo}` : host });
+    if (!offline) offPut({ url, text, name, saved: Date.now() });
 
     await showNotebook(nb, ctx, {
       name,
       text,
+      offline,
       shareable: true,
       crumbs: isGh
         ? crumbs(src.owner, src.repo, src.ref, src.path)
@@ -768,6 +853,7 @@
             ${info.source ? `<a class="btn" href="${esc(info.source)}" target="_blank" rel="noopener">Source</a>` : ''}
           </div>
           <p class="nb-meta">${kernel ? `<span>${esc(kernel)}</span>` : ''}<span>${cells.length} cells</span></p>
+          ${info.offline ? `<p class="hint" id="offline-note">${esc(info.offline)}</p>` : ''}
         </header>
         <div class="findbar" id="findbar" role="search" hidden>
           <input id="find-input" type="search" aria-label="Find in this notebook" autocomplete="off" spellcheck="false" placeholder="Find in this notebook">
