@@ -1292,6 +1292,36 @@ test('compare: a changed plot is shown old against new, with its size', () => {
   });
 });
 
+test('notebook index: every notebook in the repo, from one tree request', () => {
+  const tree = {
+    truncated: false,
+    tree: [
+      { path: 'b.ipynb', type: 'blob', size: 2048 },
+      { path: 'dir/a.ipynb', type: 'blob', size: 1024 },
+      { path: 'README.md', type: 'blob', size: 10 },
+      { path: 'dir', type: 'tree' },
+    ],
+  };
+  let requests = [];
+  return run({
+    hash: '#/github/o/r/notebooks/main', settle: 400,
+    api: u => { requests.push(u); return /git\/trees\/main\?recursive=1/.test(u) ? { body: tree } : null; },
+  }, async ({ page }) => {
+    await page.waitForSelector('.listing .entry');
+    const r = await page.evaluate(() => ({
+      names: [...document.querySelectorAll('.listing .entry .name')].map(n => n.textContent),
+      hrefs: [...document.querySelectorAll('.listing .entry a')].map(a => a.getAttribute('href')),
+      count: document.querySelector('.count').textContent,
+      title: document.title,
+    }));
+    assert(r.names.join(' ') === 'b.ipynb dir/a.ipynb', r);
+    assert(r.hrefs.every(h => /^#\/github\/o\/r\/blob\/main\//.test(h)), r.hrefs);
+    assert(/2 notebooks/.test(r.count) && /ordered by path/.test(r.count), r.count);
+    assert(/2 notebooks in o\/r/.test(r.title), r.title);
+    assert(requests.filter(u => /git\/trees/.test(u)).length === 1, requests);
+  });
+});
+
 test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
   await page.click('#mode-files');
   assert(await page.evaluate(() => document.querySelector('#compare-go').disabled), 'button should start disabled');
