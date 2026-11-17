@@ -4,6 +4,27 @@ All notable changes to nbview. Dates are when the release’s last change landed
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-17
+
+Read a repository as one notebook list, keep notebooks for offline reading, and see plot changes in Compare.
+
+### Added
+- **Every notebook in one list.** The folder toolbar now has **All notebooks**, which reads the repository tree once and lists each `.ipynb` by path at the same branch, tag or commit, so a repository that is a collection of notebooks no longer has to be walked folder by folder. A truncated answer from GitHub says so and points back at folder browsing. `tests/run.js` checks that the list comes from a single request.
+- **Dates, and newest first, when a token is saved.** With a GitHub token the list also asks for each notebook’s last commit and orders the list newest first, showing the date beside the size. GitHub gives a file’s history one request at a time, so signed out the page keeps the single tree request and the path order: dating every notebook signed out would spend the whole hourly allowance on one visit. Past 100 notebooks no dates are fetched, and a refused history request leaves the path order with a note instead of an error.
+- **Offline notebooks.** A notebook opened successfully is kept in this browser’s IndexedDB, so a later load with no network reads the saved copy and says which day it was saved. The home page counts the saved notebooks and clears them in one click. Copies never leave the browser, are capped at twelve notebooks, 8 MB in total and 2 MB each, oldest dropped first, and the privacy page lists them alongside the other browser storage.
+- **Plot changes side by side.** A changed image output now counts as a changed output even when the text marker is identical, and the diff draws the old and new pictures with their pixel size instead of saying the outputs differ with nothing to look at.
+- **Compare follows a renamed notebook.** When one side of a version comparison is missing, the Compare API is asked what was renamed between the two versions and the missing side is read under its previous path; the page says which old path it followed. The lookup happens only after a side comes back missing, so the normal case still costs the same two requests.
+
+### Changed
+- **The Compare dialog offers the default branch and searches further.** A one-click **Compare with main** (the branch the repository actually reports) appears unless the notebook is already on that branch or the metadata cannot be read. The history filter now pulls in up to three more pages while it is active and says how many pages it looked through, instead of reporting nothing found on a long history.
+- **A short history says why it is short.** When the file’s commit list ends inside the first page, the dialog says that GitHub’s list follows the current path and stops at a rename.
+- **Cell links pin the commit.** The `#` button on a cell now copies a link naming the commit the notebook was read at, like **Copy link**, rather than a branch that may move. The lookup also keeps the file name in the address and reads GitHub’s list answer correctly, which had left both links falling back to the branch.
+
+### Internal
+- The suite now compares screenshots of the home page, a notebook and a folder with committed baselines, using the average colour of 16 by 12 blocks so a different rasteriser does not fail the build. A mismatch writes the actual image to `tests/out/visual-<name>.png`.
+- Comparing outputs no longer joins every image into one key string: eight 2 MB plots went from 21 MB allocated to none, and twelve 4 MB plots from 64 MB retained to 5.3 MB.
+- A comment in `_headers` records why the Content-Security-Policy deliberately blocks Cloudflare’s injected inline script.
+
 ## [0.12.0] - 2026-11-12
 
 Compare a notebook against any earlier version in its own history, count the events a page view cannot see, and keep the whole site readable offline.
@@ -238,6 +259,7 @@ First release.
 - JavaScript outputs (ipywidgets, Plotly, Bokeh) are not run; a note points to Colab.
 - Public GitHub repositories only.
 
+[0.13.0]: https://github.com/chizkidd/nbview/releases/tag/v0.13.0
 [0.12.0]: https://github.com/chizkidd/nbview/releases/tag/v0.12.0
 [0.11.0]: https://github.com/chizkidd/nbview/releases/tag/v0.11.0
 [0.10.0]: https://github.com/chizkidd/nbview/releases/tag/v0.10.0
