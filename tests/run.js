@@ -1006,6 +1006,14 @@ test('diff engine: output text and images are compared, execution counts are not
   assert(!diff.diffCells([img('AAAA')], [img('AAAA')])[0].outputsChanged, 'the same image is not a change');
 });
 
+test('diff engine: unchanged plots do not stay in memory, changed ones do', () => {
+  const img = d => dcell('code', 'q', [{ output_type: 'display_data', data: { 'image/png': d } }]);
+  const [same] = diff.diffCells([img('AAAA')], [img('AAAA')]);
+  assert(same.kind === 'same' && !same.outputsChanged && same.a.images.length === 0 && same.b.images.length === 0, 'an unchanged plot should not be kept');
+  const [changed] = diff.diffCells([img('AAAA')], [img('BBBB')]);
+  assert(changed.outputsChanged && changed.a.images.length === 1 && changed.b.images.length === 1, 'a changed plot is kept for the view');
+});
+
 test('diff engine: thousands of cells stay fast and mostly aligned', () => {
   const a = Array.from({ length: 4000 }, (_, i) => dcell('code', 'line ' + i)), b = a.map((c, i) => (i % 40 === 0 ? dcell('code', 'other ' + i) : c));
   const t0 = Date.now();
