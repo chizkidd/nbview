@@ -155,7 +155,11 @@
 
   /* ---------- GitHub ---------- */
 
+  // With a token a conditional request is free, so a five-minute copy is revalidated with its ETag.
+  // Signed out, even a 304 spends one of the 60 hourly requests, so the copy is simply kept for longer
+  // instead of being revalidated.
   const CACHE_MS = 5 * 60 * 1000;
+  const CACHE_ANON_MS = 30 * 60 * 1000;
   const TOKEN_OK = /^[\x21-\x7e]+$/;
 
   function cacheEntry(path) {
@@ -165,9 +169,9 @@
     } catch { return null; }
   }
 
-  function cacheGet(path) {
+  function cacheGet(path, ms) {
     const v = cacheEntry(path);
-    return v && Date.now() - v.t < CACHE_MS ? v.d : null;
+    return v && Date.now() - v.t < ms ? v.d : null;
   }
 
   // The ETag is kept beside the body: once the entry is older than CACHE_MS the copy is revalidated
@@ -186,12 +190,12 @@
   }
 
   async function gh(path) {
-    const cached = cacheGet(path);
+    const token = tokenOf();
+    const cached = cacheGet(path, token ? CACHE_MS : CACHE_ANON_MS);
     if (cached) return cached;
     const stale = cacheEntry(path);
     const headers = { Accept: 'application/vnd.github+json' };
     if (stale && stale.e) headers['If-None-Match'] = stale.e;
-    const token = tokenOf();
     if (token) headers.Authorization = `Bearer ${token}`;
 
     let res;
