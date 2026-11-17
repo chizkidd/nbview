@@ -158,15 +158,22 @@
   const CACHE_MS = 5 * 60 * 1000;
   const TOKEN_OK = /^[\x21-\x7e]+$/;
 
-  function cacheGet(path) {
+  function cacheEntry(path) {
     try {
       const v = JSON.parse(sessionStorage.getItem('nbv.c:' + path));
-      return v && Date.now() - v.t < CACHE_MS ? v.d : null;
+      return v && v.d !== undefined ? v : null;
     } catch { return null; }
   }
 
-  function cacheSet(path, d) {
-    try { sessionStorage.setItem('nbv.c:' + path, JSON.stringify({ t: Date.now(), d })); } catch { /* storage full or unavailable */ }
+  function cacheGet(path) {
+    const v = cacheEntry(path);
+    return v && Date.now() - v.t < CACHE_MS ? v.d : null;
+  }
+
+  // The ETag is kept beside the body: once the entry is older than CACHE_MS the copy is revalidated
+  // instead of being downloaded again.
+  function cacheSet(path, d, etag) {
+    try { sessionStorage.setItem('nbv.c:' + path, JSON.stringify({ t: Date.now(), d, e: etag || '' })); } catch { /* storage full or unavailable */ }
   }
 
   // The saved token, checked for characters that cannot appear in one (usually an invisible space from copying).
@@ -181,7 +188,9 @@
   async function gh(path) {
     const cached = cacheGet(path);
     if (cached) return cached;
+    const stale = cacheEntry(path);
     const headers = { Accept: 'application/vnd.github+json' };
+    if (stale && stale.e) headers['If-None-Match'] = stale.e;
     const token = tokenOf();
     if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -193,9 +202,15 @@
         ? new ViewError('GitHub took too long to answer', 'Try again in a moment.')
         : new ViewError("Couldn’t reach GitHub", 'The network request failed. Check your connection and try again.');
     }
+    // An unchanged resource comes back as 304 with no body, and the copy already in this tab is the answer.
+    if (res.status === 304 && stale && stale.e) {
+      cacheSet(path, stale.d, stale.e);
+      return stale.d;
+    }
+
     if (res.ok) {
       const data = await res.json();
-      cacheSet(path, data);
+      cacheSet(path, data, res.headers.get('ETag'));
       return data;
     }
 

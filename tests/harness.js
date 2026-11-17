@@ -117,7 +117,7 @@ async function open(opts = {}) {
         return src === undefined ? null : { body: typeof src === 'string' || Buffer.isBuffer(src) ? src : JSON.stringify(src) };
       }
       const v = src(u, route.request());
-      if (v === undefined) return null;
+      if (v === undefined || v === null) return null;
       return { ...v, body: v.body === undefined ? '' : typeof v.body === 'string' || Buffer.isBuffer(v.body) ? v.body : JSON.stringify(v.body) };
     };
     let h = null;
@@ -128,7 +128,7 @@ async function open(opts = {}) {
     const headers = { 'access-control-allow-origin': '*', ...(h.headers || {}) };
     // Custom response headers (the rate limit ones) are unreadable to page JS unless the response exposes them, as GitHub does.
     if (h.headers) headers['access-control-expose-headers'] = Object.keys(h.headers).join(', ');
-    return route.fulfill({ status: h.status || 200, body: h.body === undefined ? '' : h.body, contentType: h.type || 'application/json', headers });
+    return route.fulfill({ status: h.status || 200, body: h.status === 304 ? undefined : (h.body === undefined ? '' : h.body), contentType: h.type || 'application/json', headers });
   });
   const page = await ctx.newPage();
   const errors = [];
