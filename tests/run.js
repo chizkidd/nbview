@@ -961,6 +961,31 @@ test('compare dialog: the file history loads on open, and picking a commit lands
   });
 });
 
+test('compare dialog: a history row can be diffed against its parent commit', () => {
+  const sha = 'a'.repeat(40), parent = 'b'.repeat(40), root = 'c'.repeat(40);
+  return run({
+    hash: H, settle: 400,
+    raw: u => ({ body: JSON.stringify(u.includes(parent) ? oldNb : newNb) }),
+    api: u => (/\/commits\?/.test(u) ? { body: JSON.stringify([
+      { sha, parents: [{ sha: parent }], commit: { message: 'Tidy the intro', author: { date: '2026-01-02T03:04:05Z' } } },
+      { sha: root, parents: [], commit: { message: 'First commit', author: { date: '2026-01-01T03:04:05Z' } } },
+    ]) } : null),
+  }, async ({ page }) => {
+    await page.click('#compare-btn');
+    await page.waitForSelector('.commit-item');
+    const r = await page.evaluate(() => ({
+      rows: document.querySelectorAll('.commit-row').length,
+      actions: [...document.querySelectorAll('.commit-diff')].map(d => ({ text: d.textContent, label: d.getAttribute('aria-label') })),
+    }));
+    assert(r.rows === 2, r);
+    assert(r.actions.length === 1 && r.actions[0].text === 'Changes' && /^Compare a{7} with the version before it$/.test(r.actions[0].label), r);
+    await page.click('.commit-diff');
+    await page.waitForSelector('.diffview');
+    const hash = await page.evaluate(() => decodeURIComponent(location.hash));
+    assert(hash === `#/compare/github/o/r/${parent}...${sha}/t.ipynb`, hash);
+  });
+});
+
 test('compare dialog: older commits load a page at a time, to the end of the history', () => {
   const mk = i => ({ sha: i.toString(16).padStart(40, '0'), commit: { message: `v${i}`, author: { date: '2026-01-02T03:04:05Z' } } });
   const first = Array.from({ length: 50 }, (_, i) => mk(i + 1));
@@ -1017,7 +1042,8 @@ test('compare dialog: the filter narrows the loaded history by message, author o
   }, async ({ page }) => {
     await page.click('#compare-btn');
     await page.waitForSelector('.commit-item');
-    const shown = () => page.evaluate(() => [...document.querySelectorAll('.commit-item')].filter(b => !b.hidden).length);
+    // Rows are the visible unit now: each holds the pick button and, when the commit has a parent, Changes.
+    const shown = () => page.evaluate(() => [...document.querySelectorAll('.commit-row')].filter(r => !r.hidden).length);
     const count = () => page.evaluate(() => ({ hidden: document.querySelector('#compare-count').hidden, text: document.querySelector('#compare-count').textContent }));
     assert(await shown() === 30 && (await count()).hidden, 'the whole history should be visible and uncounted');
     await page.fill('#compare-filter', 'ada');
@@ -1147,7 +1173,7 @@ test('compare a gist with an earlier revision of itself', () => run({ hash: '#/u
   await page.click('#compare-btn');
   assert(await page.evaluate(() => /revision of this gist/.test(document.querySelector('#compare-base-label').textContent)), 'dialog not in gist mode');    await page.waitForSelector('.commit-item');
     assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 2), 'revision list');
-  await page.click('.commit-item:nth-child(2)');
+  await page.click('.commit-row:nth-child(2) .commit-item');
   await page.click('#compare-form button[type="submit"]');
   await page.waitForSelector('.diffview');
   const r = await page.evaluate(() => ({ hash: decodeURIComponent(location.hash), sum: document.querySelector('#d-summary').textContent }));
