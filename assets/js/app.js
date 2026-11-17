@@ -591,7 +591,7 @@
     const name = clip(isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
     const ghPath = isGh ? `${enc(src.owner)}/${enc(src.repo)}/blob/${enc(src.ref)}/${enc(src.path)}` : null;
     const ctx = isGh
-      ? { owner: src.owner, repo: src.repo, ref: src.ref, dir: src.path.split('/').slice(0, -1).join('/'), rawBase: url }
+      ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path, dir: src.path.split('/').slice(0, -1).join('/'), rawBase: url }
       : { rawBase: url };
 
     addRecent({ kind: 'nb', hash: location.hash, title: name, sub: isGh ? `${src.owner}/${src.repo}` : host });
@@ -833,7 +833,7 @@
         try {
           const el = renderCell(cells[i], ctx, lang);
           if (el) {
-            if (info.shareable) addCellLink(el, i + 1);
+            if (info.shareable) addCellLink(el, i + 1, ctx);
             host.append(el);
             if (cells[i].cell_type === 'markdown') addHeadings(el);
             if (i + 1 === wanted) { el.classList.add('cell-target'); focusCell(el); }
@@ -848,11 +848,6 @@
     // Rendering above the target can shift it, so go there once more when everything is in.
     const hit = host.querySelector('.cell-target');
     if (hit && !stale(id)) focusCell(hit);
-  }
-
-  // A link to one cell: the notebook's own address plus ?cell=N.
-  function cellUrl(n) {
-    return shareUrl().replace(/\?cell=\d+$/, '') + '?cell=' + n;
   }
 
   // The address to share. GitHub notebooks use the nbviewer-style path (nbview.org/github/...), which the server
@@ -875,8 +870,10 @@
     if (!ctx || !ctx.owner || !/\/blob\//.test(here) || COMMIT_SHA.test(String(ctx.ref))) return here;
     let sha = null;
     try {
-      const first = await gh(`/repos/${enc(ctx.owner)}/${enc(ctx.repo)}/commits?path=${enc(ctx.path)}&sha=${enc(ctx.ref)}&per_page=1`);
-      sha = first && COMMIT_SHA.test(first.sha) ? first.sha : null;
+      const list = await gh(`/repos/${enc(ctx.owner)}/${enc(ctx.repo)}/commits?path=${enc(ctx.path)}&sha=${enc(ctx.ref)}&per_page=1`);
+      // The commits endpoint answers with a list, even for per_page=1.
+      const newest = Array.isArray(list) ? list[0] : list;
+      sha = newest && COMMIT_SHA.test(newest.sha) ? newest.sha : null;
     } catch { /* offline, rate-limited, or a file with no history: the branch link still works */ }
     if (!sha) return here;
     return location.origin + '/' + hashFor(ctx.owner, ctx.repo, 'blob', sha, ctx.path).slice(2);
@@ -900,7 +897,9 @@
     box.select();
   }
 
-  function addCellLink(el, n) {
+  // A link to one cell. It goes through the same commit lookup as Copy link, so a cell shared into a class or a
+  // review comment still points at the cell it was copied from after the branch moves on.
+  function addCellLink(el, n, ctx) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'cell-link';
@@ -908,7 +907,10 @@
     b.title = `Copy link to cell ${n}`;
     b.setAttribute('aria-label', `Copy link to cell ${n}`);
     b.addEventListener('click', async () => {
-      const url = cellUrl(n);
+      b.disabled = true;
+      const base = (await pinnedShareUrl(ctx)).replace(/\?cell=\d+$/, '');
+      const url = base + '?cell=' + n;
+      b.disabled = false;
       try { await navigator.clipboard.writeText(url); b.textContent = 'Copied'; }
       catch { window.prompt('Copy this link', url); }
       setTimeout(() => { b.textContent = '#'; }, 1800);
