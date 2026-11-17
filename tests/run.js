@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { start, stop, open, state, visibleCopy, nb, md, code, hostOf } = require('./harness');
+const shots = require('./png');
 
 const H = '#/github/o/r/blob/main/t.ipynb';
 const OUT = path.join(__dirname, 'out');
@@ -1345,6 +1346,51 @@ test('offline: a saved notebook still reads with no network, and the home page c
     assert(await page.evaluate(() => document.querySelector('#offline-home').hidden === true && document.querySelector('#offline-home').textContent === ''), 'cleared for good');
   });
 });
+
+// Visual baselines: a page is screenshotted and compared with a committed screenshot by the average colour of
+// blocks, so a changed layout, colour or missing output fails while a different font rasteriser does not.
+// Regenerate after a deliberate change: UPDATE_VISUAL=1 npm test -- "visual" (then commit tests/visual/*.png).
+const VIS_DIR = path.join(__dirname, 'visual');
+
+async function checkVisual(name, screenshot) {
+  const base = path.join(VIS_DIR, name + '.png');
+  if (process.env.UPDATE_VISUAL) {
+    fs.mkdirSync(VIS_DIR, { recursive: true });
+    fs.writeFileSync(base, screenshot);
+    return;
+  }
+  if (!fs.existsSync(base)) throw new Error(`no baseline for ${name}; run UPDATE_VISUAL=1 npm test -- "visual" and commit tests/visual/${name}.png`);
+  const d = shots.compare(shots.signature(shots.decodePng(fs.readFileSync(base))), shots.signature(shots.decodePng(screenshot)));
+  // Two screenshots of the same build on the same machine are identical; the margin is for another machine's font
+  // rasteriser, which moves a text block by a shade. A moved heading or a recoloured title is several times this.
+  if (d.mean <= 2 && d.worst <= 12) return;
+  fs.mkdirSync(OUT, { recursive: true });
+  fs.writeFileSync(path.join(OUT, `visual-${name}.png`), screenshot);
+  throw new Error(`the ${name} page changed: mean difference ${d.mean.toFixed(2)}, worst block ${d.worst.toFixed(1)} at ${d.at}; compare tests/out/visual-${name}.png with tests/visual/${name}.png`);
+}
+
+const visual = (name, opts) => run({ viewport: { width: 1100, height: 800 }, ...opts }, async ({ page }) => {
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForTimeout(250);
+  await checkVisual(name, await page.screenshot());
+});
+
+const VIS_NB = nb([
+  md('# Reading a notebook\n\nA paragraph with **bold text**, `inline code` and a [link](https://example.com).\n\n- first item\n- second item'),
+  code('print(42)\nx = 1  # ' + 'long line '.repeat(30), [{ output_type: 'stream', name: 'stdout', text: ['42\n'] }]),
+  md('| name | value |\n| --- | --- |\n| alpha | 1 |\n| beta | 2 |'),
+]);
+
+test('visual: the home page', () => visual('home', { hash: '#/', settle: 400 }));
+test('visual: a notebook page', () => visual('notebook', { hash: H, raw: () => ({ body: JSON.stringify(VIS_NB) }), settle: 700 }));
+test('visual: a folder listing', () => visual('folder', {
+  hash: '#/github/o/r/tree/main', settle: 500,
+  api: u => (/\/contents\//.test(u) ? { body: [
+    { name: 'dir', path: 'dir', type: 'dir', sha: 'a' },
+    { name: 't.ipynb', path: 't.ipynb', type: 'file', size: 2048, sha: 'b' },
+    { name: 'README.md', path: 'README.md', type: 'file', size: 1200, sha: 'c' },
+  ] } : null),
+}));
 
 test('notebook index: every notebook in the repo, from one tree request', () => {
   const tree = {

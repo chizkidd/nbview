@@ -64,4 +64,6 @@ sudo apt-get install -y --no-install-recommends fonts-dejavu-core
 - `prose.js`: Node tests that no tracked text file outside `assets/vendor/` uses an em dash or en dash, and that the Markdown prose and the visible text of the rendered pages keep their curly quotes and plain spaces, so the docs and the page copy cannot drift back to straight punctuation.
 - `harness.js`: starts the server (sending the headers from `_headers`, so tests run under the real CSP) and browser and stubs GitHub (`open()`), gives every page the repo’s own fonts so layout does not depend on the fonts a machine has installed, plus small notebook builders.
 - `run.js`: the tests, one `test(name, fn)` each. Every test also hands the text it leaves on screen to a final test, which checks that the viewer’s own copy has no straight punctuation.
+- `png.js`: reads a screenshot and reduces it to the average colour of blocks, so a visual baseline compares layout and colour instead of pixel-for-pixel output.
+- `visual/`: the committed screenshots the visual tests compare against. After a deliberate visual change, regenerate them with `UPDATE_VISUAL=1 npm test -- "visual"` and look at the new images before committing them; a mismatch writes the actual screenshot to `tests/out/visual-<name>.png`.
 - `live.js`: the optional real-GitHub smoke test.
