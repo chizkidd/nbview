@@ -16,6 +16,7 @@ const SPEC = {
   <li><strong>A GitHub token</strong>, if you saved one. It is sent only to <code>api.github.com</code>, and only to read the repositories you point nbview at. It never goes to <code>raw.githubusercontent.com</code>, and never to a host that a notebook loads something from.</li>
   <li><strong>Your recently opened list</strong>, and your GitHub account name once you sign in, so the next visit can show them without asking GitHub again.</li>
   <li><strong>Your light or dark choice</strong>, applied before the first paint.</li>
+  <li><strong>Copies of notebooks you open</strong>, kept in the browser’s IndexedDB so a notebook still reads with no network. The home page shows how many are saved and clears all of them in one click. They are never uploaded.</li>
 </ul>
 <p>Folder listings are also cached for five minutes per tab, so going back to a folder you just viewed does not spend GitHub’s hourly limit. That cache goes away with the tab.</p>
 <p>To drop the token, open <strong>Private repos</strong> in the top bar and choose <strong>Remove token</strong>. To drop everything, clear site data for nbview.org in your browser: there is no copy anywhere else.</p>
