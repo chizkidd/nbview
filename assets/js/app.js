@@ -2866,11 +2866,15 @@
   const cmpFilter = document.getElementById('compare-filter');
   const cmpCount = document.getElementById('compare-count');
   const cmpRename = document.getElementById('compare-rename');
+  const cmpDefault = document.getElementById('compare-default');
   const CMP_PAGE = 50; // commits per request; Load more fetches the next page
+  const CMP_AUTO = 3; // pages a filter may pull in by itself before it asks for a click
   let cmpCtx = null;
   let cmpPage = 0;
   let cmpMoreLeft = false;
   let cmpBusy = false;
+  let cmpAutoPages = 0;
+  let cmpDefaultRef = '';
 
   function openCompare(c) {
     cmpCtx = c;
@@ -2888,12 +2892,28 @@
     cmpFilter.value = '';
     cmpCount.hidden = true;
     cmpRename.hidden = true;
+    cmpAutoPages = 0;
+    cmpDefaultRef = '';
+    cmpDefault.hidden = true;
     cmpList.textContent = 'Loading...';
     cmpErr.replaceChildren();
     cmpErr.hidden = true;
     cmpDlg.showModal();
     cmpBase.focus();
     loadCommits();
+    // Someone arriving from a pull request has the head branch open and wants it against the branch it targets.
+    if (!gist) {
+      gh(`/repos/${encodeURIComponent(c.owner)}/${encodeURIComponent(c.repo)}`)
+        .then((repo) => {
+          if (cmpCtx !== c || !cmpDlg.open) return;
+          const branch = repo && typeof repo.default_branch === 'string' ? repo.default_branch : '';
+          if (!branch || branch.toLowerCase() === String(c.ref).toLowerCase()) return; // already there
+          cmpDefaultRef = branch;
+          cmpDefault.textContent = `Compare with ${branch}`;
+          cmpDefault.hidden = false;
+        })
+        .catch(() => { /* no shortcut without the answer; typing a branch still works */ });
+    }
   }
 
   // The history is paged rather than capped, so every earlier version of the file is reachable, fifty at a time.
@@ -2982,7 +3002,13 @@
   }
 
   cmpMore.addEventListener('click', () => loadCommits(true));
-  cmpFilter.addEventListener('input', () => applyFilter());
+  cmpFilter.addEventListener('input', () => { cmpAutoPages = 0; applyFilter(); });
+  cmpDefault.addEventListener('click', () => {
+    if (!cmpCtx || cmpCtx.gist || !cmpDefaultRef) return;
+    const { owner, repo, ref, path } = cmpCtx;
+    cmpDlg.close();
+    location.hash = compareHash(owner, repo, cmpDefaultRef, ref, path);
+  });
 
   // Where to read the same history when GitHub will not serve it to us.
   function historyUrl() {
@@ -3021,10 +3047,19 @@
       if (hit) shown++;
     }
     if (!items.length || !terms.length) { cmpCount.hidden = true; return; }
+    // A filter that finds nothing in what is loaded keeps looking, up to a small cap, instead of asking the reader
+    // to press Load more on a long history. The count always says how much was searched.
+    if (!shown && cmpMoreLeft && cmpAutoPages < CMP_AUTO) {
+      cmpAutoPages++;
+      // Deferred: this runs inside the request that is still holding cmpBusy.
+      setTimeout(() => loadCommits(true), 0);
+      return;
+    }
     const older = cmpMoreLeft ? ' Older commits are not loaded yet, so try Load more.' : '';
+    const looked = cmpPage > 1 ? ` Looked through ${cmpPage} pages.` : '';
     cmpCount.textContent = shown
-      ? `${shown} of ${items.length} loaded commits match.${older}`
-      : `No loaded commit matches.${older}`;
+      ? `${shown} of ${items.length} loaded commits match.${older}${looked}`
+      : `No loaded commit matches.${older}${looked}`;
     cmpCount.hidden = false;
   }
 

@@ -1229,6 +1229,39 @@ test('compare dialog: the filter narrows the loaded history by message, author o
   });
 });
 
+test('compare dialog: one click compares the open ref with the repository default branch', () => run({
+  hash: '#/github/o/r/blob/dev/t.ipynb', settle: 400,
+  raw: () => ({ body: JSON.stringify(newNb) }),
+  api: u => (/\/repos\/o\/r$/.test(u.split('?')[0]) ? { body: { default_branch: 'main' } } : null),
+}, async ({ page }) => {
+  await page.click('#compare-btn');
+  await page.waitForSelector('#compare-default:not([hidden])');
+  assert((await page.textContent('#compare-default')) === 'Compare with main', 'the shortcut should name the branch');
+  await page.click('#compare-default');
+  await page.waitForSelector('.diffview');
+  const hash = decodeURIComponent(await page.evaluate(() => location.hash));
+  assert(hash === '#/compare/github/o/r/main...dev/t.ipynb', hash);
+}));
+
+test('compare dialog: a filter loads older pages itself, up to a cap, and says how far it looked', () => {
+  const mk = (i, msg) => ({ sha: i.toString(16).padStart(40, '0'), commit: { message: msg, author: { date: '2026-01-02T03:04:05Z' } } });
+  const page = Array.from({ length: 50 }, (_, i) => mk(i + 1, `Step ${i + 1}`));
+  return run({
+    hash: H, settle: 400,
+    raw: () => ({ body: JSON.stringify(newNb) }),
+    api: u => (/\/commits\?/.test(u) ? { body: JSON.stringify(/[?&]page=3/.test(u) ? [mk(151, 'the odd one out')] : page) } : null),
+  }, async ({ page: tab, requests }) => {
+    await tab.click('#compare-btn');
+    await tab.waitForSelector('.commit-item');
+    await tab.fill('#compare-filter', 'odd');
+    await tab.waitForFunction(() => document.querySelectorAll('.commit-row:not([hidden])').length === 1, null, { timeout: 15000 });
+    const r = await tab.evaluate(() => ({ text: document.querySelector('#compare-count').textContent, hidden: document.querySelector('#compare-count').hidden }));
+    assert(!r.hidden && /1 of 101 loaded commits match/.test(r.text), r);
+    assert(/Looked through 3 pages/.test(r.text), r);
+    assert(requests.some(u => /commits\?/.test(u) && /[?&]page=2/.test(u)) && requests.some(u => /commits\?/.test(u) && /[?&]page=3/.test(u)), 'the filter did not fetch older pages');
+  });
+});
+
 test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
   await page.click('#mode-files');
   assert(await page.evaluate(() => document.querySelector('#compare-go').disabled), 'button should start disabled');
