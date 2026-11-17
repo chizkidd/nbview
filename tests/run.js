@@ -1173,7 +1173,7 @@ test('compare a gist with an earlier revision of itself', () => run({ hash: '#/u
   await page.click('#compare-btn');
   assert(await page.evaluate(() => /revision of this gist/.test(document.querySelector('#compare-base-label').textContent)), 'dialog not in gist mode');    await page.waitForSelector('.commit-item');
     assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 2), 'revision list');
-  await page.click('.commit-item:nth-child(2)');
+  await page.click('.commit-row:nth-child(2) .commit-item');
   await page.click('#compare-form button[type="submit"]');
   await page.waitForSelector('.diffview');
   const r = await page.evaluate(() => ({ hash: decodeURIComponent(location.hash), sum: document.querySelector('#d-summary').textContent }));
