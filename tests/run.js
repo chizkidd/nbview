@@ -1427,6 +1427,87 @@ test('notebook index: every notebook in the repo, from one tree request', () => 
     assert(/2 notebooks/.test(r.count) && /ordered by path/.test(r.count), r.count);
     assert(/2 notebooks in o\/r/.test(r.title), r.title);
     assert(requests.filter(u => /git\/trees/.test(u)).length === 1, requests);
+    // A last-commit date costs one request per notebook, which would spend the signed-out allowance on one visit: the
+    // list must ask for none at all.
+    assert(!requests.some(u => /\/commits\?/.test(u)), requests);
+  });
+});
+
+// The tree carries no dates, so with a token the index asks for each notebook's newest commit and orders the list by
+// it. One request per notebook is affordable signed in (5,000 an hour) and not signed out (60), which is why the test
+// above still counts a single request in total.
+test('notebook index: with a token, last-commit dates order the list newest first', () => {
+  const tree = {
+    truncated: false,
+    tree: [
+      { path: 'old.ipynb', type: 'blob', size: 1024 },
+      { path: 'new.ipynb', type: 'blob', size: 2048 },
+      { path: 'mid.ipynb', type: 'blob', size: 4096 },
+      { path: 'README.md', type: 'blob', size: 10 },
+    ],
+  };
+  const dates = { 'old.ipynb': '2024-03-01T10:00:00Z', 'new.ipynb': '2026-05-04T08:00:00Z', 'mid.ipynb': '2025-01-02T09:00:00Z' };
+  return run({
+    hash: '#/github/o/r/notebooks/main', settle: 500,
+    init: `localStorage.setItem('nbv.token', JSON.stringify('ghp_testtoken'))`,
+    api: u => {
+      const url = decodeURIComponent(u);
+      if (/^https:\/\/api\.github\.com\/user$/.test(u)) return { body: { login: 'octo' } };
+      if (/git\/trees\/main\?recursive=1/.test(u)) return { body: tree };
+      const m = url.match(/\/commits\?path=([^&]+)/);
+      if (!m) return null;
+      return { body: dates[m[1]] ? [{ sha: 'abc', commit: { message: 'm', committer: { date: dates[m[1]] } } }] : [] };
+    },
+  }, async ({ page, requests }) => {
+    await page.waitForSelector('.listing .entry');
+    const r = await page.evaluate(() => ({
+      names: [...document.querySelectorAll('.listing .entry .name')].map(n => n.textContent),
+      when: [...document.querySelectorAll('.listing .entry time')].map(t => [t.getAttribute('datetime'), t.textContent]),
+      sizes: [...document.querySelectorAll('.listing .entry .size')].map(s => s.textContent),
+      count: document.querySelector('.count').textContent,
+    }));
+    assert(r.names.join(' ') === 'new.ipynb mid.ipynb old.ipynb', r.names);
+    assert(r.when.length === 3, r.when);
+    assert(r.when[0][0] === dates['new.ipynb'] && r.when[1][0] === dates['mid.ipynb'] && r.when[2][0] === dates['old.ipynb'], r.when);
+    assert(r.when.every(([, text]) => text.trim().length > 3), r.when);
+    assert(/3 notebooks in this repository, newest first/.test(r.count), r.count);
+    assert(/2\.0 KB/.test(r.sizes[0]) && /1\.0 KB/.test(r.sizes[2]), r.sizes);
+    const history = requests.filter(u => /\/commits\?/.test(u));
+    assert(history.length === 3, history);
+    assert(!history.some(u => /README/.test(u)), history);
+  });
+});
+
+// A refused history request (the rate limit, a revoked token) would repeat on every remaining file, so the first one
+// ends the attempt and the page keeps the list it already has.
+test('notebook index: a refused date lookup leaves the path order instead of an error', () => {
+  const tree = {
+    truncated: false,
+    tree: Array.from({ length: 8 }, (_, i) => ({ path: `n${i}.ipynb`, type: 'blob', size: 100 })),
+  };
+  return run({
+    hash: '#/github/o/r/notebooks/main', settle: 500,
+    init: `localStorage.setItem('nbv.token', JSON.stringify('ghp_testtoken'))`,
+    api: u => {
+      if (/^https:\/\/api\.github\.com\/user$/.test(u)) return { body: { login: 'octo' } };
+      if (/git\/trees\/main\?recursive=1/.test(u)) return { body: tree };
+      if (/\/commits\?/.test(u)) return { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 600) } };
+      return null;
+    },
+  }, async ({ page, requests }) => {
+    await page.waitForSelector('.listing .entry');
+    const r = await page.evaluate(() => ({
+      names: [...document.querySelectorAll('.listing .entry .name')].map(n => n.textContent),
+      count: document.querySelector('.count').textContent,
+      hint: (document.querySelector('.hint') || {}).textContent || '',
+      err: (document.querySelector('.error-box h1') || {}).textContent || null,
+    }));
+    assert(r.names.join(' ') === 'n0.ipynb n1.ipynb n2.ipynb n3.ipynb n4.ipynb n5.ipynb n6.ipynb n7.ipynb', r.names);
+    assert(/ordered by path/.test(r.count), r.count);
+    assert(/didn’t return last-commit dates/.test(r.hint), r.hint);
+    assert(!r.err, r.err);
+    const history = requests.filter(u => /\/commits\?/.test(u));
+    assert(history.length > 0 && history.length <= 5, history);
   });
 });
 

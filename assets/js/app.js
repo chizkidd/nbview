@@ -568,9 +568,47 @@
     }
   }
 
+  // The notebook index dates at most this many notebooks, a few history requests at a time. Past the cap a visit would
+  // spend minutes and hundreds of requests, so the list keeps the path order that costs nothing.
+  const NBC_DATE_MAX = 100, NBC_DATE_PARALLEL = 5;
+
+  // A last-commit date from GitHub's ISO timestamp, the way the rest of the page writes dates.
+  function fmtDate(iso) {
+    const t = Date.parse(iso);
+    return Number.isFinite(t)
+      ? new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : '';
+  }
+
+  // Last-commit dates for a list of notebooks, keyed by path. GitHub gives one file's history per request, so this
+  // runs a few at a time and stops at the first refusal that would only repeat: a missing date leaves the list in its
+  // path order rather than failing the page.
+  async function notebookDates(owner, repo, ref, files) {
+    const dated = new Map();
+    const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits`;
+    let at = 0, stop = false;
+    const worker = async () => {
+      while (!stop && at < files.length) {
+        const file = files[at++];
+        try {
+          const list = await gh(`${base}?path=${enc(file.path)}&sha=${encodeURIComponent(ref)}&per_page=1`);
+          // The commits endpoint answers with a list, even for per_page=1.
+          const c = Array.isArray(list) ? list[0] : list;
+          const when = c && c.commit && ((c.commit.committer || {}).date || (c.commit.author || {}).date);
+          if (when && fmtDate(when)) dated.set(file.path, String(when));
+        } catch (e) {
+          if (e instanceof ViewError && e.opts && (e.opts.rateLimited || e.opts.token)) stop = true;
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(NBC_DATE_PARALLEL, files.length) }, worker));
+    return dated;
+  }
+
   // Every notebook in a repository, from one recursive tree request, for repos that are a collection of notebooks
-  // rather than a tree to walk folder by folder. Last-commit dates would cost one request per file, so the list is
-  // ordered by path and says so.
+  // rather than a tree to walk folder by folder. A tree carries no dates, and GitHub gives a file's last commit one
+  // request at a time: signed out that would spend the whole hourly allowance on a single visit, so the dates (and the
+  // newest-first order they allow) are only fetched when a token is saved.
   async function viewNotebooks(owner, repo, ref, id) {
     showLoading('Finding notebooks');
     const tree = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
@@ -578,9 +616,35 @@
     if (!tree || !Array.isArray(tree.tree)) {
       throw new ViewError('Unexpected answer from GitHub', 'The file list was not in the expected format. Try again later.');
     }
+    const byPath = (a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' });
     const files = tree.tree
       .filter(n => n && n.type === 'blob' && typeof n.path === 'string' && isNbName(n.path))
-      .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
+      .sort(byPath);
+
+    const token = Boolean(store.get('nbv.token'));
+    const overCap = token && files.length > NBC_DATE_MAX;
+    let dates = null;
+    if (token && files.length && !overCap) {
+      showLoading(files.length === 1 ? 'Reading the last commit of this notebook' : `Reading the last commit of each of ${files.length} notebooks`);
+      dates = await notebookDates(owner, repo, ref, files);
+      if (stale(id)) return;
+    }
+
+    const dated = dates && dates.size ? dates : null;
+    const when = p => (dated && dated.get(p)) || '';
+    // Newest first, with anything GitHub gave no date for after it in path order, the only order it has.
+    const ordered = dated ? files.slice().sort((a, b) => {
+      const da = when(a.path), db = when(b.path);
+      if (da && db && da !== db) return db < da ? -1 : 1;
+      if (da && !db) return -1;
+      if (!da && db) return 1;
+      return byPath(a, b);
+    }) : files;
+    const count = files.length === 1 ? '1 notebook' : `${files.length} notebooks`;
+    const note = !token || dated ? ''
+      : overCap
+        ? `<p class="hint">This repository has more than ${NBC_DATE_MAX} notebooks, and GitHub gives a last-commit date one file at a time, so the list is ordered by path instead.</p>`
+        : '<p class="hint">GitHub didn’t return last-commit dates, so the list is ordered by path.</p>';
 
     document.title = `${files.length} notebook${files.length === 1 ? '' : 's'} in ${owner}/${repo} | nbview`;
     app.innerHTML = `
@@ -589,14 +653,19 @@
         <header class="page-head">
           <h1>Notebooks in ${esc(repo)}</h1>
           <div class="toolbar"><a class="btn" href="${hashFor(owner, repo, 'tree', ref, '')}">Browse folders</a></div>
-          <p class="count">${files.length === 1 ? '1 notebook' : `${files.length} notebooks`} in this repository, ordered by path</p>
+          <p class="count">${count} in this repository, ${dated ? 'newest first' : 'ordered by path'}</p>
         </header>
         ${tree.truncated ? '<p class="hint">This repository is large, so GitHub returned only the first part of its file list. Browse folders for the rest.</p>' : ''}
-        ${files.length ? `<ul class="listing">${files.map(n => `
+        ${note}
+        ${files.length ? `<ul class="listing">${ordered.map(n => {
+          const iso = when(n.path);
+          const meta = [iso ? `<time datetime="${esc(iso)}">${esc(fmtDate(iso))}</time>` : '', fmtSize(n.size)].filter(Boolean).join(' · ');
+          return `
           <li class="entry is-nb">
             <a href="${hashFor(owner, repo, 'blob', ref, n.path)}">${ICONS.nb}<span class="name">${esc(n.path)}</span></a>
-            <span class="size">${fmtSize(n.size)}</span>
-          </li>`).join('')}</ul>` : '<p class="empty">This repository has no notebooks on this branch.</p>'}
+            <span class="size">${meta}</span>
+          </li>`;
+        }).join('')}</ul>` : '<p class="empty">This repository has no notebooks on this branch.</p>'}
       </div>`;
   }
 
