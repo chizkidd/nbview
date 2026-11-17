@@ -1263,6 +1263,29 @@ test('compare dialog: a filter loads older pages itself, up to a cap, and says h
   });
 });
 
+test('compare: a renamed notebook is followed instead of reported missing', () => {
+  const body = JSON.stringify(nb([code('x = 1')]));
+  const oldPath = 'old/plot.ipynb', newPath = 'new/plot.ipynb';
+  const raw = u => {
+    if (/\/oldref\/old\/plot\.ipynb$/.test(u)) return { body };
+    if (/\/newref\/(new|old)\/plot\.ipynb$/.test(u)) return { body };
+    return { status: 404 };
+  };
+  const api = u => (/\/compare\/oldref\.\.\.newref$/.test(u)
+    ? { body: { files: [{ status: 'renamed', filename: newPath, previous_filename: oldPath }] } }
+    : null);
+  return run({ hash: `#/compare/github/o/r/oldref...newref/${newPath}`, raw, api, settle: 500 }, async ({ page }) => {
+    const r = await page.evaluate(() => ({
+      err: !!document.querySelector('.error'),
+      note: (document.querySelector('.hint') || {}).textContent || '',
+      summary: (document.querySelector('#d-summary') || {}).textContent || '',
+    }));
+    assert(!r.err, r);
+    assert(/Renamed from old\/plot\.ipynb/.test(r.note), r.note);
+    assert(/No differences in cell source/.test(r.summary), r.summary);
+  });
+});
+
 test('compare: a changed plot is shown old against new, with its size', () => {
   const svg = (fill) => `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><rect width="4" height="3" fill="${fill}"/></svg>`;
   const withPlot = (fill) => ({
