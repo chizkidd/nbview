@@ -395,6 +395,77 @@ test('private repos: compare notebooks from two different private repos', async 
   assert(calls.length === 2 && calls.every(c => c.auth === 'Bearer ghp_private_test'), calls);
 });
 
+test('GitHub API: an expired folder listing revalidates with its ETag and reuses the body', async () => {
+  const seen = [];
+  const body = [{ name: 't.ipynb', path: 't.ipynb', type: 'file', size: 12, sha: 'a'.repeat(40), html_url: 'https://github.com/o/r/blob/main/t.ipynb' }];
+  await run({
+    hash: '#/github/o/r/tree/main', settle: 400,
+    api: (u, req) => {
+      if (/\/repos\/o\/r$/.test(u.split('?')[0])) return { body: { default_branch: 'main' } };
+      if (!/\/contents(\?|\/|$)/.test(u)) return null;
+      const inm = req.headers()['if-none-match'] || '';
+      seen.push(inm);
+      return inm === '"listing-v1"'
+        ? { status: 304, headers: { etag: '"listing-v1"' } }
+        : { body, headers: { etag: '"listing-v1"' } };
+    },
+  }, async ({ page }) => {
+    await page.waitForSelector('.listing .entry');
+    assert(/t\.ipynb/.test(await page.textContent('#listing')), 'first load did not render the folder');
+    const expire = () => page.evaluate(() => {
+      for (const k of Object.keys(sessionStorage)) {
+        if (!k.startsWith('nbv.c:')) continue;
+        const v = JSON.parse(sessionStorage.getItem(k));
+        v.t = 0;
+        sessionStorage.setItem(k, JSON.stringify(v));
+      }
+    });
+    await expire();
+    await page.evaluate(() => { location.hash = '#/'; });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => { location.hash = '#/github/o/r/tree/main'; });
+    await page.waitForSelector('.listing .entry');
+    assert(/t\.ipynb/.test(await page.textContent('#listing')), 'the 304 did not reuse the stored folder');
+    assert(!(await page.evaluate(() => Boolean(document.querySelector('.error-box')))), 'the revalidated folder showed an error');
+  });
+  assert(seen.length === 2 && seen[0] === '' && seen[1] === '"listing-v1"', seen);
+});
+
+test('GitHub API: an expired history list revalidates and keeps its commits', async () => {
+  const seen = [];
+  const sha = 'a'.repeat(40), parent = 'b'.repeat(40);
+  await run({
+    hash: H, settle: 400,
+    raw: () => ({ body: JSON.stringify(newNb) }),
+    api: (u, req) => {
+      if (!/\/commits\?/.test(u)) return null;
+      const inm = req.headers()['if-none-match'] || '';
+      seen.push(inm);
+      return inm === '"history-v1"'
+        ? { status: 304, headers: { etag: '"history-v1"' } }
+        : { body: [{ sha, parents: [{ sha: parent }], commit: { message: 'Tidy the intro', author: { date: '2026-01-02T03:04:05Z' } } }], headers: { etag: '"history-v1"' } };
+    },
+  }, async ({ page }) => {
+    await page.click('#compare-btn');
+    await page.waitForSelector('.commit-item');
+    assert(/Tidy the intro/.test(await page.textContent('.commit-item')), 'first list did not render');
+    await page.evaluate(() => document.querySelector('#compare-dialog').close());
+    await page.evaluate(() => {
+      for (const k of Object.keys(sessionStorage)) {
+        if (!k.startsWith('nbv.c:')) continue;
+        const v = JSON.parse(sessionStorage.getItem(k));
+        v.t = 0;
+        sessionStorage.setItem(k, JSON.stringify(v));
+      }
+    });
+    await page.click('#compare-btn');
+    await page.waitForSelector('.commit-item');
+    assert(/Tidy the intro/.test(await page.textContent('.commit-item')), 'the 304 did not reuse the stored commits');
+    assert(await page.evaluate(() => document.querySelector('#compare-error').hidden), 'the revalidated list showed an error');
+  });
+  assert(seen.length === 2 && seen[0] === '' && seen[1] === '"history-v1"', seen);
+});
+
 test('axe: no violations on home, notebook and error pages', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
   const wide = nb([code('x = "' + 'y'.repeat(400) + '"', [{ output_type: 'execute_result', execution_count: 1, metadata: {}, data: { 'text/plain': ['1'] } }], 1)]);
