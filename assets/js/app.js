@@ -159,7 +159,8 @@
   // Signed out, even a 304 spends one of the 60 hourly requests, so how long a copy may be reused follows the
   // budget GitHub reports on its own responses: plenty left buys freshness, a nearly spent budget buys fewer requests.
   const CACHE_MS = 5 * 60 * 1000;
-  const CACHE_ANON_MID = 10 * 60 * 1000;
+  const CACHE_ANON_BASE_MS = 10 * 60 * 1000;
+  const CACHE_ANON_MID_MS = 20 * 60 * 1000;
   const CACHE_ANON_MS = 30 * 60 * 1000;
   const RL_KEY = 'nbv.rl';
   const TOKEN_OK = /^[\x21-\x7e]+$/;
@@ -191,17 +192,21 @@
     return token ? String(token) : '';
   }
 
-  // How long a signed-out copy may be reused, from the last remaining count GitHub reported in this tab.
-  // With no count yet, or one from an hour that has already reset, the cautious default is the long window.
+  // How long a signed-out copy may be reused, from the budget GitHub last reported in this tab. The budget is 60
+  // requests an hour, so a tab that is spending at a sustainable pace has about one request per minute left until the
+  // reset. Comparing what is really left with that pace stretches the window as the tab falls behind it: a raw count
+  // alone would spend 50 requests as eagerly as 5 if the hour still has 50 minutes to run.
   function anonCacheMs() {
     let rl = null;
     try { rl = JSON.parse(sessionStorage.getItem(RL_KEY)); } catch { return CACHE_ANON_MS; }
     if (!rl) return CACHE_ANON_MS;
-    if (!(Date.now() < Number(rl.reset))) return CACHE_MS; // the hour rolled over, so the 60 are back
+    const minutesLeft = (Number(rl.reset) - Date.now()) / 60000;
+    if (!(minutesLeft > 0)) return CACHE_MS; // the hour rolled over, so the 60 are back
     const left = Number(rl.remaining);
     if (!Number.isFinite(left)) return CACHE_ANON_MS;
-    if (left >= 30) return CACHE_MS;
-    if (left >= 10) return CACHE_ANON_MID;
+    const pace = minutesLeft / Math.max(1, left); // 1 means the tab is on pace for the rest of the hour
+    if (pace <= 1.5) return CACHE_ANON_BASE_MS;
+    if (pace <= 3) return CACHE_ANON_MID_MS;
     return CACHE_ANON_MS;
   }
 
