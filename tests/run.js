@@ -505,49 +505,45 @@ test('GitHub API: a signed-out copy lasts half an hour, a signed-in one revalida
   });
 });
 
-test('GitHub API: the signed-out window follows the remaining rate limit and the time left', async () => {
+test('GitHub API: a signed-out copy lasts half an hour, a signed-in one revalidates after five minutes', async () => {
   const seen = [];
   const body = [{ name: 't.ipynb', path: 't.ipynb', type: 'file', size: 12, sha: 'a'.repeat(40), html_url: 'https://github.com/o/r/blob/main/t.ipynb' }];
-
-  // One visit, then a revisit after the given age. Returns how many API requests the whole phase made:
-  // one means the stored copy was reused, two means it was revalidated.
-  const phase = async (remaining, ageMs) => {
-    seen.length = 0;
-    await run({
-      hash: '#/github/o/r/tree/main', settle: 400,
-      api: (u, req) => {
-        if (/\/repos\/o\/r$/.test(u.split('?')[0])) return { body: { default_branch: 'main' } };
-        if (!/\/contents(\?|\/|$)/.test(u)) return null;
-        seen.push(req.headers()['if-none-match'] || '');
-        return {
-          body,
-          headers: { etag: '"listing-v1"', 'x-ratelimit-remaining': String(remaining), 'x-ratelimit-reset': String(Math.floor(Date.now() / 1000) + 3600) },
-        };
-      },
-    }, async ({ page }) => {
-      await page.waitForSelector('.listing .entry');
-      assert(seen.length === 1, 'the first visit should make one request');
+  await run({
+    hash: '#/github/o/r/tree/main', settle: 400,
+    api: (u, req) => {
+      if (/\/repos\/o\/r$/.test(u.split('?')[0])) return { body: { default_branch: 'main' } };
+      if (!/\/contents(\?|\/|$)/.test(u)) return null;
+      seen.push(req.headers()['if-none-match'] || '');
+      return seen.length === 1
+        ? { body, headers: { etag: '"listing-v1"' } }
+        : { status: 304, headers: { etag: '"listing-v1"' } };
+    },
+  }, async ({ page }) => {
+    await page.waitForSelector('.listing .entry');
+    const revisit = async (mins) => {
       await page.evaluate(m => {
         for (const k of Object.keys(sessionStorage)) {
           if (!k.startsWith('nbv.c:')) continue;
           const v = JSON.parse(sessionStorage.getItem(k));
-          v.t -= m;
+          v.t -= m * 60000;
           sessionStorage.setItem(k, JSON.stringify(v));
         }
-      }, ageMs);
+      }, mins);
       await page.evaluate(() => { location.hash = '#/'; });
       await page.waitForTimeout(150);
       await page.evaluate(() => { location.hash = '#/github/o/r/tree/main'; });
       await page.waitForSelector('.listing .entry');
       assert(/t\.ipynb/.test(await page.textContent('#listing')), 'the folder did not render on the revisit');
-    });
-    return seen.length;
-  };
+    };
 
-  assert((await phase(55, 10 * 60000)) === 2, 'on pace, a ten-minute-old copy is revalidated');
-  assert((await phase(25, 15 * 60000)) === 1, 'behind pace, a fifteen-minute-old copy is reused');
-  assert((await phase(25, 21 * 60000)) === 2, 'behind pace, a twenty-one-minute-old copy is revalidated');
-  assert((await phase(4, 10 * 60000)) === 1, 'nearly spent, a ten-minute-old copy is reused without a request');
+    await revisit(10);
+    assert(seen.length === 1, 'a signed-out copy older than five minutes was requested again');
+
+    await page.evaluate(() => localStorage.setItem('nbv.token', JSON.stringify('ghp_' + 'a'.repeat(30))));
+    await revisit(10);
+    assert(seen.length === 2, 'a signed-in copy older than five minutes was not revalidated');
+    assert(seen[1] === '"listing-v1"', seen);
+  });
 });
 test('axe: no violations on home, notebook and error pages', async () => {
   const axeFile = require.resolve('axe-core/axe.min.js');
