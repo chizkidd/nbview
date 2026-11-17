@@ -207,9 +207,31 @@
     return parts.join('\n').replace(/\n+$/, '');
   }
 
+  // Images in a cell's outputs, kept as data so a changed plot can be looked at rather than described.
+  function imageOutputs(cell) {
+    const outs = cell && Array.isArray(cell.outputs) ? cell.outputs : [];
+    const found = [];
+    for (const o of outs) {
+      if (!o || typeof o !== 'object' || !o.data || typeof o.data !== 'object') continue;
+      for (const mime of ['image/png', 'image/jpeg', 'image/svg+xml']) {
+        const data = norm(o.data[mime]);
+        if (!data) continue;
+        found.push({ mime, data });
+        break;
+      }
+    }
+    return found;
+  }
+
   function describe(cell, index) {
     const type = cell && typeof cell === 'object' && typeof cell.cell_type === 'string' ? cell.cell_type : 'raw';
-    return { index, type, text: norm(cell && cell.source), outputs: type === 'code' ? outputText(cell) : '' };
+    return {
+      index,
+      type,
+      text: norm(cell && cell.source),
+      outputs: type === 'code' ? outputText(cell) : '',
+      images: type === 'code' ? imageOutputs(cell) : [],
+    };
   }
 
   function diffCells(aCells, bCells) {
@@ -229,9 +251,11 @@
       ai = i + 1; bi = j + 1;
     }
     flush(A.length, B.length);
+    // Two plots can share the same text marker, so the image data is part of what decides "outputs changed".
+    const imageKey = c => (c.images || []).map(i => i.mime + ':' + i.data).join('|');
     for (const e of out) {
       if (e.kind === 'modified') e.lines = diffLines(e.a.text, e.b.text);
-      if (e.a && e.b) e.outputsChanged = e.a.outputs !== e.b.outputs;
+      if (e.a && e.b) e.outputsChanged = e.a.outputs !== e.b.outputs || imageKey(e.a) !== imageKey(e.b);
       if (e.outputsChanged) e.outputLines = diffLines(e.a.outputs, e.b.outputs);
     }
     return out;
@@ -243,7 +267,7 @@
     return s;
   }
 
-  const api = { diffLines, diffWords, diffCells, summarize, outputText };
+  const api = { diffLines, diffWords, diffCells, summarize, outputText, imageOutputs };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.nbvDiff = api;
 })(typeof window !== 'undefined' ? window : globalThis);

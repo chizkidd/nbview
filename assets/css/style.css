@@ -762,3 +762,11 @@ html[data-embed] main { padding-top: 0.5rem; }
 ::highlight(nbv-find-current) { background-color: #ff9632; color: #000; }
 .find-cell { outline: 2px solid #ff9632; outline-offset: 4px; }
 @media print { .findbar { display: none !important; } }
+
+/* Changed images, old against new, so an output diff can be looked at. */
+.imgdiff { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin: .5rem 0 .75rem; }
+.imgside { margin: 0; padding: .5rem; border: 1px solid var(--line, #d0d7de); border-radius: 6px; min-width: 0; }
+.imgside-head { font-size: .8rem; font-weight: 600; margin-bottom: .35rem; }
+.imgside img { display: block; max-width: 100%; height: auto; image-rendering: auto; }
+.imgmeta { display: block; font-size: .75rem; opacity: .7; margin-top: .25rem; }
+@media (max-width: 640px) { .imgdiff { grid-template-columns: 1fr; } }

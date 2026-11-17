@@ -994,14 +994,15 @@ test('diff engine: changed words are marked only on similar lines', () => {
   assert(!diff.diffLines('totally different', 'nothing alike here').some(l => l.parts), 'unrelated lines should not be word-marked');
 });
 
-test('diff engine: output text is compared, execution counts and images are not', () => {
+test('diff engine: output text and images are compared, execution counts are not', () => {
   const out = text => [{ output_type: 'stream', name: 'stdout', text: [text] }];
   const a = dcell('code', 'p', out('hello\n')), b = dcell('code', 'p', out('bye\n'));
   b.execution_count = 7;
   const [e] = diff.diffCells([a], [b]);
   assert(e.kind === 'same' && e.outputsChanged && e.outputLines.some(l => l.t === 'add' && l.text === 'bye'), e);
   const img = d => dcell('code', 'q', [{ output_type: 'display_data', data: { 'image/png': d } }]);
-  assert(!diff.diffCells([img('AAAA')], [img('BBBB')])[0].outputsChanged, 'image bytes should not count');
+  assert(diff.diffCells([img('AAAA')], [img('BBBB')])[0].outputsChanged, 'a different image is a changed output');
+  assert(!diff.diffCells([img('AAAA')], [img('AAAA')])[0].outputsChanged, 'the same image is not a change');
 });
 
 test('diff engine: thousands of cells stay fast and mostly aligned', () => {
@@ -1259,6 +1260,35 @@ test('compare dialog: a filter loads older pages itself, up to a cap, and says h
     assert(!r.hidden && /1 of 101 loaded commits match/.test(r.text), r);
     assert(/Looked through 3 pages/.test(r.text), r);
     assert(requests.some(u => /commits\?/.test(u) && /[?&]page=2/.test(u)) && requests.some(u => /commits\?/.test(u) && /[?&]page=3/.test(u)), 'the filter did not fetch older pages');
+  });
+});
+
+test('compare: a changed plot is shown old against new, with its size', () => {
+  const svg = (fill) => `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><rect width="4" height="3" fill="${fill}"/></svg>`;
+  const withPlot = (fill) => ({
+    nbformat: 4, nbformat_minor: 5, metadata: {},
+    cells: [{ cell_type: 'code', source: 'plot()', metadata: {}, execution_count: 1,
+      outputs: [{ output_type: 'display_data', metadata: {}, data: { 'image/svg+xml': svg(fill) } }] }],
+  });
+  const file = (name, body) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(body)) });
+  return run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+    await page.click('#mode-files');
+    await page.setInputFiles('#file-a', file('before.ipynb', withPlot('red')));
+    await page.setInputFiles('#file-b', file('after.ipynb', withPlot('blue')));
+    await page.click('#compare-go');
+    await page.waitForSelector('.diffview');
+    await page.click('#d-outputs');
+    await page.waitForSelector('.imgdiff img');
+    await page.waitForFunction(() => [...document.querySelectorAll('.imgmeta')].every(m => /\d+ x \d+/.test(m.textContent)), null, { timeout: 10000 });
+    const r = await page.evaluate(() => ({
+      sides: [...document.querySelectorAll('.imgside-head')].map(h => h.textContent),
+      srcs: [...document.querySelectorAll('.imgdiff img')].map(i => i.getAttribute('src')),
+      metas: [...document.querySelectorAll('.imgmeta')].map(m => m.textContent),
+    }));
+    assert(r.sides.join(' ') === 'before after', r);
+    assert(r.srcs.length === 2 && r.srcs[0] !== r.srcs[1], 'both images should be present and different');
+    assert(r.srcs[0].startsWith('data:image/svg+xml') && /red/.test(decodeURIComponent(r.srcs[0])) && /blue/.test(decodeURIComponent(r.srcs[1])), 'the images are the old and the new one');
+    assert(r.metas.join(' ') === '4 x 3 4 x 3', r);
   });
 });
 
