@@ -2053,13 +2053,43 @@
     return parseCells(r.text, shortRef(ref));
   }
 
+  // A notebook renamed between the two refs is still the same notebook, so a missing side is looked up under its
+  // previous name. One extra request, only after a side comes back missing, because only the compare API knows the map.
+  async function renamedBetween(owner, repo, base, head, path) {
+    const cmp = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`);
+    const files = cmp && Array.isArray(cmp.files) ? cmp.files : [];
+    const hit = files.find(f => f && f.status === 'renamed' && f.filename === path && typeof f.previous_filename === 'string' && f.previous_filename);
+    return hit ? hit.previous_filename : '';
+  }
+
   async function viewCompareGh(owner, repo, base, head, path, id) {
     if (!base || !head || !path) throw new ViewError('Incomplete compare link', 'A compare link needs two versions and a notebook path.');
     showLoading('Fetching both versions');
-    const [a, b] = await Promise.all([fetchCells(owner, repo, base, path), fetchCells(owner, repo, head, path)]);
+    const trySide = async (ref) => {
+      try { return { cells: await fetchCells(owner, repo, ref, path) }; }
+      catch (err) { return { err }; }
+    };
+    const [sideA, sideB] = await Promise.all([trySide(base), trySide(head)]);
+    let note = '';
+    if (sideA.err || sideB.err) {
+      let old = '';
+      try { old = await renamedBetween(owner, repo, base, head, path); } catch { old = ''; }
+      if (old) {
+        let followed = false;
+        for (const [side, ref] of [[sideA, base], [sideB, head]]) {
+          if (!side.err) continue;
+          try { side.cells = await fetchCells(owner, repo, ref, old); side.err = null; followed = true; } catch { /* keep the original error */ }
+        }
+        if (followed) note = `Renamed from <code>${esc(old)}</code> between these versions; comparing the same notebook.`;
+      }
+    }
     if (stale(id)) return;
+    if (sideA.err) throw sideA.err;
+    if (sideB.err) throw sideB.err;
+    const a = sideA.cells, b = sideB.cells;
     const name = path.split('/').pop();
     renderDiff({
+      note,
       title: name,
       crumbs: `<a href="#/">Home</a><span class="sep">/</span><a href="${hashFor(owner, repo, 'blob', head, path)}">${esc(name)}</a><span class="sep">/</span><span aria-current="page">Compare</span>`,
       labelA: shortRef(base),
@@ -2417,6 +2447,7 @@
             ${d.links || ''}
           </div>
           <p class="nb-meta"><span class="dlabels"></span><span id="d-summary"></span><span id="d-pos" aria-live="polite"></span></p>
+          ${d.note ? `<p class="hint">${d.note}</p>` : ''}
         </header>
         <div id="d-body" class="diff"></div>
       </article>`;
