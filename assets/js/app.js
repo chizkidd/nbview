@@ -156,10 +156,12 @@
   /* ---------- GitHub ---------- */
 
   // With a token a conditional request is free, so a five-minute copy is revalidated with its ETag.
-  // Signed out, even a 304 spends one of the 60 hourly requests, so the copy is simply kept for longer
-  // instead of being revalidated.
+  // Signed out, even a 304 spends one of the 60 hourly requests, so how long a copy may be reused follows the
+  // budget GitHub reports on its own responses: plenty left buys freshness, a nearly spent budget buys fewer requests.
   const CACHE_MS = 5 * 60 * 1000;
+  const CACHE_ANON_MID = 10 * 60 * 1000;
   const CACHE_ANON_MS = 30 * 60 * 1000;
+  const RL_KEY = 'nbv.rl';
   const TOKEN_OK = /^[\x21-\x7e]+$/;
 
   function cacheEntry(path) {
@@ -189,9 +191,36 @@
     return token ? String(token) : '';
   }
 
+  // How long a signed-out copy may be reused, from the last remaining count GitHub reported in this tab.
+  // With no count yet, or one from an hour that has already reset, the cautious default is the long window.
+  function anonCacheMs() {
+    let rl = null;
+    try { rl = JSON.parse(sessionStorage.getItem(RL_KEY)); } catch { return CACHE_ANON_MS; }
+    if (!rl) return CACHE_ANON_MS;
+    if (!(Date.now() < Number(rl.reset))) return CACHE_MS; // the hour rolled over, so the 60 are back
+    const left = Number(rl.remaining);
+    if (!Number.isFinite(left)) return CACHE_ANON_MS;
+    if (left >= 30) return CACHE_MS;
+    if (left >= 10) return CACHE_ANON_MID;
+    return CACHE_ANON_MS;
+  }
+
+  // GitHub states what is left of the hourly budget on every response; the count is read, not guessed.
+  function noteRateLimit(res) {
+    const remaining = res.headers.get('x-ratelimit-remaining');
+    if (remaining == null) return;
+    const reset = Number(res.headers.get('x-ratelimit-reset')) * 1000;
+    try {
+      sessionStorage.setItem(RL_KEY, JSON.stringify({
+        remaining: Number(remaining),
+        reset: Number.isFinite(reset) && reset > Date.now() ? reset : Date.now() + 60 * 60 * 1000,
+      }));
+    } catch { /* storage full or unavailable */ }
+  }
+
   async function gh(path) {
     const token = tokenOf();
-    const cached = cacheGet(path, token ? CACHE_MS : CACHE_ANON_MS);
+    const cached = cacheGet(path, token ? CACHE_MS : anonCacheMs());
     if (cached) return cached;
     const stale = cacheEntry(path);
     const headers = { Accept: 'application/vnd.github+json' };
@@ -206,6 +235,7 @@
         ? new ViewError('GitHub took too long to answer', 'Try again in a moment.')
         : new ViewError("Couldn’t reach GitHub", 'The network request failed. Check your connection and try again.');
     }
+    noteRateLimit(res);
     // An unchanged resource comes back as 304 with no body, and the copy already in this tab is the answer.
     if (res.status === 304 && stale && stale.e) {
       cacheSet(path, stale.d, stale.e);
