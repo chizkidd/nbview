@@ -682,7 +682,7 @@ test('cell links: button copies a ?cell=N link, and opening it lands on that cel
     await page.locator('.cell').nth(29).scrollIntoViewIfNeeded();
     await b.click();
     const url = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
-    if (url) assert(/^http:\/\/127\.0\.0\.1:\d+\/github\/o\/r\/blob\/main\/t\.ipynb\?cell=30$/.test(url), url);
+    if (url) assert(/^http:\/\/127\.0\.0\.1:\d+\/github\/o\/r\/blob\/(main|[0-9a-f]{40})\/t\.ipynb\?cell=30$/.test(url), url);
   });
   await run({ hash: H + '?cell=30', raw: many, settle: 800 }, async ({ page }) => {
     const r = await page.evaluate(() => {
@@ -694,6 +694,24 @@ test('cell links: button copies a ?cell=N link, and opening it lands on that cel
   // out of range and junk values are ignored; the notebook still opens
   await run({ hash: H + '?cell=9999', raw: many, settle: 500 }, async ({ page }) => {
     assert(await page.evaluate(() => document.querySelectorAll('.cell').length === 40 && !document.querySelector('.cell-target')), 'bad cell number broke the page');
+  });
+});
+
+test('cell links: the copied link names the commit, not the branch', async () => {
+  const sha = 'c'.repeat(40);
+  await run({
+    hash: H, settle: 500,
+    raw: nb([md('## One'), md('## Two')]),
+    api: (u) => /\/commits\?path=/.test(u) ? { body: [{ sha }] } : null,
+  }, async ({ page }) => {
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
+    await page.locator('.cell').nth(0).locator('.cell-link').click();
+    await page.waitForTimeout(500);
+    const url = await page.evaluate(() => navigator.clipboard.readText()).catch(() => null);
+    if (url) {
+      assert(new RegExp(`/github/o/r/blob/${sha}/t\\.ipynb\\?cell=1$`).test(url), url);
+      assert(!/\/blob\/main\//.test(url), 'the cell link still named the branch');
+    }
   });
 });
 
