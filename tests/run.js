@@ -950,6 +950,8 @@ test('compare dialog: the file history loads on open, and picking a commit lands
     assert(/per_page=50/.test(q) && /[?&]page=1/.test(q) && /path=/.test(q), q);
     assert(await page.evaluate(() => document.querySelectorAll('.commit-item').length === 1 && /Tidy the intro/.test(document.querySelector('.commit-item').textContent)), 'commit list');
     assert(await page.evaluate(() => { const b = document.querySelector('#compare-load'); return b.hidden && getComputedStyle(b).display === 'none'; }), 'Load more must be hidden, not merely marked hidden');
+    const hint = await page.evaluate(() => { const p = document.querySelector('#compare-rename'); return { hidden: p.hidden, display: getComputedStyle(p).display, text: p.textContent }; });
+    assert(!hint.hidden && hint.display !== 'none' && /current path/.test(hint.text) && /rename/.test(hint.text), hint);
     await page.click('.commit-item');
     assert(await page.evaluate(() => document.querySelector('.commit-item').getAttribute('aria-pressed') === 'true'), 'picked commit is not marked');
     await page.click('#compare-form button[type="submit"]');
@@ -971,6 +973,7 @@ test('compare dialog: older commits load a page at a time, to the end of the his
     await page.waitForSelector('.commit-item');
     let r = await page.evaluate(() => ({ n: document.querySelectorAll('.commit-item').length, hidden: document.querySelector('#compare-load').hidden, label: document.querySelector('#compare-load').textContent }));
     assert(r.n === 50 && !r.hidden && /Load more commits/.test(r.label), r);
+    assert(await page.evaluate(() => document.querySelector('#compare-rename').hidden), 'the hint must stay hidden while Load more remains');
     await page.click('#compare-load');
     await page.waitForFunction(() => document.querySelectorAll('.commit-item').length === 52);
     r = await page.evaluate(() => {
@@ -978,6 +981,7 @@ test('compare dialog: older commits load a page at a time, to the end of the his
       return { n: items.length, hidden: document.querySelector('#compare-load').hidden, first: items[0].textContent, last: items[51].textContent };
     });
     assert(r.n === 52 && r.hidden && /v1\b/.test(r.first) && /v52\b/.test(r.last), r);
+    assert(await page.evaluate(() => !document.querySelector('#compare-rename').hidden), 'the hint must appear once the whole history has been loaded');
     assert(requests.some(u => /\/commits\?/.test(u) && /[?&]page=2/.test(u)), 'page 2 was not requested');
   });
 });

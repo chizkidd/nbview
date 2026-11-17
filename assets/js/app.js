@@ -2845,6 +2845,7 @@
   const cmpMore = document.getElementById('compare-load');
   const cmpFilter = document.getElementById('compare-filter');
   const cmpCount = document.getElementById('compare-count');
+  const cmpRename = document.getElementById('compare-rename');
   const CMP_PAGE = 50; // commits per request; Load more fetches the next page
   let cmpCtx = null;
   let cmpPage = 0;
@@ -2866,6 +2867,7 @@
     cmpOther.value = '';
     cmpFilter.value = '';
     cmpCount.hidden = true;
+    cmpRename.hidden = true;
     cmpList.textContent = 'Loading...';
     cmpErr.replaceChildren();
     cmpErr.hidden = true;
@@ -2921,6 +2923,9 @@
         cmpList.textContent = cmpCtx.gist ? 'This gist has no earlier revisions.' : 'This file has no earlier commits.';
       }
       cmpMore.hidden = !cmpMoreLeft;
+      // A history that ends inside the first page is either a young file or a moved one, and the list cannot
+      // tell the two apart: commits from before a rename are filed under the old path.
+      cmpRename.hidden = !(!cmpCtx.gist && !cmpMoreLeft && cmpList.children.length > 0);
       applyFilter();
     } catch (err) {
       if (page === 1) cmpList.replaceChildren();
