@@ -2403,6 +2403,31 @@
     };
     const draw = lines => (state.layout === 'split' ? splitBody(numberLines(lines)) : unifiedBody(numberLines(lines)));
 
+    // A changed plot is the thing output review is for, so images are shown rather than described as text.
+    const sideBySide = e => {
+      const oldImgs = (e.a && e.a.images) || [], newImgs = (e.b && e.b.images) || [];
+      if (!oldImgs.length && !newImgs.length) return null;
+      const wrap = mk('div', 'imgdiff');
+      for (const [list, cls, label] of [[oldImgs, 'old', 'before'], [newImgs, 'new', 'after']]) {
+        const fig = mk('figure', `imgside ${cls}`);
+        fig.append(mk('figcaption', 'imgside-head', label));
+        if (!list.length) fig.append(mk('p', 'muted', 'no image on this side'));
+        for (const img of list) {
+          const el = document.createElement('img');
+          el.loading = 'lazy';
+          el.alt = `${label} image output`;
+          el.src = img.mime === 'image/svg+xml'
+            ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(img.data)}`
+            : `data:${img.mime};base64,${img.data}`;
+          const meta = mk('span', 'imgmeta', '');
+          el.addEventListener('load', () => { meta.textContent = `${el.naturalWidth} x ${el.naturalHeight}`; });
+          fig.append(el, meta);
+        }
+        wrap.append(fig);
+      }
+      return wrap;
+    };
+
     const changeBox = e => {
       const box = mk('section', `dcell dcell-${e.kind}`);
       box.dataset.change = '1';
@@ -2416,6 +2441,8 @@
       const src = sourceLines(e);
       if (src.length) box.append(draw(src));
       if (state.outputs) {
+        const pictures = sideBySide(e);
+        if (pictures) box.append(pictures);
         const out = outputLinesOf(e);
         if (out.length) { box.append(mk('div', 'dout-label', 'Output')); box.append(draw(out)); }
       }
