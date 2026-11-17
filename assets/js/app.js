@@ -2916,7 +2916,28 @@
           for (const other of cmpList.querySelectorAll('.commit-item')) other.setAttribute('aria-pressed', String(other === b));
           cmpBase.focus();
         });
-        cmpList.append(b);
+        const row = document.createElement('div');
+        row.className = 'commit-row';
+        row.dataset.search = b.dataset.search;
+        row.append(b);
+        // What this commit changed: the same file at the parent and at this commit, which is the question a
+        // history row is usually asked. A merge is diffed against its first parent, and a first commit has
+        // nothing before it, so it gets no action.
+        const parent = Array.isArray(it.parents) && it.parents[0] && typeof it.parents[0].sha === 'string' ? it.parents[0].sha : '';
+        if (parent && !cmpCtx.gist) {
+          const d = document.createElement('button');
+          d.type = 'button';
+          d.className = 'commit-diff';
+          d.textContent = 'Changes';
+          d.title = `What ${it.sha.slice(0, 7)} changed against ${parent.slice(0, 7)}`;
+          d.setAttribute('aria-label', `Compare ${it.sha.slice(0, 7)} with the version before it`);
+          d.addEventListener('click', () => {
+            cmpDlg.close();
+            location.hash = compareHash(ctx.owner, ctx.repo, parent, it.sha, ctx.path);
+          });
+          row.append(d);
+        }
+        cmpList.append(row);
       }
       if (!cmpList.children.length) {
         cmpMoreLeft = false;
@@ -2972,11 +2993,11 @@
   // Filtering only sees what is loaded, so the count says when older commits are still behind Load more.
   function applyFilter() {
     const terms = cmpFilter.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const items = [...cmpList.querySelectorAll('.commit-item')];
+    const items = [...cmpList.querySelectorAll('.commit-row')];
     let shown = 0;
-    for (const b of items) {
-      const hit = terms.every(t => (b.dataset.search || '').includes(t));
-      b.hidden = !hit;
+    for (const row of items) {
+      const hit = terms.every(t => (row.dataset.search || '').includes(t));
+      row.hidden = !hit;
       if (hit) shown++;
     }
     if (!items.length || !terms.length) { cmpCount.hidden = true; return; }
