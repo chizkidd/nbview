@@ -1,4 +1,7 @@
 /*
+  # Cloudflare injects an inline JavaScript Detections bootstrap into every HTML response. It is blocked on
+  # purpose: it is harmless for this site, which uses nothing under /cdn-cgi/, and allowing it would need
+  # 'unsafe-inline' or a per-response nonce, neither of which is worth it for one bot-scoring signal.
   Content-Security-Policy: default-src 'none'; script-src 'self' https://nbview.org https://static.cloudflareinsights.com; worker-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src * data: blob:; manifest-src 'self'; media-src https: data: blob:; connect-src https:; form-action 'none'; base-uri 'none'; frame-ancestors 'self'; frame-src 'self'; object-src 'none'
   X-Frame-Options: SAMEORIGIN
   Referrer-Policy: strict-origin-when-cross-origin
