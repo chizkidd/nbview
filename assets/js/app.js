@@ -465,6 +465,7 @@
           <h1>${esc(path ? path.split('/').pop() : repo)}</h1>
           <div class="toolbar">
             <label class="check"><input type="checkbox" id="only-nb"${onlyNb ? ' checked' : ''}> Notebooks only</label>
+            <a class="btn" href="${hashFor(owner, repo, 'notebooks', ref)}">All notebooks</a>
             <a class="btn" href="https://github.com/${enc(owner)}/${enc(repo)}/tree/${enc(ref)}${path ? '/' + enc(path) : ''}" target="_blank" rel="noopener">View on GitHub</a>
           </div>
           <p class="count">${nbCount === 1 ? '1 notebook' : `${nbCount} notebooks`} in this folder</p>
@@ -494,6 +495,38 @@
         })
         .catch(() => { /* README is optional */ });
     }
+  }
+
+  // Every notebook in a repository, from one recursive tree request, for repos that are a collection of notebooks
+  // rather than a tree to walk folder by folder. Last-commit dates would cost one request per file, so the list is
+  // ordered by path and says so.
+  async function viewNotebooks(owner, repo, ref, id) {
+    showLoading('Finding notebooks');
+    const tree = await gh(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(ref)}?recursive=1`);
+    if (stale(id)) return;
+    if (!tree || !Array.isArray(tree.tree)) {
+      throw new ViewError('Unexpected answer from GitHub', 'The file list was not in the expected format. Try again later.');
+    }
+    const files = tree.tree
+      .filter(n => n && n.type === 'blob' && typeof n.path === 'string' && isNbName(n.path))
+      .sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true, sensitivity: 'base' }));
+
+    document.title = `${files.length} notebook${files.length === 1 ? '' : 's'} in ${owner}/${repo} | nbview`;
+    app.innerHTML = `
+      <div class="page">
+        <nav class="crumbs">${crumbs(owner, repo, ref, '')}</nav>
+        <header class="page-head">
+          <h1>Notebooks in ${esc(repo)}</h1>
+          <div class="toolbar"><a class="btn" href="${hashFor(owner, repo, 'tree', ref, '')}">Browse folders</a></div>
+          <p class="count">${files.length === 1 ? '1 notebook' : `${files.length} notebooks`} in this repository, ordered by path</p>
+        </header>
+        ${tree.truncated ? '<p class="hint">This repository is large, so GitHub returned only the first part of its file list. Browse folders for the rest.</p>' : ''}
+        ${files.length ? `<ul class="listing">${files.map(n => `
+          <li class="entry is-nb">
+            <a href="${hashFor(owner, repo, 'blob', ref, n.path)}">${ICONS.nb}<span class="name">${esc(n.path)}</span></a>
+            <span class="size">${fmtSize(n.size)}</span>
+          </li>`).join('')}</ul>` : '<p class="empty">This repository has no notebooks on this branch.</p>'}
+      </div>`;
   }
 
   async function viewGist(gistId, id) {
@@ -2580,6 +2613,7 @@
           return;
         }
         if (kind === 'tree') return await viewTree(owner, repo, ref, path, id);
+        if (kind === 'notebooks') return await viewNotebooks(owner, repo, ref, id);
         if (kind === 'blob') {
           // A link to some other file (README.md, a script) shows its folder instead of a JSON error.
           if (!isNbName(path)) { location.replace(hashFor(owner, repo, 'tree', ref, path.split('/').slice(0, -1).join('/'))); return; }
