@@ -92,6 +92,7 @@ nbview/
 │   ├── screenshots/     captures of the home page for the install prompt
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
+├── scripts/check-changelog-refs.mjs  fails when a changelog entry cites a commit outside its release tag
 ├── scripts/stamp-assets.mjs  writes the ?v= content hash for CSS and JS into index.html
 ├── tests/               regression tests (Playwright)
 ├── package.json         dev dependencies for the tests only
@@ -110,6 +111,8 @@ nbview/
 `npm install && npx playwright install --with-deps chromium && npm test` (there is no lockfile: the two dev dependencies are pinned exactly in `package.json`). More options, other browsers and the setup for a bare machine or CI are in [tests/README.md](tests/README.md).
 
 CSS and JS are requested with a content hash (`?v=…`), so a deploy can never pair new markup with a stylesheet a browser cached earlier. After editing those files, run `npm run stamp`; `npm test` fails if the stamp is stale. The hash is what does the work: Cloudflare Pages sends its own four-hour `Cache-Control` for assets and ignores one set in `_headers`, so a repeat visit revalidates because the URL changed, not because a header asked it to.
+
+The changelog is checked the same way: `npm test` fails when an entry cites a pull request or commit that is not an ancestor of the tag for its section, so an entry filed under the wrong release is caught before it ships. New entries cite theirs as `(#104)`.
 
 The home page, a notebook and a folder are also compared against committed screenshots, so a layout or colour change that still passes every text test fails the build. After a deliberate visual change, regenerate them with `UPDATE_VISUAL=1 npm test -- "visual"` and look at the new images before committing.
 
