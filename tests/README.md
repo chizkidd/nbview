@@ -15,6 +15,10 @@ npm test
 - `CHROMIUM_PATH=/path/to/chromium npm test` uses a Chromium you already have.
 - `node tests/live.js` is an optional smoke test against the real GitHub and needs network access. Add `LIVE_VIA_CURL=1` if the browser itself has no internet access. Unauthenticated GitHub API calls are limited to 60 an hour.
 
+## Changelog references
+
+`npm test` runs `node scripts/check-changelog-refs.mjs` before the browser suite. It reads the pull request numbers and commits cited in `CHANGELOG.md` and fails when the commit is not an ancestor of the tag for that section, which catches an entry filed under a release that did not ship it. The Unreleased section, a version heading that has no tag yet, and a shallow clone are skipped and named, so the depth-1 CI checkout does not fail on history it does not have. Cite a new entry as `(#104)`; the Releasing steps in [MAINTENANCE.md](../MAINTENANCE.md) say the same.
+
 ## A fresh machine, and CI
 
 Node 20 or newer; the workflow pins 24. There is no lockfile on purpose: `package-lock.json` is ignored, and the two dev dependencies are pinned to exact versions in `package.json`. Install with `npm install`; `npm ci` has nothing to read and fails.

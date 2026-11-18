@@ -31,6 +31,6 @@ Chores that are easy to forget. There is no build step, so there is little else 
 
 ## Releasing
 
-1. Move the “Unreleased” entries in `CHANGELOG.md` under a new version heading with the date, and merge.
+1. Move the “Unreleased” entries in `CHANGELOG.md` under a new version heading with the date, and merge. Cite the pull request each entry came from, as `(#104)`, so `npm test` can confirm the commit is an ancestor of the tag and catch an entry filed under the wrong release.
 2. Tag the merge commit (`git tag -a vX.Y.Z -m "vX.Y.Z"`, `git push origin vX.Y.Z`).
 3. Publish a GitHub release with the same notes (`gh release create vX.Y.Z --notes-file notes.md --latest`). Use the new `CHANGELOG.md` section as the body and keep the tag on the merge commit.
