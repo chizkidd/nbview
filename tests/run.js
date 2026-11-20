@@ -1521,6 +1521,9 @@ test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, as
   await page.waitForSelector('.diffview');
   const r = await page.evaluate(() => ({ sum: document.querySelector('#d-summary').textContent, labels: document.querySelector('.dlabels').textContent }));
   assert(/2 modified, 1 added, 1 removed/.test(r.sum) && r.labels === 'before.ipynb to after.ipynb', r);
+  await page.click('#d-swap-sides');
+  const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, hash: decodeURIComponent(location.hash) }));
+  assert(swapped.labels === 'after.ipynb to before.ipynb' && swapped.hash === '#/compare', swapped);
 }));
 
 test('compare a link with a local file: the link is the original, and there is no address to share', () => run({
