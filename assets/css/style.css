@@ -668,8 +668,8 @@ html[data-embed] main { padding-top: 0.5rem; }
 .commit-diff { font: 11px var(--mono); color: var(--muted); background: none; border: 0; border-radius: 3px; padding: 0.45rem 0.35rem; cursor: pointer; white-space: nowrap; }
 .commit-diff:hover, .commit-diff:focus-visible { background: var(--code-bg); color: var(--ink); }
 
-.compare-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-.compare-slot { display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; text-align: center; }
+.compare-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; max-width: 42rem; }
+.compare-slot { display: flex; flex-direction: column; gap: 0.4rem; cursor: pointer; text-align: center; margin-top: 0; }
 .compare-slot.over { border-color: var(--in); }
 .compare-go { justify-content: flex-start; }
 
@@ -721,6 +721,14 @@ html[data-embed] main { padding-top: 0.5rem; }
 .compare-go { margin-top: 0.6rem; }
 .compare-mixed { max-width: 42rem; }
 .compare-mixed .compare-links { margin-bottom: 0.8rem; }
+/* The hint keeps the same breathing room below it as above, in all three tabs */
+#panel-links > .hint, #panel-files > .hint, #panel-mixed > .hint { margin-bottom: 0.9rem; }
+
+/* Small screens: the diff actions fit in three rows instead of four ragged ones */
+@media (max-width: 520px) {
+  .diffview .toolbar { gap: 0.4rem; }
+  .diffview .toolbar .btn { font-size: 12px; padding: 0.32rem 0.55rem; }
+}
 
 /* Diff lines wrap like GitHub's instead of scrolling one by one, and side by side uses the whole page width */
 .dline { white-space: normal; }
