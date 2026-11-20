@@ -2374,6 +2374,8 @@
   function viewComparePick() {
     document.title = 'Compare notebooks | nbview';
     const picks = { a: null, b: null, mixed: null };
+    // A file has no address, so a diff with a file on either side swaps in place instead of linking to a new order.
+    const fileDiffLinks = '<button class="btn" id="d-swap-sides" type="button">Swap sides</button><a class="btn" href="#/compare">New comparison</a>';
     const slot = (key, label) => `
       <label class="drop compare-slot" id="slot-${key}">
         <strong>${label}</strong>
@@ -2470,7 +2472,7 @@
             labelA: a.label,
             labelB: b.label,
             entries: nbvDiff.diffCells(a.cells, b.cells),
-            links: '<button class="btn" id="d-swap-sides" type="button">Swap sides</button><a class="btn" href="#/compare">New comparison</a>',
+            links: fileDiffLinks,
           });
           document.getElementById('d-swap-sides').addEventListener('click', () => draw(b, a));
         };
@@ -2499,7 +2501,7 @@
             labelA: a.label,
             labelB: b.label,
             entries: nbvDiff.diffCells(a.cells, b.cells),
-            links: '<button class="btn" id="d-swap-sides" type="button">Swap sides</button><a class="btn" href="#/compare">New comparison</a>',
+            links: fileDiffLinks,
           });
           document.getElementById('d-swap-sides').addEventListener('click', () => draw(b, a));
         };
