@@ -1532,7 +1532,7 @@ test('compare a link with a local file: the link is the original, and there is n
   assert(panel.mixed && panel.links && panel.files && panel.pressed === 'true', panel);
   await page.fill('#link-mixed', 'https://github.com/alice/one/blob/main/nb.ipynb');
   await page.setInputFiles('#file-mixed', file('after.ipynb', newNb));
-  await page.click('#compare-mixed');
+  await page.press('#link-mixed', 'Enter');
   await page.waitForSelector('.diffview');
   const r = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent, hash: decodeURIComponent(location.hash), links: [...document.querySelectorAll('.toolbar a')].map(a => a.textContent), swap: !!document.querySelector('#d-swap-sides') }));
   assert(r.labels === 'alice/one@main to after.ipynb' && /2 modified, 1 added, 1 removed/.test(r.sum), r);
@@ -1540,6 +1540,24 @@ test('compare a link with a local file: the link is the original, and there is n
   await page.click('#d-swap-sides');
   const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, hash: decodeURIComponent(location.hash) }));
   assert(swapped.labels === 'after.ipynb to alice/one@main' && swapped.hash === '#/compare', swapped);
+}));
+
+test('compare one of each asks for the side that is missing', () => run({ hash: '#/compare', settle: 300 }, async ({ page, requests }) => {
+  const file = { name: 'local.ipynb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(newNb)) };
+  const msg = () => page.evaluate(() => ({ text: document.querySelector('#compare-msg').textContent, shown: !document.querySelector('#compare-msg').hidden }));
+  await page.click('#mode-mixed');
+  await page.fill('#link-mixed', 'https://github.com/alice/one/blob/main/nb.ipynb');
+  await page.click('#compare-mixed');
+  await page.waitForTimeout(100);
+  const noFile = await msg();
+  assert(noFile.shown && /Choose or drop an \.ipynb file/.test(noFile.text), noFile);
+  await page.setInputFiles('#file-mixed', file);
+  await page.fill('#link-mixed', '');
+  await page.click('#compare-mixed');
+  await page.waitForTimeout(100);
+  const noLink = await msg();
+  assert(noLink.shown && /Paste a notebook link/.test(noLink.text), noLink);
+  assert(!requests.length, requests);
 }));
 
 test('compare: switching tabs keeps the files already picked', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
@@ -1570,7 +1588,7 @@ test('compare: a Colab or Drive link says it needs a sign-in, without a request'
     assert(/Google Drive and Colab files can’t be opened/.test(s.err), s);
     assert(/Google sign-in/.test(s.errText) && !requests.some(u => /google\.com/.test(u)), s.errText);
   });
-  await run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+  await run({ hash: '#/compare', settle: 300 }, async ({ page, requests }) => {
     const file = { name: 'local.ipynb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(newNb)) };
     await page.click('#mode-mixed');
     await page.fill('#link-mixed', drive);
@@ -1579,6 +1597,7 @@ test('compare: a Colab or Drive link says it needs a sign-in, without a request'
     await page.waitForTimeout(200);
     const r = await page.evaluate(() => ({ msg: document.querySelector('#compare-msg').textContent, shown: !document.querySelector('#compare-msg').hidden }));
     assert(r.shown && /Google sign-in/.test(r.msg), r);
+    assert(!requests.some(u => /google\.com/.test(u)), requests);
   });
 });
 
