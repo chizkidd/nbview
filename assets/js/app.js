@@ -2462,12 +2462,12 @@
       msg.hidden = true;
       try {
         const [textA, textB] = await Promise.all([picks.a.text(), picks.b.text()]);
-        const fromA = { cells: parseCells(textA, picks.a.name), label: picks.a.name };
-        const fromB = { cells: parseCells(textB, picks.b.name), label: picks.b.name };
+        const fromA = { cells: parseCells(textA, picks.a.name), label: picks.a.name, name: picks.a.name };
+        const fromB = { cells: parseCells(textB, picks.b.name), label: picks.b.name, name: picks.b.name };
         // Local files have no address either, so Swap re-renders in place instead of linking.
         const draw = (a, b) => {
           renderDiff({
-            title: `${picks.a.name} and ${picks.b.name}`,
+            title: a.name === b.name ? a.name : `${a.name} and ${b.name}`,
             crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span>',
             labelA: a.label,
             labelB: b.label,
@@ -2492,11 +2492,12 @@
         const src = await resolveSource(notebookUrl(input));
         const [cellsA, textB] = await Promise.all([fetchUrlCells(src.url, src.label), picks.mixed.text()]);
         const cellsB = parseCells(textB, picks.mixed.name);
-        const fromLink = { cells: cellsA, label: src.label }, fromFile = { cells: cellsB, label: picks.mixed.name };
+        const fromLink = { cells: cellsA, label: src.label, name: src.name };
+        const fromFile = { cells: cellsB, label: picks.mixed.name, name: picks.mixed.name };
         // One side is a file, so neither order can go in the address. Swap re-renders in place instead of linking.
         const draw = (a, b) => {
           renderDiff({
-            title: src.name === picks.mixed.name ? picks.mixed.name : `${src.name} and ${picks.mixed.name}`,
+            title: a.name === b.name ? a.name : `${a.name} and ${b.name}`,
             crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span>',
             labelA: a.label,
             labelB: b.label,
