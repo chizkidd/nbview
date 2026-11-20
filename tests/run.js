@@ -1523,6 +1523,65 @@ test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, as
   assert(/2 modified, 1 added, 1 removed/.test(r.sum) && r.labels === 'before.ipynb to after.ipynb', r);
 }));
 
+test('compare a link with a local file: the link is the original, and there is no address to share', () => run({
+  hash: '#/compare', settle: 300, raw: () => ({ body: JSON.stringify(oldNb) }),
+}, async ({ page }) => {
+  const file = (name, body) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(body)) });
+  await page.click('#mode-mixed');
+  const panel = await page.evaluate(() => ({ mixed: !document.querySelector('#panel-mixed').hidden, links: document.querySelector('#panel-links').hidden, files: document.querySelector('#panel-files').hidden, pressed: document.querySelector('#mode-mixed').getAttribute('aria-pressed') }));
+  assert(panel.mixed && panel.links && panel.files && panel.pressed === 'true', panel);
+  await page.fill('#link-mixed', 'https://github.com/alice/one/blob/main/nb.ipynb');
+  await page.setInputFiles('#file-mixed', file('after.ipynb', newNb));
+  await page.click('#compare-mixed');
+  await page.waitForSelector('.diffview');
+  const r = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent, hash: decodeURIComponent(location.hash), links: [...document.querySelectorAll('.toolbar a')].map(a => a.textContent), swap: !!document.querySelector('#d-swap-sides') }));
+  assert(r.labels === 'alice/one@main to after.ipynb' && /2 modified, 1 added, 1 removed/.test(r.sum), r);
+  assert(r.hash === '#/compare' && r.links.join() === 'New comparison' && r.swap, r);
+  await page.click('#d-swap-sides');
+  const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, hash: decodeURIComponent(location.hash) }));
+  assert(swapped.labels === 'after.ipynb to alice/one@main' && swapped.hash === '#/compare', swapped);
+}));
+
+test('compare: switching tabs keeps the files already picked', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+  const file = (name, body) => ({ name, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(body)) });
+  await page.click('#mode-files');
+  await page.setInputFiles('#file-a', file('before.ipynb', oldNb));
+  await page.click('#mode-links');
+  await page.click('#mode-mixed');
+  await page.setInputFiles('#file-mixed', file('after.ipynb', newNb));
+  await page.click('#mode-files');
+  const r = await page.evaluate(() => ({ a: document.querySelector('#name-a').textContent, disabled: document.querySelector('#compare-go').disabled }));
+  assert(/before\.ipynb/.test(r.a) && r.disabled, r);
+  await page.click('#mode-mixed');
+  assert(await page.evaluate(() => /after\.ipynb/.test(document.querySelector('#name-mixed').textContent)), 'the one-of-each pick was lost');
+  await page.click('#mode-files');
+  await page.setInputFiles('#file-b', file('after.ipynb', newNb));
+  await page.click('#compare-go');
+  await page.waitForSelector('.diffview');
+  const after = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent }));
+  assert(after.labels === 'before.ipynb to after.ipynb' && /2 modified, 1 added, 1 removed/.test(after.sum), after);
+}));
+
+test('compare: a Colab or Drive link says it needs a sign-in, without a request', async () => {
+  const drive = 'https://colab.research.google.com/drive/1R_YO2Tc2GH6Nf0bVfdqxabi5sR_xzgln?authuser=1';
+  const l = (a, b) => `#/compare/links/${encodeURIComponent(a)}/${encodeURIComponent(b)}`;
+  await run({ hash: l(drive, rawOf('alice', 'one', 'main', 'nb.ipynb')), raw: twoRepos, settle: 300 }, async ({ page, requests }) => {
+    const s = await state(page);
+    assert(/Google Drive and Colab files can’t be opened/.test(s.err), s);
+    assert(/Google sign-in/.test(s.errText) && !requests.some(u => /google\.com/.test(u)), s.errText);
+  });
+  await run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
+    const file = { name: 'local.ipynb', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(newNb)) };
+    await page.click('#mode-mixed');
+    await page.fill('#link-mixed', drive);
+    await page.setInputFiles('#file-mixed', file);
+    await page.click('#compare-mixed');
+    await page.waitForTimeout(200);
+    const r = await page.evaluate(() => ({ msg: document.querySelector('#compare-msg').textContent, shown: !document.querySelector('#compare-msg').hidden }));
+    assert(r.shown && /Google sign-in/.test(r.msg), r);
+  });
+});
+
 test('compare: a file that is not a notebook is reported, not crashed on', () => run({ hash: '#/compare', settle: 300 }, async ({ page }) => {
   await page.click('#mode-files');
   await page.setInputFiles('#file-a', { name: 'a.ipynb', mimeType: 'application/json', buffer: Buffer.from('not json') });
