@@ -5,10 +5,12 @@ All notable changes to nbview. Dates are when the release’s last change landed
 ## [Unreleased]
 
 ### Added
-- **One of each in Compare.** The Compare page has a third tab, **One of each**: paste a link to one notebook and choose the other from disk. The link is the original side and the file is the modified side, **Swap sides** flips them, and a file already picked in **Two files** stays picked when the tabs change. The file never leaves the browser, so this comparison has no address of its own: **New comparison** is the only link on the result. (#107)
+- **One of each in Compare.** The Compare page has a third tab, **One of each**: paste a link to one notebook and choose the other from disk. The link is the original side and the file is the modified side, **Swap sides** flips them, pressing Enter in the link field compares as it does in **Two links**, and a file already picked in **Two files** stays picked when the tabs change. The file never leaves the browser, so this comparison has no address of its own: **New comparison** is the only link on the result. (#107)
+- **Two files can swap sides too.** Two local notebooks picked in the wrong order used to mean choosing them again; the diff now carries the same **Swap sides** button **One of each** has, re-rendering the two files in the other direction. Neither order fits in the address, because the files never leave the browser. (#109)
 - **A Colab or Google Drive link explains itself in Compare.** Pasting one into either tab used to end in a CORS message; Compare now says the link needs a Google sign-in and points at downloading the notebook and comparing the file, as the viewer already did. (#107)
 
 ### Internal
+- **Compare keeps its repeated parts in one place.** The three tabs come from one list of modes, the Colab and Drive refusal is one function the viewer and Compare share, and the file diff’s toolbar is one string, so each is written once. (#108, #110)
 - **A changelog reference check.** `scripts/check-changelog-refs.mjs` resolves the pull request or commit each entry cites and fails when that commit is not an ancestor of the tag for its section, so an entry filed under an earlier release is caught by `npm test` instead of an audit. The Unreleased section, a version heading that has no tag yet, and a shallow clone are named and skipped. The 0.11.0, 0.12.0 and 0.13.0 entries now cite the pull requests that shipped them. (#106)
 
 ## [0.13.0] - 2026-11-17
