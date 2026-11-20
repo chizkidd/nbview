@@ -702,6 +702,17 @@
     return m ? { gist: m[2], url } : null;
   }
 
+  // A Drive file is behind a Google sign-in, so a plain fetch gets a login page or nothing. The viewer and Compare say
+  // the same thing, rather than showing a network or parse error for a link that can never work.
+  const DRIVE_HOST = /^(colab\.research\.google\.com|drive\.google\.com|docs\.google\.com)$/i;
+  function refuseDrive(url) {
+    let h = '';
+    try { h = new URL(url).hostname; } catch { return; }
+    if (DRIVE_HOST.test(h)) {
+      throw new ViewError('Google Drive and Colab files can’t be opened', 'Those links need a Google sign-in, so nbview cannot read them. Download the .ipynb and drop it on the home page, or use a link to the notebook on GitHub.');
+    }
+  }
+
   async function viewNotebook(src, id) {
     showLoading('Fetching notebook');
     const isGh = !src.url;
@@ -712,13 +723,7 @@
       ? `${RAW}/${enc(src.owner)}/${enc(src.repo)}/${enc(src.ref)}/${enc(src.path)}`
       : src.url;
 
-    if (!isGh) {
-      let h = '';
-      try { h = new URL(src.url).hostname; } catch { /* the fetch below reports it */ }
-      if (/^(colab\.research\.google\.com|drive\.google\.com|docs\.google\.com)$/i.test(h)) {
-        throw new ViewError("Google Drive and Colab files can’t be opened", 'Those links need a Google sign-in, so nbview cannot read them. Download the .ipynb and drop it on the home page, or use a link to the notebook on GitHub.');
-      }
-    }
+    if (!isGh) refuseDrive(src.url);
 
     let text = '', offline = '';
     if (isGh) {
@@ -2319,6 +2324,7 @@
   async function fetchUrlCells(url, labelOverride) {
     const label = labelOverride || labelOf(url);
     if (!/^https?:\/\//i.test(url)) throw new ViewError('Unsupported link', 'Only http and https notebook links can be compared.');
+    refuseDrive(url);
     const gh = parseRawGithub(url);
     if (gh) {
       let r;
@@ -2364,10 +2370,10 @@
     });
   }
 
-  // Pick two notebooks: local files (never leave the browser) or two links.
+  // Pick two notebooks: local files (never leave the browser), two links, or one of each.
   function viewComparePick() {
     document.title = 'Compare notebooks | nbview';
-    const picks = { a: null, b: null };
+    const picks = { a: null, b: null, mixed: null };
     const slot = (key, label) => `
       <label class="drop compare-slot" id="slot-${key}">
         <strong>${label}</strong>
@@ -2381,6 +2387,7 @@
         <div class="toolbar compare-modes">
           <button class="btn" id="mode-links" type="button" aria-pressed="true">Two links</button>
           <button class="btn" id="mode-files" type="button" aria-pressed="false">Two files</button>
+          <button class="btn" id="mode-mixed" type="button" aria-pressed="false">One of each</button>
         </div>
         <section id="panel-links">
           <p class="hint">Paste a link to each notebook, or <code>owner/repo/path/to/notebook.ipynb</code>. They can be in different repos or branches. Private repos work when a GitHub token with access to them is saved.</p>
@@ -2397,17 +2404,31 @@
           <div class="compare-slots">${slot('a', 'Original')}${slot('b', 'Modified')}</div>
           <div class="toolbar compare-go"><button class="btn primary" id="compare-go" type="button" disabled>Compare</button></div>
         </section>
+        <section id="panel-mixed" hidden>
+          <p class="hint">Paste a link to one notebook and choose the other from your disk. The link is the original and the file is the modified version; <strong>Swap sides</strong> on the diff flips them. The file stays in your browser, so this comparison has no link to share.</p>
+          <div class="compare-mixed">
+            <div class="compare-links">
+              <label for="link-mixed">Original (link)</label>
+              <input id="link-mixed" type="text" placeholder="https://github.com/owner/repo/blob/main/notebook.ipynb" autocomplete="off" spellcheck="false">
+            </div>
+            ${slot('mixed', 'Modified (file)')}
+            <div class="toolbar compare-go"><button class="btn primary" id="compare-mixed" type="button">Compare</button></div>
+          </div>
+        </section>
         <p class="hint form-error" id="compare-msg" role="alert" hidden></p>
       </div>`;
     const setMode = mode => {
       document.getElementById('panel-links').hidden = mode !== 'links';
       document.getElementById('panel-files').hidden = mode !== 'files';
+      document.getElementById('panel-mixed').hidden = mode !== 'mixed';
       document.getElementById('mode-links').setAttribute('aria-pressed', String(mode === 'links'));
       document.getElementById('mode-files').setAttribute('aria-pressed', String(mode === 'files'));
+      document.getElementById('mode-mixed').setAttribute('aria-pressed', String(mode === 'mixed'));
       document.getElementById('compare-msg').hidden = true;
     };
     document.getElementById('mode-links').addEventListener('click', () => setMode('links'));
     document.getElementById('mode-files').addEventListener('click', () => setMode('files'));
+    document.getElementById('mode-mixed').addEventListener('click', () => setMode('mixed'));
     document.getElementById('links-form').addEventListener('submit', e => {
       e.preventDefault();
       const note = document.getElementById('compare-msg');
@@ -2428,7 +2449,7 @@
       document.getElementById(`name-${key}`).textContent = `${file.name} (${fmtSize(file.size)})`;
       go.disabled = !(picks.a && picks.b);
     };
-    for (const key of ['a', 'b']) {
+    for (const key of ['a', 'b', 'mixed']) {
       const slotEl = document.getElementById(`slot-${key}`);
       document.getElementById(`file-${key}`).addEventListener('change', e => take(key, e.target.files[0]));
       slotEl.addEventListener('dragover', e => { e.preventDefault(); slotEl.classList.add('over'); });
@@ -2452,6 +2473,34 @@
           entries: nbvDiff.diffCells(cellsA, cellsB),
           links: '<a class="btn" href="#/compare">New comparison</a>',
         });
+      } catch (e) {
+        msg.textContent = e.detail || e.message;
+        msg.hidden = false;
+      }
+    });
+    document.getElementById('compare-mixed').addEventListener('click', async () => {
+      msg.hidden = true;
+      try {
+        if (!picks.mixed) throw new ViewError('A file is missing', 'Choose or drop an .ipynb file for the modified notebook.');
+        const input = document.getElementById('link-mixed').value;
+        if (!String(input).trim()) throw new ViewError('A link is missing', 'Paste a notebook link, or owner/repo/path/to/notebook.ipynb, for the original.');
+        const src = await resolveSource(notebookUrl(input));
+        const [cellsA, textB] = await Promise.all([fetchUrlCells(src.url, src.label), picks.mixed.text()]);
+        const cellsB = parseCells(textB, picks.mixed.name);
+        const fromLink = { cells: cellsA, label: src.label }, fromFile = { cells: cellsB, label: picks.mixed.name };
+        // One side is a file, so neither order can go in the address. Swap re-renders in place instead of linking.
+        const draw = (a, b) => {
+          renderDiff({
+            title: src.name === picks.mixed.name ? picks.mixed.name : `${src.name} and ${picks.mixed.name}`,
+            crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span>',
+            labelA: a.label,
+            labelB: b.label,
+            entries: nbvDiff.diffCells(a.cells, b.cells),
+            links: '<button class="btn" id="d-swap-sides" type="button">Swap sides</button><a class="btn" href="#/compare">New comparison</a>',
+          });
+          document.getElementById('d-swap-sides').addEventListener('click', () => draw(b, a));
+        };
+        draw(fromLink, fromFile);
       } catch (e) {
         msg.textContent = e.detail || e.message;
         msg.hidden = false;

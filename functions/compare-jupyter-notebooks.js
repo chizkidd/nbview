@@ -5,14 +5,14 @@ import { render } from './_lib/landing.mjs';
 const SPEC = {
   path: '/compare-jupyter-notebooks',
   title: 'Compare two Jupyter notebooks in the browser | nbview',
-  description: 'Diff two Jupyter notebooks cell by cell in the browser: added code, changed outputs and edited markdown, from two GitHub links, branches, tags or commits.',
+  description: 'Diff two Jupyter notebooks cell by cell in the browser: added code, changed outputs and edited markdown, from two GitHub links, branches or commits, or from a link against a file on your disk.',
   body: `<h1>Compare two Jupyter notebooks</h1>
 <p class="lede">nbview shows what changed between two <code>.ipynb</code> files, cell by cell, in the browser. Neither notebook is uploaded: each one is read from GitHub, a gist or a link by the browser that is showing it.</p>
 
 <h2>How to compare</h2>
 <ol>
   <li>Open <a href="/#/compare">nbview’s compare page</a>, or choose <strong>Compare</strong> in the toolbar of any notebook you already have open.</li>
-  <li>Paste a link to each notebook, or pick two <code>.ipynb</code> files from your disk. The two can sit in different repositories, branches or folders.</li>
+  <li>Paste a link to each notebook, pick two <code>.ipynb</code> files from your disk, or mix the two: a link on one side and a file on the other. The two can sit in different repositories, branches or folders.</li>
   <li>Read the diff. Each changed cell is shown with the version it came from, and a swap button above it flips the two sides.</li>
 </ol>
 <p>A link can carry the comparison itself, so a review comment or a class note can point at it. The <code>#</code> is part of the address: the viewer routes on it, so a link without one lands on the home page.</p>
@@ -32,6 +32,7 @@ const SPEC = {
 
 <h2>Private repos, and notebooks on your disk</h2>
 <p>Files you choose from your disk are read in the page and never leave the browser. Private repositories work once a fine-grained GitHub token with <strong>Contents: Read-only</strong> is saved: the token stays in this browser and is sent only to <code>api.github.com</code>.</p>
+<p>A link and a file can be compared with each other, which is how a notebook downloaded from Colab is checked against the version in its repository. That comparison has no address to share, because the file stays on your disk. A Colab or Google Drive link on its own needs a Google sign-in, so nbview asks for the downloaded file instead.</p>
 
 <h2>How this compares with other notebook diffs</h2>
 <table class="doc-table">

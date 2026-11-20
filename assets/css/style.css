@@ -719,6 +719,8 @@ html[data-embed] main { padding-top: 0.5rem; }
 .compare-links input { font: 14px var(--mono); padding: 0.55rem 0.7rem; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 4px; width: 100%; }
 .compare-or { margin-top: 1rem; }
 .compare-go { margin-top: 0.6rem; }
+.compare-mixed { max-width: 42rem; }
+.compare-mixed .compare-links { margin-bottom: 0.8rem; }
 
 /* Diff lines wrap like GitHub's instead of scrolling one by one, and side by side uses the whole page width */
 .dline { white-space: normal; }
