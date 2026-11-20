@@ -1522,8 +1522,9 @@ test('compare two local files', () => run({ hash: '#/compare', settle: 300 }, as
   const r = await page.evaluate(() => ({ sum: document.querySelector('#d-summary').textContent, labels: document.querySelector('.dlabels').textContent }));
   assert(/2 modified, 1 added, 1 removed/.test(r.sum) && r.labels === 'before.ipynb to after.ipynb', r);
   await page.click('#d-swap-sides');
-  const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, hash: decodeURIComponent(location.hash) }));
+  const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, title: document.querySelector('.nb-title').textContent, hash: decodeURIComponent(location.hash) }));
   assert(swapped.labels === 'after.ipynb to before.ipynb' && swapped.hash === '#/compare', swapped);
+  assert(swapped.title === 'after.ipynb and before.ipynb', swapped.title);
 }));
 
 test('compare a link with a local file: the link is the original, and there is no address to share', () => run({
@@ -1541,8 +1542,9 @@ test('compare a link with a local file: the link is the original, and there is n
   assert(r.labels === 'alice/one@main to after.ipynb' && /2 modified, 1 added, 1 removed/.test(r.sum), r);
   assert(r.hash === '#/compare' && r.links.join() === 'New comparison' && r.swap, r);
   await page.click('#d-swap-sides');
-  const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, hash: decodeURIComponent(location.hash) }));
+  const swapped = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, title: document.querySelector('.nb-title').textContent, hash: decodeURIComponent(location.hash) }));
   assert(swapped.labels === 'after.ipynb to alice/one@main' && swapped.hash === '#/compare', swapped);
+  assert(swapped.title === 'after.ipynb and nb.ipynb', swapped.title);
 }));
 
 test('compare one of each asks for the side that is missing', () => run({ hash: '#/compare', settle: 300 }, async ({ page, requests }) => {
