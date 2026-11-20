@@ -2459,16 +2459,22 @@
     go.addEventListener('click', async () => {
       msg.hidden = true;
       try {
-        const [a, b] = await Promise.all([picks.a.text(), picks.b.text()]);
-        const cellsA = parseCells(a, picks.a.name), cellsB = parseCells(b, picks.b.name);
-        renderDiff({
-          title: `${picks.a.name} and ${picks.b.name}`,
-          crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span>',
-          labelA: picks.a.name,
-          labelB: picks.b.name,
-          entries: nbvDiff.diffCells(cellsA, cellsB),
-          links: '<a class="btn" href="#/compare">New comparison</a>',
-        });
+        const [textA, textB] = await Promise.all([picks.a.text(), picks.b.text()]);
+        const fromA = { cells: parseCells(textA, picks.a.name), label: picks.a.name };
+        const fromB = { cells: parseCells(textB, picks.b.name), label: picks.b.name };
+        // Local files have no address either, so Swap re-renders in place instead of linking.
+        const draw = (a, b) => {
+          renderDiff({
+            title: `${picks.a.name} and ${picks.b.name}`,
+            crumbs: '<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">Compare</span>',
+            labelA: a.label,
+            labelB: b.label,
+            entries: nbvDiff.diffCells(a.cells, b.cells),
+            links: '<button class="btn" id="d-swap-sides" type="button">Swap sides</button><a class="btn" href="#/compare">New comparison</a>',
+          });
+          document.getElementById('d-swap-sides').addEventListener('click', () => draw(b, a));
+        };
+        draw(fromA, fromB);
       } catch (e) {
         msg.textContent = e.detail || e.message;
         msg.hidden = false;
