@@ -2406,43 +2406,39 @@
         </section>
         <section id="panel-mixed" hidden>
           <p class="hint">Paste a link to one notebook and choose the other from your disk. The link is the original and the file is the modified version; <strong>Swap sides</strong> on the diff flips them. The file stays in your browser, so this comparison has no link to share.</p>
-          <div class="compare-mixed">
+          <form id="mixed-form" class="compare-mixed">
             <div class="compare-links">
               <label for="link-mixed">Original (link)</label>
               <input id="link-mixed" type="text" placeholder="https://github.com/owner/repo/blob/main/notebook.ipynb" autocomplete="off" spellcheck="false">
             </div>
             ${slot('mixed', 'Modified (file)')}
-            <div class="toolbar compare-go"><button class="btn primary" id="compare-mixed" type="button">Compare</button></div>
-          </div>
+            <div class="toolbar compare-go"><button class="btn primary" id="compare-mixed" type="submit">Compare</button></div>
+          </form>
         </section>
         <p class="hint form-error" id="compare-msg" role="alert" hidden></p>
       </div>`;
+    const modes = ['links', 'files', 'mixed'];
     const setMode = mode => {
-      document.getElementById('panel-links').hidden = mode !== 'links';
-      document.getElementById('panel-files').hidden = mode !== 'files';
-      document.getElementById('panel-mixed').hidden = mode !== 'mixed';
-      document.getElementById('mode-links').setAttribute('aria-pressed', String(mode === 'links'));
-      document.getElementById('mode-files').setAttribute('aria-pressed', String(mode === 'files'));
-      document.getElementById('mode-mixed').setAttribute('aria-pressed', String(mode === 'mixed'));
+      for (const m of modes) {
+        document.getElementById(`panel-${m}`).hidden = m !== mode;
+        document.getElementById(`mode-${m}`).setAttribute('aria-pressed', String(m === mode));
+      }
       document.getElementById('compare-msg').hidden = true;
     };
-    document.getElementById('mode-links').addEventListener('click', () => setMode('links'));
-    document.getElementById('mode-files').addEventListener('click', () => setMode('files'));
-    document.getElementById('mode-mixed').addEventListener('click', () => setMode('mixed'));
+    for (const m of modes) document.getElementById(`mode-${m}`).addEventListener('click', () => setMode(m));
+    const msg = document.getElementById('compare-msg');
     document.getElementById('links-form').addEventListener('submit', e => {
       e.preventDefault();
-      const note = document.getElementById('compare-msg');
       try {
         const a = notebookUrl(document.getElementById('link-a').value), b = notebookUrl(document.getElementById('link-b').value);
-        note.hidden = true;
+        msg.hidden = true;
         location.hash = compareLinksHash(a, b);
       } catch (err) {
-        note.textContent = err.detail || err.message;
-        note.hidden = false;
+        msg.textContent = err.detail || err.message;
+        msg.hidden = false;
       }
     });
     const go = document.getElementById('compare-go');
-    const msg = document.getElementById('compare-msg');
     const take = (key, file) => {
       if (!file) return;
       picks[key] = file;
@@ -2478,7 +2474,8 @@
         msg.hidden = false;
       }
     });
-    document.getElementById('compare-mixed').addEventListener('click', async () => {
+    document.getElementById('mixed-form').addEventListener('submit', async e => {
+      e.preventDefault();
       msg.hidden = true;
       try {
         if (!picks.mixed) throw new ViewError('A file is missing', 'Choose or drop an .ipynb file for the modified notebook.');
