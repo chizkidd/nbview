@@ -1617,9 +1617,15 @@ test('compare: a file that is not a notebook is reported, not crashed on', () =>
 
 const rawOf = (o, r, ref, path) => `https://raw.githubusercontent.com/${o}/${r}/${ref}/${path}`;
 const twoRepos = u => ({ body: JSON.stringify(u.includes('/alice/') ? oldNb : newNb) });
+const linksHash = (a, b) => '#/compare/links/' + encodeURIComponent(a) + '/' + encodeURIComponent(b);
+// Links swap by following the toolbar link to the reversed address, which re-renders the diff.
+const swapLinks = async (page, labels) => {
+  await page.click('.toolbar a[href^="#/compare/links/"]');
+  await page.waitForFunction(l => document.querySelector('.dlabels') && document.querySelector('.dlabels').textContent === l, labels, { timeout: 15000 });
+};
 
 test('compare two notebooks by link: different repos, shorthand and swap', () => run({
-  hash: '#/compare/links/' + encodeURIComponent(rawOf('alice', 'one', 'main', 'a/nb.ipynb')) + '/' + encodeURIComponent(rawOf('bob', 'two', 'dev', 'b/nb.ipynb')),
+  hash: linksHash(rawOf('alice', 'one', 'main', 'a/nb.ipynb'), rawOf('bob', 'two', 'dev', 'b/nb.ipynb')),
   raw: twoRepos, settle: 400,
 }, async ({ page }) => {
   const r = await page.evaluate(() => ({ labels: document.querySelector('.dlabels').textContent, sum: document.querySelector('#d-summary').textContent, title: document.querySelector('.nb-title').textContent, links: [...document.querySelectorAll('.toolbar a')].map(a => [a.textContent, a.getAttribute('href')]) }));
@@ -1627,6 +1633,19 @@ test('compare two notebooks by link: different repos, shorthand and swap', () =>
   const openA = r.links.find(l => l[0] === 'Open original'), openB = r.links.find(l => l[0] === 'Open modified'), swap = r.links.find(l => l[0] === 'Swap sides');
   assert(openA[1] === '#/github/alice/one/blob/main/a/nb.ipynb' && openB[1] === '#/github/bob/two/blob/dev/b/nb.ipynb', r.links);
   assert(decodeURIComponent(swap[1]).startsWith('#/compare/links/' + rawOf('bob', 'two', 'dev', 'b/nb.ipynb')), swap);
+  await swapLinks(page, 'bob/two@dev to alice/one@main');
+  const swappedTitle = await page.evaluate(() => document.querySelector('.nb-title').textContent);
+  assert(swappedTitle === 'nb.ipynb', swappedTitle);
+}));
+
+test('compare two notebooks by link: swapping flips the heading when the names differ', () => run({
+  hash: linksHash(rawOf('alice', 'one', 'main', 'a/nb.ipynb'), rawOf('bob', 'two', 'dev', 'b/other.ipynb')),
+  raw: twoRepos, settle: 400,
+}, async ({ page }) => {
+  const before = await page.evaluate(() => document.querySelector('.nb-title').textContent);
+  await swapLinks(page, 'bob/two@dev to alice/one@main');
+  const after = await page.evaluate(() => document.querySelector('.nb-title').textContent);
+  assert(before === 'nb.ipynb and other.ipynb' && after === 'other.ipynb and nb.ipynb', { before, after });
 }));
 
 test('compare by link: the form accepts GitHub links, raw links, shorthand and plain URLs', async () => {
