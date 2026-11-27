@@ -241,6 +241,7 @@ body.is-home main { padding-bottom: 1rem; }
 
 /* Pages: folders, user repos */
 .page, .nb { max-width: 1000px; margin: 0 auto; }
+.nb { max-width: 1200px; }
 .crumbs {
   font: 13px var(--mono);
   color: var(--muted);
@@ -389,7 +390,7 @@ body.is-home main { padding-bottom: 1rem; }
 .cell-target:focus { outline: 2px solid var(--in); }
 .row {
   display: grid;
-  grid-template-columns: 15ex minmax(0, 1fr);
+  grid-template-columns: 10.5ch minmax(0, 1fr);
   gap: 0 0.4rem;
 }
 .prompt {
