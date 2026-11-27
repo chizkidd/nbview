@@ -107,7 +107,7 @@
     const fonts = escHtml(o.origin || '');
     return '<!doctype html>\n<html lang="en" data-theme="light">\n<head>\n<meta charset="utf-8">\n' +
       '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
-      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src ${fonts} data:; img-src * data:">\n` +
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src ${fonts} data:; img-src * data:; media-src data:">\n` +
       `<title>${escHtml(o.name)}</title>\n<style>\n${css}\nbody { display: block; }\n</style>\n</head>\n` +
       `<body class="${escHtml(o.bodyClass || '')}">\n<main>\n<article class="nb">\n<h1 class="nb-title">${escHtml(o.name)}</h1>\n` +
       `<p class="nb-meta"><span>Exported from nbview.org</span></p>\n<div class="cells">\n${o.cellsHtml}\n</div>\n</article>\n</main>\n</body>\n</html>\n`;

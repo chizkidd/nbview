@@ -109,6 +109,22 @@
     return 'https://' + rest;
   }
 
+  // Rewrites browser blob URLs from other public code hosts to their raw notebook endpoints.
+  function crossForgeRaw(input) {
+    const clean = input.replace(/[?#].*$/, '');
+    let m;
+    if ((m = clean.match(/^(?:https?:\/\/)?(?:www\.)?huggingface\.co\/((?:datasets|spaces)\/[^/]+\/[^/]+|[^/]+\/[^/]+)\/(?:blob|resolve)\/([^/]+)\/(.+\.ipynb)$/i))) {
+      return `https://huggingface.co/${m[1]}/resolve/${m[2]}/${m[3]}`;
+    }
+    if ((m = clean.match(/^(?:https?:\/\/)?(?:www\.)?gitlab\.com\/(.+?)\/(?:-\/)?(?:blob|raw)\/([^/]+)\/(.+\.ipynb)$/i))) {
+      return `https://gitlab.com/${m[1]}/-/raw/${m[2]}/${m[3]}`;
+    }
+    if ((m = clean.match(/^(?:https?:\/\/)?(?:www\.)?codeberg\.org\/([^/]+\/[^/]+)\/(?:src|raw)\/(branch|tag|commit)\/([^/]+)\/(.+\.ipynb)$/i))) {
+      return `https://codeberg.org/${m[1]}/raw/${m[2]}/${m[3]}/${m[4]}`;
+    }
+    return null;
+  }
+
   // Turns whatever the user pastes into a route.
   function parseInput(input) {
     let s = input.trim();
@@ -121,6 +137,8 @@
     if ((m = s.match(/^(?:https?:\/\/)?gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]+)(?:[/?#].*)?$/i))) {
       return '#/gist/' + m[1];
     }
+    const forge = crossForgeRaw(s);
+    if (forge) return '#/url/' + encodeURIComponent(forge);
     if ((m = s.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/(.+)$/i))) {
       s = m[1];
     } else if ((m = s.match(/^(?:https?:\/\/)?nbviewer\.(?:org|jupyter\.org)\/github\/(.+)$/i))) {
@@ -457,6 +475,25 @@
     });
   }
 
+  // Client-side filter for long repo, folder and notebook listings: zero extra API requests.
+  function setupListFilter({ input, list, countEl, emptyEl, formatCount, isIncluded }) {
+    if (!input || !list) return () => {};
+    const apply = () => {
+      const q = input.value.trim().toLowerCase();
+      let shown = 0;
+      for (const li of list.querySelectorAll('.entry:not(.is-up)')) {
+        const hay = (li.dataset.filter || '').toLowerCase();
+        const match = !q || hay.includes(q);
+        li.hidden = !match;
+        if (match && (!isIncluded || isIncluded(li))) shown++;
+      }
+      if (countEl) countEl.textContent = formatCount(shown, q);
+      if (emptyEl) emptyEl.hidden = shown > 0 || !q;
+    };
+    input.addEventListener('input', apply);
+    return apply;
+  }
+
   async function viewUser(owner, id) {
     showLoading(`Loading repositories for ${owner}`);
     // /users/:owner/repos is public-only, even for the signed-in account itself, so ask the authenticated
@@ -470,24 +507,33 @@
     if (!Array.isArray(repos)) throw new ViewError('Unexpected answer from GitHub', 'The repository list was not in the expected format. Try again later.');
     repos = repos.filter(r => r && typeof r.name === 'string' && r.owner && typeof r.owner.login === 'string');
     document.title = `${owner} | nbview`;
+    const baseCount = own
+      ? (repos.length === 100 ? 'The 100 most recently updated repositories' : `${repos.length} repositories`)
+      : (repos.length === 100 ? 'The 100 most recently updated public repositories' : `${repos.length} public repositories`);
     app.innerHTML = `
       <div class="page">
         <nav class="crumbs"><a href="#/">Home</a><span class="sep">/</span><span aria-current="page">${esc(owner)}</span></nav>
         <header class="page-head">
           <h1>${esc(owner)}</h1>
           <div class="toolbar"><a class="btn" href="https://github.com/${encodeURIComponent(owner)}" target="_blank" rel="noopener">View on GitHub</a></div>
-          <p class="count">${own
-            ? (repos.length === 100 ? 'The 100 most recently updated repositories' : `${repos.length} repositories`)
-            : (repos.length === 100 ? 'The 100 most recently updated public repositories' : `${repos.length} public repositories`)}</p>
+          <p class="count" id="list-count">${baseCount}</p>
         </header>
-        ${repos.length ? `<ul class="listing">${repos.map(r => `
-          <li class="entry is-dir">
+        ${repos.length >= 8 ? '<div class="list-controls"><input type="search" id="list-filter" class="list-filter" placeholder="Filter repositories" aria-label="Filter repositories" autocomplete="off" spellcheck="false"></div>' : ''}
+        ${repos.length ? `<ul class="listing" id="listing">${repos.map(r => `
+          <li class="entry is-dir" data-filter="${esc(`${r.name} ${r.description || ''}`)}">
             <a href="${hashFor(r.owner.login, r.name)}">${ICONS.repo}
               <span class="stack"><span class="name">${esc(r.name)}</span>${r.description ? `<span class="desc">${esc(r.description)}</span>` : ''}</span>
             </a>
             <span class="size">${r.private ? '<span class="tag">private</span>' : ''}${r.language === 'Jupyter Notebook' ? '<span class="tag">notebooks</span>' : esc(r.language || '')}</span>
-          </li>`).join('')}</ul>` : `<p class="empty">${esc(owner)} has no ${own ? '' : 'public '}repositories.</p>`}
+          </li>`).join('')}</ul><p class="empty" id="list-empty" hidden>No matching repositories.</p>` : `<p class="empty">${esc(owner)} has no ${own ? '' : 'public '}repositories.</p>`}
       </div>`;
+    setupListFilter({
+      input: document.getElementById('list-filter'),
+      list: document.getElementById('listing'),
+      countEl: document.getElementById('list-count'),
+      emptyEl: document.getElementById('list-empty'),
+      formatCount: (shown, q) => (q ? `${shown} of ${repos.length} ${own ? '' : 'public '}repositories` : baseCount),
+    });
   }
 
   async function viewTree(owner, repo, ref, path, id) {
@@ -526,8 +572,9 @@
         : it.html_url;
       const ext = !isDir && !isNb ? ' target="_blank" rel="noopener"' : '';
       const icon = isDir ? ICONS.dir : isNb ? ICONS.nb : ICONS.file;
-      return `<li class="entry ${cls}"><a href="${esc(href || '#')}"${ext}>${icon}<span class="name">${esc(it.name)}</span></a><span class="size">${isDir ? '' : fmtSize(it.size)}</span></li>`;
+      return `<li class="entry ${cls}" data-filter="${esc(it.name)}"><a href="${esc(href || '#')}"${ext}>${icon}<span class="name">${esc(it.name)}</span></a><span class="size">${isDir ? '' : fmtSize(it.size)}</span></li>`;
     }).join('');
+    const baseTreeCount = `${nbCount === 1 ? '1 notebook' : `${nbCount} notebooks`} in this folder`;
 
     app.innerHTML = `
       <div class="page">
@@ -539,18 +586,32 @@
             <a class="btn" href="${hashFor(owner, repo, 'notebooks', ref)}">All notebooks</a>
             <a class="btn" href="https://github.com/${enc(owner)}/${enc(repo)}/tree/${enc(ref)}${path ? '/' + enc(path) : ''}" target="_blank" rel="noopener">View on GitHub</a>
           </div>
-          <p class="count">${nbCount === 1 ? '1 notebook' : `${nbCount} notebooks`} in this folder</p>
+          <p class="count" id="list-count">${baseTreeCount}</p>
         </header>
+        ${items.length >= 8 ? '<div class="list-controls"><input type="search" id="list-filter" class="list-filter" placeholder="Filter files in this folder" aria-label="Filter files" autocomplete="off" spellcheck="false"></div>' : ''}
         <ul class="listing${onlyNb ? ' only-nb' : ''}" id="listing">
-          ${parent !== null ? `<li class="entry is-dir"><a href="${hashFor(owner, repo, 'tree', ref, parent)}">${ICONS.up}<span class="name">..</span></a><span class="size"></span></li>` : ''}
+          ${parent !== null ? `<li class="entry is-dir is-up"><a href="${hashFor(owner, repo, 'tree', ref, parent)}">${ICONS.up}<span class="name">..</span></a><span class="size"></span></li>` : ''}
           ${rows || '<li class="empty">This folder is empty.</li>'}
         </ul>
+        <p class="empty" id="list-empty" hidden>No matching files in this folder.</p>
         <div id="readme"></div>
       </div>`;
 
-    document.getElementById('only-nb').addEventListener('change', e => {
+    const listing = document.getElementById('listing');
+    const onlyNbBox = document.getElementById('only-nb');
+    const reapplyTree = setupListFilter({
+      input: document.getElementById('list-filter'),
+      list: listing,
+      countEl: document.getElementById('list-count'),
+      emptyEl: document.getElementById('list-empty'),
+      isIncluded: li => !(onlyNbBox.checked && li.classList.contains('is-file')),
+      formatCount: (shown, q) => (q ? `${shown} matching item${shown === 1 ? '' : 's'} in this folder` : baseTreeCount),
+    });
+
+    onlyNbBox.addEventListener('change', e => {
       store.set('nbv.onlyNb', e.target.checked);
-      document.getElementById('listing').classList.toggle('only-nb', e.target.checked);
+      listing.classList.toggle('only-nb', e.target.checked);
+      reapplyTree();
     });
 
     const readme = items.find(it => it.type === 'file' && /^readme(\.md|\.markdown)?$/i.test(it.name));
@@ -633,18 +694,31 @@
     const dated = dates && dates.size ? dates : null;
     const when = p => (dated && dated.get(p)) || '';
     // Newest first, with anything GitHub gave no date for after it in path order, the only order it has.
-    const ordered = dated ? files.slice().sort((a, b) => {
+    const byDate = dated ? files.slice().sort((a, b) => {
       const da = when(a.path), db = when(b.path);
       if (da && db && da !== db) return db < da ? -1 : 1;
       if (da && !db) return -1;
       if (!da && db) return 1;
       return byPath(a, b);
     }) : files;
+    let sortMode = dated ? 'date' : 'path';
     const count = files.length === 1 ? '1 notebook' : `${files.length} notebooks`;
     const note = !token || dated ? ''
       : overCap
         ? `<p class="hint">This repository has more than ${NBC_DATE_MAX} notebooks, and GitHub gives a last-commit date one file at a time, so the list is ordered by path instead.</p>`
         : '<p class="hint">GitHub didn’t return last-commit dates, so the list is ordered by path.</p>';
+
+    const renderRows = list => list.map(n => {
+      const iso = when(n.path);
+      const meta = [iso ? `<time datetime="${esc(iso)}">${esc(fmtDate(iso))}</time>` : '', fmtSize(n.size)].filter(Boolean).join(' · ');
+      return `
+      <li class="entry is-nb" data-filter="${esc(n.path)}">
+        <a href="${hashFor(owner, repo, 'blob', ref, n.path)}">${ICONS.nb}<span class="name">${esc(n.path)}</span></a>
+        <span class="size">${meta}</span>
+      </li>`;
+    }).join('');
+
+    const orderLabel = () => (sortMode === 'date' ? 'newest first' : 'ordered by path');
 
     document.title = `${files.length} notebook${files.length === 1 ? '' : 's'} in ${owner}/${repo} | nbview`;
     app.innerHTML = `
@@ -653,20 +727,34 @@
         <header class="page-head">
           <h1>Notebooks in ${esc(repo)}</h1>
           <div class="toolbar"><a class="btn" href="${hashFor(owner, repo, 'tree', ref, '')}">Browse folders</a></div>
-          <p class="count">${count} in this repository, ${dated ? 'newest first' : 'ordered by path'}</p>
+          <p class="count" id="list-count">${count} in this repository, ${orderLabel()}</p>
         </header>
         ${tree.truncated ? '<p class="hint">This repository is large, so GitHub returned only the first part of its file list. Browse folders for the rest.</p>' : ''}
         ${note}
-        ${files.length ? `<ul class="listing">${ordered.map(n => {
-          const iso = when(n.path);
-          const meta = [iso ? `<time datetime="${esc(iso)}">${esc(fmtDate(iso))}</time>` : '', fmtSize(n.size)].filter(Boolean).join(' · ');
-          return `
-          <li class="entry is-nb">
-            <a href="${hashFor(owner, repo, 'blob', ref, n.path)}">${ICONS.nb}<span class="name">${esc(n.path)}</span></a>
-            <span class="size">${meta}</span>
-          </li>`;
-        }).join('')}</ul>` : '<p class="empty">This repository has no notebooks on this branch.</p>'}
+        ${files.length > 1 ? `<div class="list-controls">
+          <input type="search" id="list-filter" class="list-filter" placeholder="Filter notebooks by path" aria-label="Filter notebooks" autocomplete="off" spellcheck="false">
+          ${dated ? '<button class="btn" id="list-sort" type="button">Order by path</button>' : ''}
+        </div>` : ''}
+        ${files.length ? `<ul class="listing" id="listing">${renderRows(byDate)}</ul><p class="empty" id="list-empty" hidden>No matching notebooks.</p>` : '<p class="empty">This repository has no notebooks on this branch.</p>'}
       </div>`;
+
+    const listing = document.getElementById('listing');
+    const reapply = setupListFilter({
+      input: document.getElementById('list-filter'),
+      list: listing,
+      countEl: document.getElementById('list-count'),
+      emptyEl: document.getElementById('list-empty'),
+      formatCount: (shown, q) => (q ? `${shown} of ${count} in this repository, ${orderLabel()}` : `${count} in this repository, ${orderLabel()}`),
+    });
+    const sortBtn = document.getElementById('list-sort');
+    if (sortBtn && listing) {
+      sortBtn.addEventListener('click', () => {
+        sortMode = sortMode === 'date' ? 'path' : 'date';
+        sortBtn.textContent = sortMode === 'date' ? 'Order by path' : 'Newest first';
+        listing.innerHTML = renderRows(sortMode === 'date' ? byDate : files);
+        reapply();
+      });
+    }
   }
 
   async function viewGist(gistId, id) {
@@ -891,6 +979,9 @@
     document.title = `${info.name} | nbview`;
     document.body.classList.remove('hide-code', 'hide-outputs');
 
+    const health = analyzeNotebook(cells);
+    const healthHtml = renderHealthHtml(health);
+
     app.innerHTML = `
       <article class="nb">
         <nav class="crumbs">${info.crumbs || ''}</nav>
@@ -927,6 +1018,7 @@
             ${info.source ? `<a class="btn" href="${esc(info.source)}" target="_blank" rel="noopener">Source</a>` : ''}
           </div>
           <p class="nb-meta">${kernel ? `<span>${esc(kernel)}</span>` : ''}<span>${cells.length} cells</span></p>
+          ${healthHtml}
           ${info.offline ? `<p class="hint" id="offline-note">${esc(info.offline)}</p>` : ''}
         </header>
         <div class="findbar" id="findbar" role="search" hidden>
@@ -1017,6 +1109,20 @@
 
     // Render in batches so huge notebooks stay responsive.
     const host = document.getElementById('cells');
+    const healthEl = document.getElementById('nb-health');
+    if (healthEl) {
+      healthEl.addEventListener('click', async e => {
+        const btn = e.target.closest('[data-jump-cell]');
+        if (!btn) return;
+        const idx = Number(btn.dataset.jumpCell) - 1;
+        if (!host.children[idx]) await current.rendered;
+        const target = host.children[idx];
+        if (!target) return;
+        for (const prev of host.querySelectorAll('.cell-target')) prev.classList.remove('cell-target');
+        target.classList.add('cell-target');
+        focusCell(target);
+      });
+    }
     setupFind(host, () => current.rendered);
     try {
       let frameStart = performance.now();
@@ -1026,6 +1132,10 @@
         try {
           const el = renderCell(cells[i], ctx, lang);
           if (el) {
+            if (cells[i].cell_type === 'code') {
+              const src = join(cells[i].source);
+              if (/\S/.test(src)) addCellCopy(el, i + 1, src);
+            }
             if (info.shareable) addCellLink(el, i + 1, ctx);
             host.append(el);
             if (cells[i].cell_type === 'markdown') addHeadings(el);
@@ -1041,6 +1151,65 @@
     // Rendering above the target can shift it, so go there once more when everything is in.
     const hit = host.querySelector('.cell-target');
     if (hit && !stale(id)) focusCell(hit);
+  }
+
+  // Single-pass notebook diagnostics: flags out-of-order runs, unexecuted code cells, tracebacks and heavy outputs.
+  function analyzeNotebook(cells) {
+    const outOfOrder = [], unexecuted = [], errors = [], heavy = [];
+    let lastCount = null, totalOut = 0;
+    for (let i = 0; i < cells.length; i++) {
+      const c = cells[i];
+      if (!c || typeof c !== 'object' || c.cell_type !== 'code') continue;
+      const num = i + 1;
+      const src = join(c.source);
+      const ec = typeof c.execution_count === 'number' && Number.isFinite(c.execution_count) ? c.execution_count : null;
+      if (ec !== null) {
+        if (lastCount !== null && ec <= lastCount) outOfOrder.push({ cell: num, count: ec, prev: lastCount });
+        lastCount = ec;
+      } else if (src.trim()) {
+        unexecuted.push({ cell: num });
+      }
+      const outs = Array.isArray(c.outputs) ? c.outputs : [];
+      let cellBytes = 0;
+      let errName = '';
+      for (const o of outs) {
+        if (!o || typeof o !== 'object') continue;
+        cellBytes += outputSize(o);
+        if (o.output_type === 'error' && !errName) errName = String(o.ename || 'Error');
+      }
+      if (errName) errors.push({ cell: num, ename: errName });
+      totalOut += cellBytes;
+      if (cellBytes >= 256 * 1024) heavy.push({ cell: num, bytes: cellBytes });
+    }
+    heavy.sort((a, b) => b.bytes - a.bytes);
+    const bigOutputs = totalOut >= 1024 * 1024 || (heavy.length > 0 && heavy[0].bytes >= 512 * 1024);
+    return { outOfOrder, unexecuted, errors, heavy: bigOutputs ? heavy.slice(0, 5) : [], totalOut: bigOutputs ? totalOut : 0 };
+  }
+
+  function renderHealthHtml(h) {
+    const summary = [];
+    if (h.errors.length) summary.push(`${h.errors.length} error${h.errors.length === 1 ? '' : 's'}`);
+    if (h.outOfOrder.length) summary.push(`${h.outOfOrder.length} cell${h.outOfOrder.length === 1 ? '' : 's'} out of order`);
+    if (h.unexecuted.length) summary.push(`${h.unexecuted.length} unexecuted code cell${h.unexecuted.length === 1 ? '' : 's'}`);
+    if (h.totalOut) summary.push(`${fmtSize(h.totalOut)} in outputs`);
+    if (!summary.length) return '';
+
+    const items = [];
+    for (const e of h.errors.slice(0, 8)) {
+      items.push(`<li><button type="button" class="health-jump" data-jump-cell="${e.cell}">Cell ${e.cell}</button>: ${esc(e.ename)}</li>`);
+    }
+    for (const o of h.outOfOrder.slice(0, 8)) {
+      items.push(`<li><button type="button" class="health-jump" data-jump-cell="${o.cell}">Cell ${o.cell}</button>: ran as In [${o.count}] after In [${o.prev}]</li>`);
+    }
+    if (h.unexecuted.length) {
+      const shown = h.unexecuted.slice(0, 6).map(u => `<button type="button" class="health-jump" data-jump-cell="${u.cell}">Cell ${u.cell}</button>`).join(', ');
+      const extra = h.unexecuted.length > 6 ? ` and ${h.unexecuted.length - 6} more` : '';
+      items.push(`<li>Unexecuted code: ${shown}${extra}</li>`);
+    }
+    for (const b of h.heavy) {
+      items.push(`<li><button type="button" class="health-jump" data-jump-cell="${b.cell}">Cell ${b.cell}</button>: ${esc(fmtSize(b.bytes))} in outputs</li>`);
+    }
+    return `<details class="nb-health" id="nb-health"><summary>Notebook notes: ${esc(summary.join(' · '))}</summary><ul class="health-list">${items.join('')}</ul></details>`;
   }
 
   // The address to share. GitHub notebooks use the nbviewer-style path (nbview.org/github/...), which the server
@@ -1090,6 +1259,32 @@
     box.select();
   }
 
+  function cellActionBox(el) {
+    let box = el.querySelector(':scope > .cell-actions');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'cell-actions';
+      el.prepend(box);
+    }
+    return box;
+  }
+
+  // Copies the raw source of a code cell without line numbers or highlighting markup.
+  function addCellCopy(el, n, source) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn cell-copy';
+    b.textContent = 'Copy';
+    b.title = `Copy code from cell ${n}`;
+    b.setAttribute('aria-label', `Copy code from cell ${n}`);
+    b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(source); b.textContent = 'Copied'; }
+      catch { window.prompt('Copy this code', source); }
+      setTimeout(() => { b.textContent = 'Copy'; }, 1800);
+    });
+    cellActionBox(el).append(b);
+  }
+
   // A link to one cell. It goes through the same commit lookup as Copy link, so a cell shared into a class or a
   // review comment still points at the cell it was copied from after the branch moves on.
   function addCellLink(el, n, ctx) {
@@ -1108,7 +1303,7 @@
       catch { window.prompt('Copy this link', url); }
       setTimeout(() => { b.textContent = '#'; }, 1800);
     });
-    el.prepend(b);
+    cellActionBox(el).append(b);
   }
 
   function focusCell(el) {
@@ -1121,7 +1316,7 @@
 
   const MAX_FIND = 3000;
   const HAS_HIGHLIGHTS = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight === 'function';
-  const FIND_SKIP = '.prompt, .gutter, .cell-link, .plotly-ui, script, style, [aria-hidden="true"]';
+  const FIND_SKIP = '.prompt, .gutter, .cell-actions, .cell-link, .cell-copy, .out-actions, .plotly-ui, script, style, [aria-hidden="true"]';
 
   function clearFindHighlights() {
     if (HAS_HIGHLIGHTS) { CSS.highlights.delete('nbv-find'); CSS.highlights.delete('nbv-find-current'); }
@@ -1276,7 +1471,7 @@
     if (kind === 'html') {
       await nbState.rendered;
       const host = document.getElementById('cells').cloneNode(true);
-      for (const x of host.querySelectorAll('.cell-link')) x.remove();
+      for (const x of host.querySelectorAll('.cell-actions, .cell-link, .cell-copy, .out-actions')) x.remove();
       for (const x of host.querySelectorAll('.plotly-box')) {
         const n = document.createElement('div');
         n.className = 'note';
@@ -1479,8 +1674,70 @@
 
   const MIME_ORDER = [
     'text/html', 'image/svg+xml', 'image/png', 'image/jpeg', 'image/gif',
+    'audio/wav', 'audio/mpeg', 'audio/ogg', 'audio/flac', 'audio/webm', 'audio/mp4',
+    'video/mp4', 'video/webm', 'video/ogg',
     'text/markdown', 'text/latex', 'application/json', 'text/plain',
   ];
+
+  const MEDIA_EXT = {
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/svg+xml': 'svg',
+    'audio/wav': 'wav', 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/flac': 'flac', 'audio/webm': 'webm', 'audio/mp4': 'm4a',
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'video/ogg': 'ogv',
+  };
+  const B64_DATA = /^[A-Za-z0-9+/=]+$/;
+
+  // Converts an HTML output table into RFC 4180 CSV text, preserving column spans.
+  function tableToCsv(table) {
+    const csvCell = s => {
+      const clean = String(s).replace(/\s+/g, ' ').trim();
+      return /[",\r\n]/.test(clean) ? '"' + clean.replace(/"/g, '""') + '"' : clean;
+    };
+    const rows = [];
+    for (const tr of table.rows) {
+      const cols = [];
+      for (const cell of tr.cells) {
+        cols.push(csvCell(cell.textContent || ''));
+        const span = Math.min(Number(cell.colSpan) || 1, 50);
+        for (let k = 1; k < span; k++) cols.push('');
+      }
+      rows.push(cols.join(','));
+    }
+    return rows.join('\n') + '\n';
+  }
+
+  // Adds Copy CSV and Download CSV controls to top-level HTML tables (typically pandas DataFrames).
+  function enhanceTables(root) {
+    for (const table of root.querySelectorAll('table')) {
+      if (!table.rows.length || (table.parentElement && table.parentElement.closest('table'))) continue;
+      const box = document.createElement('div');
+      box.className = 'table-out';
+      const actions = document.createElement('div');
+      actions.className = 'out-actions';
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'btn out-btn table-copy-csv';
+      copyBtn.textContent = 'Copy CSV';
+      copyBtn.addEventListener('click', async () => {
+        const csv = tableToCsv(table);
+        try { await navigator.clipboard.writeText(csv); copyBtn.textContent = 'Copied'; }
+        catch { window.prompt('Copy this CSV', csv); }
+        setTimeout(() => { copyBtn.textContent = 'Copy CSV'; }, 1800);
+      });
+      const dlBtn = document.createElement('button');
+      dlBtn.type = 'button';
+      dlBtn.className = 'btn out-btn table-dl-csv';
+      dlBtn.textContent = 'CSV';
+      dlBtn.title = 'Download table as CSV';
+      dlBtn.setAttribute('aria-label', 'Download table as CSV');
+      dlBtn.addEventListener('click', () => {
+        const base = (current && current.name ? current.name.replace(/\.ipynb$/i, '').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_') : 'table') || 'table';
+        saveFile(base + '-table.csv', tableToCsv(table), 'text/csv');
+      });
+      actions.append(copyBtn, dlBtn);
+      table.replaceWith(box);
+      box.append(actions, table);
+    }
+  }
 
   // Reads the pixel size from the first bytes of a PNG, GIF or JPEG so the browser can reserve space.
   function imageSize(type, b64) {
@@ -1529,7 +1786,7 @@
         const clean = sanitizeHtml(v, scope);
         const probe = document.createElement('div');
         probe.innerHTML = clean;
-        const visible = probe.textContent.trim() || probe.querySelector('img,svg,table,video,canvas');
+        const visible = probe.textContent.trim() || probe.querySelector('img,svg,table,video,audio,canvas');
         if (!visible) {
           // Typically Plotly/Bokeh/widget output that only works with JavaScript.
           skippedScript = /<script/i.test(v);
@@ -1540,6 +1797,7 @@
         d.innerHTML = clean;
         guardImages(d);
         d.querySelectorAll('a[href]').forEach(a => { a.target = '_blank'; a.rel = 'noopener'; });
+        enhanceTables(d);
         wrap.append(d);
         return true;
       }
@@ -1560,7 +1818,47 @@
         if (h) img.height = h;
         // Lazy loading only when the size is known, so the page doesn't jump as images arrive.
         if (w && h) img.loading = 'lazy';
-        wrap.append(img);
+        const box = document.createElement('div');
+        box.className = 'img-out';
+        const actions = document.createElement('div');
+        actions.className = 'out-actions';
+        const save = document.createElement('a');
+        save.className = 'btn out-btn img-save';
+        save.href = img.src;
+        save.download = `output.${MEDIA_EXT[type] || 'png'}`;
+        save.textContent = 'Save';
+        save.title = 'Save image';
+        save.setAttribute('aria-label', 'Save image');
+        actions.append(save);
+        box.append(actions, img);
+        wrap.append(box);
+        return true;
+      }
+
+      if (type.startsWith('audio/') || type.startsWith('video/')) {
+        const b64 = v.replace(/\s/g, '');
+        if (!b64 || !B64_DATA.test(b64)) continue;
+        const src = `data:${type};base64,${b64}`;
+        const isVideo = type.startsWith('video/');
+        const el = document.createElement(isVideo ? 'video' : 'audio');
+        el.controls = true;
+        el.preload = 'metadata';
+        if (isVideo) el.playsInline = true;
+        el.src = src;
+        const box = document.createElement('div');
+        box.className = 'media-out';
+        const actions = document.createElement('div');
+        actions.className = 'out-actions';
+        const save = document.createElement('a');
+        save.className = 'btn out-btn media-save';
+        save.href = src;
+        save.download = `output.${MEDIA_EXT[type] || (isVideo ? 'mp4' : 'wav')}`;
+        save.textContent = 'Save';
+        save.title = isVideo ? 'Save video' : 'Save audio';
+        save.setAttribute('aria-label', save.title);
+        actions.append(save);
+        box.append(el, actions);
+        wrap.append(box);
         return true;
       }
 
@@ -2813,6 +3111,7 @@
     document.body.classList.toggle('is-home', parts.length === 0);
     window.scrollTo(0, 0);
     clearFindHighlights();
+    kbCell = -1;
 
     if (!window.marked || !window.DOMPurify) {
       renderError(new ViewError("Couldn’t load the rendering libraries", 'A script failed to load. Reload the page, or check for content blockers.'));
@@ -2876,16 +3175,76 @@
     return true;
   }
 
-  // On the home page, "/" jumps into the search box. Inside a notebook the same key opens Find instead.
+  // Keyboard shortcuts across the home page, listings, notebooks and Compare.
+  let kbCell = -1;
   document.addEventListener('keydown', e => {
-    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const t = e.target;
     if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-    if (!document.body.classList.contains('is-home') || document.querySelector('dialog[open]')) return;
-    const input = document.getElementById('hero-input');
-    if (!input) return;
-    e.preventDefault();
-    input.focus();
+
+    const shortcutsDlg = document.getElementById('shortcuts-dialog');
+    if (e.key === '?') {
+      if (!shortcutsDlg) return;
+      if (shortcutsDlg.open) { e.preventDefault(); shortcutsDlg.close(); return; }
+      if (document.querySelector('dialog[open]')) return;
+      e.preventDefault();
+      shortcutsDlg.showModal();
+      return;
+    }
+    if (document.querySelector('dialog[open]')) return;
+
+    if (e.key === '/') {
+      if (document.body.classList.contains('is-home')) {
+        const input = document.getElementById('hero-input');
+        if (input) { e.preventDefault(); input.focus(); }
+      } else if (!document.getElementById('find-btn')) {
+        const filter = document.getElementById('list-filter');
+        if (filter) { e.preventDefault(); filter.focus(); }
+      }
+      return;
+    }
+    if (e.shiftKey) return;
+
+    if (e.key === 'j' || e.key === 'k') {
+      const step = e.key === 'j' ? 1 : -1;
+      const diffBtn = document.getElementById(step > 0 ? 'd-next' : 'd-prev');
+      if (diffBtn) { e.preventDefault(); diffBtn.click(); return; }
+      const host = document.getElementById('cells');
+      if (!host) return;
+      const list = [...host.querySelectorAll(':scope > .cell')];
+      if (!list.length) return;
+      e.preventDefault();
+      const active = document.activeElement && document.activeElement.closest('.cell');
+      const cur = active ? list.indexOf(active) : kbCell;
+      const next = cur < 0 ? (step > 0 ? 0 : list.length - 1) : Math.max(0, Math.min(list.length - 1, cur + step));
+      kbCell = next;
+      focusCell(list[next]);
+      return;
+    }
+
+    if (e.key === 'c') {
+      const b = document.getElementById('toggle-code');
+      if (b) { e.preventDefault(); b.click(); }
+    } else if (e.key === 'o') {
+      const b = document.getElementById('toggle-outputs') || document.getElementById('d-outputs');
+      if (b) { e.preventDefault(); b.click(); }
+    } else if (e.key === 'l') {
+      const b = document.getElementById('toggle-lines');
+      if (b) { e.preventDefault(); b.click(); }
+    } else if (e.key === 'w') {
+      const b = document.getElementById('toggle-wrap');
+      if (b) { e.preventDefault(); b.click(); }
+    } else if (e.key === 't') {
+      const toc = document.getElementById('toc-menu');
+      if (toc && !toc.hidden) {
+        e.preventDefault();
+        toc.open = !toc.open;
+        if (toc.open) {
+          const first = toc.querySelector('.toc-item');
+          if (first) first.focus();
+        }
+      }
+    }
   });
 
   /* ---------- global wiring ---------- */

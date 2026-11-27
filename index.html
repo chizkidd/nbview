@@ -26,7 +26,7 @@
   <link rel="preload" href="assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="theme-color" content="#2D52CF">
   <meta name="apple-mobile-web-app-title" content="nbview">
-  <link rel="stylesheet" href="assets/css/style.css?v=3ff1c3cf">
+  <link rel="stylesheet" href="assets/css/style.css?v=af3832ea">
   <script src="assets/js/theme.js?v=5331cfe1"></script>
 </head>
 <body class="is-home">
@@ -114,10 +114,29 @@
     </form>
   </dialog>
 
+  <dialog id="shortcuts-dialog">
+    <form method="dialog" class="settings-form">
+      <h2>Keyboard shortcuts</h2>
+      <dl class="shortcuts-list">
+        <dt><kbd>/</kbd></dt><dd>Search on the home page, or Find in a notebook</dd>
+        <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next or previous cell in a notebook, or change in Compare</dd>
+        <dt><kbd>c</kbd></dt><dd>Hide or show code</dd>
+        <dt><kbd>o</kbd></dt><dd>Hide or show outputs</dd>
+        <dt><kbd>t</kbd></dt><dd>Open or close the Contents menu</dd>
+        <dt><kbd>l</kbd> / <kbd>w</kbd></dt><dd>Toggle line numbers or wrap lines</dd>
+        <dt><kbd>?</kbd></dt><dd>Show or close these shortcuts</dd>
+        <dt><kbd>Esc</kbd></dt><dd>Close a dialog, menu or Find</dd>
+      </dl>
+      <div class="dialog-actions">
+        <button class="btn primary" value="close">Close</button>
+      </div>
+    </form>
+  </dialog>
+
   <script defer src="assets/vendor/marked.umd.js?v=c9bfda1c"></script>
   <script defer src="assets/vendor/purify.min.js?v=c2b28807"></script>
-  <script defer src="assets/js/export.js?v=507cf0b0"></script>
+  <script defer src="assets/js/export.js?v=d6eea2cf"></script>
   <script defer src="assets/js/diff.js?v=e10ad741"></script>
-  <script defer src="assets/js/app.js?v=bffd141a"></script>
+  <script defer src="assets/js/app.js?v=2573d935"></script>
 </body>
 </html>
