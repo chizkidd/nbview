@@ -4,6 +4,16 @@ All notable changes to nbview. Dates are when the release’s last change landed
 
 ## [Unreleased]
 
+### Added
+- **Standalone HTML diff export.** Compare now has an **Export HTML** button that saves the rendered diff (including side-by-side plot diffs, active layout and outputs state) as a single self-contained, script-free HTML file with an inline Content Security Policy.
+- **Visual plot diff modes.** Changed image outputs in Compare can now be inspected **Side by side**, with a draggable **Slider** curtain, or as a **Pixel diff** highlight canvas reporting how many pixels changed.
+- **Visible offline reading shelf and complete offline precache.** The home page now lists saved notebooks under **Saved for offline reading** with direct links, saved dates, sizes and per-item **Remove** buttons, and marks saved items with an `offline` tag on **Recently opened**. The service worker now precaches the lazy-loaded highlight.js and KaTeX bundles alongside the shell so offline notebooks keep full syntax coloring and math.
+- **Lazy branch and tag switcher.** Clicking the branch or tag pill in repository, folder, All notebooks or notebook breadcrumbs opens a switcher that fetches branches and tags only when clicked, filters lists longer than ten refs in place, and switches refs without leaving the current path.
+- **Shareable `/compare/...` URLs and richer link-preview cards.** Added `/compare/*` Pages Function and `_redirects` backup support plus a **Copy link** button on GitHub comparisons, and extended crawler preview cards to cover comparisons, `?cell=N` cell links, repositories, folders, All notebooks and multi-file gists.
+- **Per-cell collapse/expand and Jupyter cell metadata.** Clicking any `In [n]:` or output prompt collapses or expands that cell’s code or outputs in place, and author metadata (`metadata.collapsed`, `metadata.jupyter.source_hidden`, `metadata.jupyter.outputs_hidden`, and `hide-input`/`hide-output` tags) is honored on open while keeping Find, print and HTML exports clean.
+- **Multi-notebook gist support.** Gists containing multiple `.ipynb` files now render in place with a file switcher tab bar (`#/gist/{id}/{file}`) and gist breadcrumbs instead of redirecting to raw URLs, and pinned gist revisions (`#/gist/{id}/{rev}` and `#/gist/{id}/{rev}/{file}`) work directly.
+- **Smarter embeds.** `/embed/...` now accepts `?cells=2-5`, `?hide-code=1`, `?hide-outputs=1` and `?theme=light|dark`, posts `{ type: 'nbview:height', height }` to the parent page for auto-resizing, stamps `embed-boot.js?v=...`, and exposes interactive option controls in the **Embed** dialog.
+
 ## [0.14.0] - 2026-11-27
 
 Copy code, tables and plots straight from cells, filter and sort listings in place, navigate by keyboard, compare a link with a local file, and open notebooks from more hosts.

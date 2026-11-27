@@ -26,7 +26,7 @@
   <link rel="preload" href="assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin>
   <meta name="theme-color" content="#2D52CF">
   <meta name="apple-mobile-web-app-title" content="nbview">
-  <link rel="stylesheet" href="assets/css/style.css?v=4221602e">
+  <link rel="stylesheet" href="assets/css/style.css?v=30abb420">
   <script src="assets/js/theme.js?v=5331cfe1"></script>
 </head>
 <body class="is-home">
@@ -105,7 +105,25 @@
   <dialog id="embed-dialog">
     <form method="dialog" class="settings-form">
       <h2>Embed this notebook</h2>
-      <p>Paste this into any page that allows iframes. The notebook is fetched and drawn by the reader’s browser, so nothing is uploaded, and the frame always shows the latest version of the file.</p>
+      <p>Paste this into any page that allows iframes. The notebook is fetched and drawn by the reader’s browser, so nothing is uploaded, and the frame posts its height to the host page for optional auto-sizing.</p>
+      <div class="embed-opts">
+        <div class="embed-opt">
+          <label for="embed-cells">Cells (optional)</label>
+          <input id="embed-cells" type="text" placeholder="All, or e.g. 2-5" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="embed-opt">
+          <label for="embed-theme">Theme</label>
+          <select id="embed-theme">
+            <option value="">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </div>
+      </div>
+      <div class="embed-checks">
+        <label class="check"><input type="checkbox" id="embed-hide-code"> Hide code</label>
+        <label class="check"><input type="checkbox" id="embed-hide-outputs"> Hide outputs</label>
+      </div>
       <label for="embed-code">HTML</label>
       <textarea id="embed-code" rows="4" readonly spellcheck="false"></textarea>
       <div class="dialog-actions">
@@ -136,8 +154,8 @@
 
   <script defer src="assets/vendor/marked.umd.js?v=c9bfda1c"></script>
   <script defer src="assets/vendor/purify.min.js?v=c2b28807"></script>
-  <script defer src="assets/js/export.js?v=d6eea2cf"></script>
+  <script defer src="assets/js/export.js?v=1f6e364b"></script>
   <script defer src="assets/js/diff.js?v=e10ad741"></script>
-  <script defer src="assets/js/app.js?v=4f7379f3"></script>
+  <script defer src="assets/js/app.js?v=f88f9f41"></script>
 </body>
 </html>

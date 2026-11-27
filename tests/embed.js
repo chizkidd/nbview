@@ -26,9 +26,23 @@ test('only notebook files are embeddable', () => {
   assert(api.routeFrom('/embed/github/o/r/tree/main') === null, 'folder');
   assert(api.routeFrom('/embed/github/o/r/blob/main/README.md') === null, 'non-notebook');
   assert(api.routeFrom('/embed/gist/u/abc123def') === '#/gist/abc123def', 'gist');
+  assert(api.routeFrom('/embed/gist/u/abc123def/eval.ipynb') === '#/gist/abc123def/eval.ipynb', 'multi-file gist');
+  assert(api.routeFrom('/embed/gist/u/abc123def/notes.txt') === null, 'non-notebook gist file');
   assert(api.routeFrom('/embed/url/https%3A%2F%2Fx.dev%2Fa.ipynb') === '#/url/https%3A%2F%2Fx.dev%2Fa.ipynb', 'url');
   assert(api.routeFrom('/embed/nope/x') === null, 'unknown kind');
   assert(api.routeFrom('/embed/') === null, 'empty');
+});
+
+test('embed query options are parsed and invalid values ignored', async () => {
+  const o = api.optsFrom(new URLSearchParams('cells=3-7&hide-code=1&hide-outputs=true&theme=dark'));
+  assert(o.cells && o.cells[0] === 3 && o.cells[1] === 7 && o.hideCode && o.hideOutputs && o.theme === 'dark', o);
+  const single = api.optsFrom(new URLSearchParams('cells=4'));
+  assert(single.cells && single.cells[0] === 4 && single.cells[1] === 4, single);
+  const bad = api.optsFrom(new URLSearchParams('cells=9-2&hide-code=no&theme=sepia'));
+  assert(!bad.cells && !bad.hideCode && !bad.theme, bad);
+  const html = await (await ask('/embed/github/o/r/blob/main/nb.ipynb?cells=2-4&hide-code=1&theme=light')).text();
+  assert(html.includes('name="nbv-embed-opts"'), html);
+  assert(html.includes('&quot;hideCode&quot;:true') && html.includes('&quot;theme&quot;:&quot;light&quot;'), html);
 });
 
 test('titles come from the file name', () => {
@@ -51,7 +65,7 @@ test('the shell is the real page, pointed at the notebook', async () => {
   const html = await (await ask('/embed/github/o/r/blob/main/nb.ipynb')).text();
   assert(html.includes('<base href="/">'), 'relative assets would 404 under /embed/');
   assert(html.includes('name="nbv-embed" content="#/github/o/r/blob/main/nb.ipynb"'), 'route meta');
-  assert(html.includes('/assets/js/embed-boot.js'), 'boot script');
+  assert(/\/assets\/js\/embed-boot\.js\?v=[0-9a-f]{8}/.test(html), 'stamped boot script');
   assert(html.indexOf('embed-boot.js') < html.indexOf('assets/js/app.js'), 'boot must run before app.js');
   assert(/<body>/.test(html) && !/class="is-home"/.test(html), 'home body class');
   assert(/<title>nb \| nbview<\/title>/.test(html), 'title');

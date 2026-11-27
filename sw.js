@@ -10,7 +10,8 @@
  * Never cached: /auth/* (a sign-in response must not be replayable), /embed/* (rendered per notebook), anything
  * that is not a GET, and every other origin: GitHub API responses can be private or authorised by a token.
  *
- * Notebook content still needs the network; it is fetched from GitHub by the page, not by this worker.
+ * Previously opened notebooks are kept in IndexedDB by the page; this worker keeps the shell and rendering libraries
+ * available offline so those saved notebooks open with math and syntax highlighting intact.
  */
 
 const VERSION = '1';
@@ -28,6 +29,14 @@ const CORE = [
   '/assets/icon-512.png',
   '/assets/icon-maskable-512.png',
   '/assets/apple-touch-icon.png',
+];
+
+// Lazy-loaded when a notebook opens (ensureRenderLibs in app.js), not listed in index.html.
+const RENDER_LIBS = [
+  '/assets/vendor/highlight.min.js',
+  '/assets/vendor/katex/katex.min.css',
+  '/assets/vendor/katex/katex.min.js',
+  '/assets/vendor/katex/auto-render.min.js',
 ];
 
 const BYPASS = /^\/(?:auth|embed)(?:\/|$)/;
@@ -62,7 +71,7 @@ async function precache() {
   if (!page) return;
   const html = await page.clone().text();
   await shell.put(SHELL_KEY, page);
-  await Promise.all(refsIn(html).map(async url => {
+  await Promise.all([...refsIn(html), ...RENDER_LIBS].map(async url => {
     try { const res = await fresh(url); if (res) await assets.put(url, res); } catch { /* the next load will fetch it */ }
   }));
 }
@@ -108,7 +117,7 @@ async function page(req) {
 // series of deploys cannot pile old stylesheets up in the cache.
 async function remember(res) {
   try {
-    const refs = refsIn(await res.text());
+    const refs = [...refsIn(await res.text()), ...RENDER_LIBS];
     const assets = await caches.open(ASSETS);
     await Promise.all(refs.map(async url => {
       if (await assets.match(url)) return;

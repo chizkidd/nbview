@@ -12,18 +12,29 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const page = join(root, 'index.html');
+const targets = [
+  join(root, 'index.html'),
+  join(root, 'functions', 'embed', '[[path]].js'),
+];
 const check = process.argv.includes('--check');
 const REF = /(assets\/(?:css|js|vendor)\/[A-Za-z0-9._-]+\.(?:css|js))(?:\?v=[A-Za-z0-9]+)?/g;
 
-const html = readFileSync(page, 'utf8');
 const stale = [];
-const next = html.replace(REF, (match, path) => {
-  const hash = createHash('sha256').update(readFileSync(join(root, path))).digest('hex').slice(0, 8);
-  const stamped = `${path}?v=${hash}`;
-  if (match !== stamped) stale.push({ from: match, to: stamped });
-  return stamped;
-});
+const updates = [];
+for (const file of targets) {
+  const src = readFileSync(file, 'utf8');
+  let changed = false;
+  const next = src.replace(REF, (match, path) => {
+    const hash = createHash('sha256').update(readFileSync(join(root, path))).digest('hex').slice(0, 8);
+    const stamped = `${path}?v=${hash}`;
+    if (match !== stamped) {
+      stale.push({ from: match, to: stamped });
+      changed = true;
+    }
+    return stamped;
+  });
+  if (changed) updates.push({ file, next });
+}
 
 if (!stale.length) {
   console.log('assets: every version matches its file');
@@ -34,6 +45,6 @@ if (check) {
   for (const s of stale) console.error(`  ${s.from}  ->  ${s.to}`);
   process.exit(1);
 }
-writeFileSync(page, next);
+for (const u of updates) writeFileSync(u.file, u.next);
 for (const s of stale) console.log(`  ${s.from}  ->  ${s.to}`);
 console.log(`assets: stamped ${stale.length}`);

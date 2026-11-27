@@ -2043,6 +2043,296 @@ test('media outputs: audio/* and video/* MIME bundles render controls, invalid b
   });
 });
 
+test('compare: HTML diff export, Copy link, and visual plot diff modes (slider and pixel diff)', () => {
+  const svg = (fill) => `<svg xmlns="http://www.w3.org/2000/svg" width="4" height="3"><rect width="4" height="3" fill="${fill}"/></svg>`;
+  const plotCell = (src, fill) => ({
+    cell_type: 'code', source: [src], metadata: {}, execution_count: 1,
+    outputs: [{ output_type: 'display_data', metadata: {}, data: { 'image/svg+xml': svg(fill) } }],
+  });
+  const aDoc = nb([plotCell('plot("red")', 'red')]);
+  const bDoc = nb([plotCell('plot("blue")', 'blue')]);
+  return run({
+    hash: CMP, settle: 400,
+    raw: u => (u.includes('/oldref/') ? { body: JSON.stringify(aDoc) } : u.includes('/newref/') ? { body: JSON.stringify(bDoc) } : null),
+    init: 'window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: t => { window.__copied.push(t); return Promise.resolve(); } } });',
+  }, async ({ page }) => {
+    await page.click('#d-copy-link');
+    const copied = await page.evaluate(() => window.__copied);
+    assert(copied.length === 1 && copied[0].endsWith('/compare/github/o/r/oldref...newref/dir/nb.ipynb'), copied);
+
+    await page.click('#d-outputs');
+    await page.waitForSelector('.imgdiff img');
+
+    // Slider curtain mode
+    await page.click('[data-img-mode="slider"]');
+    await page.waitForSelector('.slider-range');
+    await page.locator('.slider-range').fill('25');
+    await page.locator('.slider-range').dispatchEvent('input');
+    const sliderState = await page.evaluate(() => ({
+      sideHidden: document.querySelector('.imgdiff').hidden,
+      sliderHidden: document.querySelector('.imgdiff-slider').hidden,
+      split: document.querySelector('.slider-stage').style.getPropertyValue('--split'),
+    }));
+    assert(sliderState.sideHidden && !sliderState.sliderHidden && sliderState.split === '25%', sliderState);
+
+    // Pixel diff mode
+    await page.click('[data-img-mode="pixel"]');
+    await page.waitForFunction(() => /pixels differ/.test((document.querySelector('.imgdiff-canvas .imgmeta') || {}).textContent || ''), null, { timeout: 10000 });
+    const pixelState = await page.evaluate(() => {
+      const c = document.querySelector('.imgdiff-canvas canvas');
+      return { w: c && c.width, h: c && c.height, meta: document.querySelector('.imgdiff-canvas .imgmeta').textContent };
+    });
+    assert(pixelState.w === 4 && pixelState.h === 3 && /12 pixels differ \(100\.0%\)/.test(pixelState.meta), pixelState);
+
+    // Export standalone HTML diff: script-free CSP, keeps diff lines and side-by-side images, strips interactive mode controls.
+    const [dl] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('#d-export-html'),
+    ]);
+    fs.mkdirSync(OUT, { recursive: true });
+    const f = path.join(OUT, 'diff-export.html');
+    await dl.saveAs(f);
+    const html = fs.readFileSync(f, 'utf8');
+    const body = html.split('<div class="diff">')[1] || '';
+    assert(/default-src 'none'/.test(html) && !/<script\b/i.test(html), 'diff HTML export is not script-free');
+    assert(/<span class="dw">red<\/span>/.test(body) && /data:image\/svg\+xml/.test(body), 'diff HTML missing lines or plot');
+    assert(!/imgdiff-modes|imgdiff-slider|imgdiff-canvas/.test(body), 'diff HTML kept interactive plot controls');
+  });
+});
+
+test('offline shelf: lists saved notebooks with offline badges on recents, removes one item, and opens offline', () => {
+  const docA = JSON.stringify(nb([md('alpha offline content')]));
+  const docB = JSON.stringify(nb([md('beta offline content')]));
+  let offline = false;
+  return run({
+    hash: '#/github/o/r/blob/main/a.ipynb', settle: 450,
+    raw: u => {
+      if (offline) return { abort: true };
+      if (u.endsWith('/a.ipynb')) return { body: docA };
+      if (u.endsWith('/b.ipynb')) return { body: docB };
+      return null;
+    },
+  }, async ({ page }) => {
+    await page.waitForSelector('.cell');
+    await page.evaluate(() => { location.hash = '#/github/o/r/blob/main/b.ipynb'; });
+    await page.waitForFunction(() => document.querySelector('#cells') && document.querySelector('#cells').textContent.includes('beta offline content'));
+    await page.waitForTimeout(300);
+
+    await page.evaluate(() => { location.hash = '#/'; });
+    await page.waitForSelector('#offline-home:not([hidden])');
+    const before = await page.evaluate(() => ({
+      items: [...document.querySelectorAll('#offline-home .offline-list .entry .name')].map(e => e.textContent),
+      badges: document.querySelectorAll('#recent-list .tag').length,
+      head: document.querySelector('#offline-home h2').textContent,
+    }));
+    assert(before.head === 'Saved for offline reading' && before.items.length === 2 && before.badges === 2, before);
+
+    // Remove one notebook from the shelf.
+    await page.locator('#offline-home .off-rm').first().click();
+    await page.waitForFunction(() => document.querySelectorAll('#offline-home .offline-list .entry').length === 1);
+    const after = await page.evaluate(() => ({
+      items: [...document.querySelectorAll('#offline-home .offline-list .entry .name')].map(e => e.textContent),
+      badges: document.querySelectorAll('#recent-list .tag').length,
+    }));
+    assert(after.items.length === 1 && after.badges === 1, after);
+
+    // Open the remaining notebook from the shelf while offline.
+    offline = true;
+    await page.locator('#offline-home .offline-list .entry a').first().click();
+    await page.waitForSelector('#offline-note');
+    assert(await page.evaluate(() => /offline content/.test(document.querySelector('#cells').textContent)), 'shelf link did not open saved notebook offline');
+  });
+});
+
+test('branch and tag switcher: lazy-loads on open, filters long lists, and switches ref preserving path', () => {
+  const branches = Array.from({ length: 10 }, (_, i) => ({ name: i === 0 ? 'main' : i === 1 ? 'dev' : `feat-${i}` }));
+  const tags = [{ name: 'v1.0.0' }, { name: 'v2.0.0' }];
+  return run({
+    hash: '#/github/o/r/blob/main/dir/nb.ipynb', settle: 400,
+    raw: u => {
+      if (u.includes('/main/dir/nb.ipynb')) return { body: JSON.stringify(nb([md('on main branch')])) };
+      if (u.includes('/dev/dir/nb.ipynb')) return { body: JSON.stringify(nb([md('on dev branch')])) };
+      return null;
+    },
+    api: u => {
+      if (/\/branches/.test(u)) return { body: branches };
+      if (/\/tags/.test(u)) return { body: tags };
+      return null;
+    },
+  }, async ({ page, requests }) => {
+    await page.waitForSelector('.ref-menu summary');
+    assert(!requests.some(u => /\/(branches|tags)/.test(u)), 'ref switcher fetched before opening');
+
+    await page.click('.ref-menu summary');
+    await page.waitForSelector('.ref-filter');
+    const loaded = await page.evaluate(() => ({
+      current: (document.querySelector('.ref-item[aria-current="true"]') || {}).textContent,
+      total: document.querySelectorAll('.ref-item').length,
+    }));
+    assert(/main/.test(loaded.current) && loaded.total === 12, loaded);
+
+    const reqCount = requests.length;
+    await page.fill('.ref-filter', 'dev');
+    const filtered = await page.evaluate(() => [...document.querySelectorAll('.ref-item')].filter(a => !a.hidden).map(a => a.dataset.refName));
+    assert(filtered.join(' ') === 'dev' && requests.length === reqCount, { filtered });
+
+    await page.locator('.ref-item:not([hidden])').first().click();
+    await page.waitForFunction(() => location.hash === '#/github/o/r/blob/dev/dir/nb.ipynb');
+    await page.waitForFunction(() => document.querySelector('#cells') && document.querySelector('#cells').textContent.includes('on dev branch'));
+  });
+});
+
+test('per-cell collapse: prompt toggles and Jupyter metadata/tags hide and reveal code and outputs cleanly', () => {
+  const doc = nb([
+    code('a = 1', [{ output_type: 'stream', name: 'stdout', text: ['out-one\n'] }], 1),
+    { ...code('b = 2', [{ output_type: 'stream', name: 'stdout', text: ['out-two\n'] }], 2), metadata: { jupyter: { source_hidden: true }, collapsed: true } },
+    { ...code('c = 3', [
+      { output_type: 'display_data', metadata: {}, data: { 'text/plain': ['first-out'] } },
+      { output_type: 'display_data', metadata: {}, data: { 'text/plain': ['second-out'] } },
+    ], 3), metadata: { tags: ['hide-input', 'hide-output'] } },
+  ]);
+  return run({ hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }) }, async ({ page }) => {
+    const init = await page.evaluate(() => {
+      const cells = [...document.querySelectorAll('.cell')];
+      return cells.map(c => ({
+        src: c.classList.contains('is-src-collapsed'),
+        out: c.classList.contains('is-out-collapsed'),
+        reveals: [...c.querySelectorAll('.cell-reveal')].map(b => b.textContent),
+      }));
+    });
+    assert(!init[0].src && !init[0].out && init[0].reveals.length === 0, init);
+    assert(init[1].src && init[1].out && init[1].reveals.join('|') === 'Show code|Show output', init);
+    assert(init[2].src && init[2].out && init[2].reveals.join('|') === 'Show code|Show 2 outputs', init);
+
+    // Toggle cell 1 source and output collapse/expand.
+    await page.locator('.cell').nth(0).locator('.prompt-toggle.in').click();
+    assert(await page.evaluate(() => document.querySelectorAll('.cell')[0].classList.contains('is-src-collapsed')), 'cell 1 src did not collapse');
+    await page.locator('.cell').nth(0).locator('.cell-reveal-src').click();
+    assert(await page.evaluate(() => !document.querySelectorAll('.cell')[0].classList.contains('is-src-collapsed') && !document.querySelectorAll('.cell')[0].querySelector('.cell-reveal-src')), 'cell 1 src did not expand');
+
+    await page.locator('.cell').nth(0).locator('.prompt-toggle.out').click();
+    assert(await page.evaluate(() => document.querySelectorAll('.cell')[0].classList.contains('is-out-collapsed')), 'cell 1 out did not collapse');
+    await page.locator('.cell').nth(0).locator('.cell-reveal-out').click();
+    assert(await page.evaluate(() => !document.querySelectorAll('.cell')[0].classList.contains('is-out-collapsed') && !document.querySelectorAll('.cell')[0].querySelector('.out-reveal-row')), 'cell 1 out did not expand');
+
+    // Find skips reveal buttons.
+    await page.click('#find-btn');
+    await page.fill('#find-input', 'Show code');
+    await page.waitForTimeout(250);
+    assert(await page.evaluate(() => /No matches/.test(document.querySelector('#find-count').textContent)), 'find matched cell-reveal button');
+
+    // HTML export strips reveal buttons and expands collapsed cells.
+    await page.click('#export-menu summary');
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-export="html"]')]);
+    fs.mkdirSync(OUT, { recursive: true });
+    const f = path.join(OUT, 'collapse-export.html');
+    await dl.saveAs(f);
+    const body = fs.readFileSync(f, 'utf8').split('<div class="cells">')[1] || '';
+    assert(!/cell-reveal|out-reveal-row|is-src-collapsed|is-out-collapsed/.test(body), 'export kept collapse controls');
+  });
+});
+
+test('multi-notebook gist: renders in place with file tabs, switches files, and supports pinned revisions', async () => {
+  const gistId = 'abc123def456';
+  const revSha = '0123456789abcdef';
+  const gistDoc = (tag) => ({
+    id: gistId,
+    description: 'Demo multi-notebook gist',
+    html_url: `https://gist.github.com/octo/${gistId}`,
+    owner: { login: 'octo' },
+    files: {
+      'README.md': { filename: 'README.md', raw_url: `https://gist.githubusercontent.com/octo/${gistId}/raw/${tag}/README.md` },
+      'first.ipynb': { filename: 'first.ipynb', raw_url: `https://gist.githubusercontent.com/octo/${gistId}/raw/${tag}/first.ipynb` },
+      'second.ipynb': { filename: 'second.ipynb', raw_url: `https://gist.githubusercontent.com/octo/${gistId}/raw/${tag}/second.ipynb` },
+    },
+  });
+  await run({
+    hash: `#/gist/${gistId}`, settle: 400,
+    api: u => {
+      if (u === `https://api.github.com/gists/${gistId}`) return { body: gistDoc('latest') };
+      if (u === `https://api.github.com/gists/${gistId}/${revSha}`) return { body: gistDoc('pinned') };
+      return null;
+    },
+    other: u => {
+      const m = u.match(/\/raw\/(latest|pinned)\/(first|second)\.ipynb$/);
+      return m ? { body: JSON.stringify(nb([md(`${m[2]} ${m[1]}`)])) } : null;
+    },
+  }, async ({ page }) => {
+    await page.waitForSelector('.gist-files');
+    const first = await page.evaluate(() => ({
+      tabs: [...document.querySelectorAll('.gist-tab')].map(a => ({ name: a.textContent, cur: a.getAttribute('aria-current') })),
+      text: document.querySelector('#cells').textContent,
+      crumbs: document.querySelector('.crumbs').textContent,
+    }));
+    assert(first.tabs.length === 2 && first.tabs[0].name === 'first.ipynb' && first.tabs[0].cur === 'page', first);
+    assert(first.text.includes('first latest') && /Gist/.test(first.crumbs), first);
+
+    await page.locator('.gist-tab').nth(1).click();
+    await page.waitForFunction(want => location.hash === want, `#/gist/${gistId}/second.ipynb`);
+    await page.waitForFunction(() => document.querySelector('#cells') && document.querySelector('#cells').textContent.includes('second latest'));
+
+    await page.evaluate(h => { location.hash = h; }, `#/gist/${gistId}/${revSha}/second.ipynb`);
+    await page.waitForFunction(() => document.querySelector('#cells') && document.querySelector('#cells').textContent.includes('second pinned'));
+  });
+});
+
+test('smarter embeds: dialog updates snippet options live, and embed mode filters cells, hides code, and posts height', async () => {
+  const doc = nb([
+    md('cell one text'),
+    code('x = 2', [{ output_type: 'stream', name: 'stdout', text: ['cell two out\n'] }], 2),
+    md('cell three text'),
+  ]);
+  await run({ hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }) }, async ({ page }) => {
+    await page.click('#embed-btn');
+    await page.waitForSelector('#embed-dialog[open]');
+    await page.fill('#embed-cells', '2-3');
+    await page.check('#embed-hide-code');
+    await page.check('#embed-hide-outputs');
+    await page.selectOption('#embed-theme', 'dark');
+    const snippet = await page.inputValue('#embed-code');
+    assert(snippet.includes('/embed/github/o/r/blob/main/t.ipynb?cells=2-3&hide-code=1&hide-outputs=1&theme=dark'), snippet);
+  });
+
+  // Simulated embed shell: slices to cell 2, hides code, applies theme.
+  await run({
+    hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }),
+    init: `
+      window.NBV_EMBED_OPTS = { cells: [2, 2], hideCode: true, hideOutputs: false, theme: 'dark' };
+      const applyEmbed = () => {
+        if (!document.documentElement) return false;
+        document.documentElement.dataset.embed = '1';
+        document.documentElement.dataset.theme = 'dark';
+        return true;
+      };
+      if (!applyEmbed()) new MutationObserver((_, o) => { if (applyEmbed()) o.disconnect(); }).observe(document, { childList: true });
+    `,
+  }, async ({ page }) => {
+    const r = await page.evaluate(() => ({
+      cells: document.querySelectorAll('.cell').length,
+      text: document.querySelector('#cells').textContent,
+      hideCode: document.body.classList.contains('hide-code'),
+      theme: document.documentElement.dataset.theme,
+      toolbarHidden: getComputedStyle(document.querySelector('.bar')).display === 'none',
+    }));
+    assert(r.cells === 1 && r.text.includes('cell two out') && !r.text.includes('cell one') && !r.text.includes('cell three'), r);
+    assert(r.hideCode && r.theme === 'dark' && r.toolbarHidden, r);
+  });
+
+  // Real embed-boot.js inside a same-origin iframe posts nbview:height to its parent.
+  await run({ hash: '#/', settle: 300 }, async ({ page }) => {
+    const msg = await page.evaluate(() => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('no nbview:height message received')), 3000);
+      window.addEventListener('message', e => {
+        if (e.data && e.data.type === 'nbview:height') { clearTimeout(timer); resolve(e.data); }
+      });
+      const f = document.createElement('iframe');
+      f.srcdoc = '<!doctype html><html><head><meta name="nbv-embed" content="#/github/o/r/blob/main/t.ipynb"><meta name="nbv-embed-opts" content="{&quot;theme&quot;:&quot;dark&quot;}"><script src="/assets/js/embed-boot.js"></script></head><body style="margin:0;height:240px">ok</body></html>';
+      document.body.append(f);
+    }));
+    assert(msg && msg.type === 'nbview:height' && msg.height >= 240, msg);
+  });
+});
+
 /* ---------- harness ---------- */
 
 // If the injected faces stop reaching a page, text lays out with no glyph metrics: every line box collapses and a dozen

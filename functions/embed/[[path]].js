@@ -30,7 +30,9 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 const isNb = p => /\.ipynb$/i.test(p);
 const SEG = /^[A-Za-z0-9._~%:@+-]{1,200}$/;
 
-// What the frame may show: a GitHub notebook (or folder), a gist, or a direct URL. Anything else is refused.
+const GIST_ID = /^[0-9a-f]{6,64}$/i;
+
+// What the frame may show: a GitHub notebook, a gist (optionally naming one notebook file), or a direct URL.
 function routeFrom(pathname) {
   const rest = pathname.replace(/^\/embed\/?/, '');
   if (!rest) return null;
@@ -39,21 +41,49 @@ function routeFrom(pathname) {
   if (parts.length > 40) return null;
   const kind = parts[0];
   if (kind === 'github') {
-    const [owner, repo, sub, ref, ...rest] = parts.slice(1);
+    const [owner, repo, sub, ref, ...tail] = parts.slice(1);
     if (!owner || !repo || !SEG.test(owner) || !SEG.test(repo)) return null;
     // Notebooks only: a folder or repo listing is not something anyone wants inside a frame.
-    if (sub !== 'blob' || !ref || !rest.length || !isNb(rest.join('/'))) return null;
+    if (sub !== 'blob' || !ref || !tail.length || !isNb(tail.join('/'))) return null;
     return '#/' + parts.map(encodeURIComponent).join('/');
   }
   if (kind === 'gist') {
-    const id = parts[parts.length - 1];
-    return /^[0-9a-f]{6,64}$/i.test(id || '') ? '#/gist/' + id : null;
+    const segs = parts.slice(1);
+    if (!segs.length) return null;
+    let idIdx = -1;
+    if (GIST_ID.test(segs[0])) idIdx = 0;
+    else if (segs.length >= 2 && GIST_ID.test(segs[1])) idIdx = 1;
+    if (idIdx < 0) return null;
+    const id = segs[idIdx];
+    const extra = segs.slice(idIdx + 1);
+    if (extra.length > 2) return null;
+    if (extra.some(s => !s || s === '.' || s === '..' || /[\x00-\x1f\\/]/.test(s))) return null;
+    if (extra.length && !isNb(extra[extra.length - 1]) && !GIST_ID.test(extra[extra.length - 1])) return null;
+    return '#/gist/' + [id, ...extra].map(encodeURIComponent).join('/');
   }
   if (kind === 'url') {
     const target = rest.replace(/^url\/?/, '');
     return target ? '#/url/' + target : null;
   }
   return null;
+}
+
+// Validated display flags for an embed frame (?cells=2-5&hide-code=1&hide-outputs=1&theme=dark).
+function optsFrom(searchParams) {
+  const opts = {};
+  if (!searchParams) return opts;
+  const cells = (searchParams.get('cells') || '').trim();
+  const m = /^(\d{1,5})(?:-(\d{1,5}))?$/.exec(cells);
+  if (m) {
+    const from = Number(m[1]), to = m[2] ? Number(m[2]) : from;
+    if (from >= 1 && to >= from) opts.cells = [from, to];
+  }
+  const flag = k => /^(1|true|yes)$/i.test(searchParams.get(k) || '');
+  if (flag('hide-code')) opts.hideCode = true;
+  if (flag('hide-outputs')) opts.hideOutputs = true;
+  const theme = (searchParams.get('theme') || '').toLowerCase();
+  if (theme === 'light' || theme === 'dark') opts.theme = theme;
+  return opts;
 }
 
 function titleFrom(pathname) {
@@ -64,7 +94,7 @@ function titleFrom(pathname) {
   return name || 'Jupyter notebook';
 }
 
-async function shell(env, request, { route, title, canonical }) {
+async function shell(env, request, { route, title, canonical, opts }) {
   let html = '';
   try {
     const res = await env.ASSETS.fetch(new URL('/index.html', request.url));
@@ -78,14 +108,14 @@ async function shell(env, request, { route, title, canonical }) {
 
   const head = `<base href="/">
 <meta name="nbv-embed" content="${esc(route)}">
-<meta name="nbv-embed-title" content="${esc(title)}">`;
+<meta name="nbv-embed-title" content="${esc(title)}">${Object.keys(opts || {}).length ? `\n<meta name="nbv-embed-opts" content="${esc(JSON.stringify(opts))}">` : ''}`;
   html = html.replace(/<head>/i, '<head>\n' + head);
   html = html.replace(/<title>[^<]*<\/title>/i, `<title>${esc(title)} | nbview</title>`);
   html = html.replace('<body class="is-home">', '<body>');
-  // Keep whatever ?v= stamp the build gave app.js, so the frame gets the same sheet and script the page does.
+  // Keep whatever ?v= stamp the build gave app.js and embed-boot.js.
   html = html.replace(
     /<script defer src="(assets\/js\/app\.js[^"]*)"><\/script>/,
-    '<script defer src="/assets/js/embed-boot.js"></script>\n  <script defer src="/$1"></script>'
+    '<script defer src="/assets/js/embed-boot.js?v=367c1f3a"></script>\n  <script defer src="/$1"></script>'
   );
   return html;
 }
@@ -102,8 +132,9 @@ export async function onRequest({ request, env }) {
       headers: { 'content-type': 'text/plain; charset=utf-8', 'x-robots-tag': 'noindex' },
     });
   }
+  const opts = optsFrom(url.searchParams);
   const canonical = SITE + route.replace(/^#/, '');
-  const body = await shell(env, request, { route, title: titleFrom(url.pathname), canonical });
+  const body = await shell(env, request, { route, title: titleFrom(url.pathname), canonical, opts });
   return new Response(body, {
     headers: {
       'content-type': 'text/html; charset=utf-8',
@@ -116,4 +147,4 @@ export async function onRequest({ request, env }) {
   });
 }
 
-export { routeFrom, titleFrom, CSP };
+export { routeFrom, optsFrom, titleFrom, CSP };
