@@ -8,22 +8,22 @@ A client-side Jupyter notebook viewer for GitHub repos (public, and private with
 
 ## What it does
 
-- Browse any user, org or repo (`chizkidd`, `owner/repo`, or a pasted GitHub URL)
+- Browse any user, org or repo (`chizkidd`, `owner/repo`, or a pasted GitHub URL), and click the branch or tag pill in the breadcrumbs to switch refs without leaving the current folder or notebook (branches and tags load only when opened)
 - See every notebook in a repository on one page with **All notebooks** in a folder toolbar, ordered by path, or newest first with last-commit dates when a token is saved, with a live path filter and a toggle back to path order (long folders and repository lists also filter in place)
-- Render `.ipynb` files: markdown, LaTeX (KaTeX), syntax-highlighted code, text, HTML tables (with **Copy CSV** and **CSV** download), images and plots (with **Save**), SVG, audio and video outputs, ANSI-colored tracebacks, progress bars
+- Render `.ipynb` files: markdown, LaTeX (KaTeX), syntax-highlighted code, text, HTML tables (with **Copy CSV** and **CSV** download), images and plots (with **Save**), SVG, audio and video outputs, ANSI-colored tracebacks, progress bars, plus click any `In [n]:` or output prompt to collapse or expand individual cells (author `collapsed`, `source_hidden`, `outputs_hidden` and `hide-input`/`hide-output` metadata are honored automatically)
 - An image hosted anywhere other than GitHub appears as **Image from example.com** with a **Show** button until it is clicked, so simply opening a notebook cannot make your browser call the author’s server
 - Inspired by nbviewer: Jupyter classic typography, Pygments-style Python colors, upright math, and long equations that wrap instead of running off the page
-- Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a Hugging Face Hub, GitLab or Codeberg blob link, from a gist link, or from a local file
+- Open notebooks from any direct `.ipynb` URL that allows cross-origin reads, from a Hugging Face Hub, GitLab or Codeberg blob link, from a gist link (including multi-notebook gists with file switcher tabs and pinned gist revisions), or from a local file
 - Open and compare notebooks from **private repos** with a fine-grained GitHub token (Contents: Read-only), or with one-click **Sign in with GitHub** where the site has an OAuth app configured
 - nbviewer links work too: paste one into the box, or just change `nbviewer.org` to `nbview.org` in the address bar
-- Shareable URLs, e.g. `nbview.org/github/owner/repo/blob/main/path/to/notebook.ipynb` (the `#/github/...` form works too), with a preview card (file name and repo) when pasted into Slack, Reddit, X and similar, plus a “Copy link” button on every notebook, a **Copy** button on every code cell, and a `#` button on every cell that copies a link straight to that cell at the commit (`...?cell=12`)
+- Shareable URLs, e.g. `nbview.org/github/owner/repo/blob/main/path/to/notebook.ipynb`, `/github/owner/repo`, `/gist/{id}/{file}` and `/compare/github/owner/repo/old...new/path.ipynb` (the `#/...` forms work too), with tailored link-preview cards (file name, cell number, repo/folder or diff summary) when pasted into Slack, Reddit, X and similar, plus a “Copy link” button on every notebook and GitHub diff, a **Copy** button on every code cell, and a `#` button on every cell that copies a link straight to that cell at the commit (`...?cell=12`)
 - A Contents menu built from the notebook’s headings, Find in notebook (press `/`; matches highlight in code, text and outputs, even in very large notebooks, with next and previous), keyboard shortcuts (press `?` or click `?` in the top bar for the list; `j`/`k` step cells or Compare changes), a **Notebook notes** summary when a notebook has errors, out-of-order runs, unexecuted code or heavy outputs, plus hide code, hide outputs, line numbers, wrap long lines, download, open in Binder (standard JupyterLab, so widgets work) or Colab
-- Compare notebooks: use Compare on any GitHub notebook (pick a branch, tag or commit, any earlier commit in the file’s history, filter that list by message, author or date, or a different notebook), on a gist (earlier revisions), on a local file or a notebook opened by URL; or compare any two notebooks by link, gist link or `owner/repo/path.ipynb` (different repos and branches are fine), two local files, or one of each: a link on one side and a file from disk on the other. A comparison with a file on either side has no address to share, because the file stays in the browser, so **Swap sides** on the result flips the two sides where they are. Changed lines highlight the changed words, and changes show cell by cell, in one column (unified) or side by side, with optional output changes. A changed image output, such as a plot, shows the old and new pictures side by side, and a notebook renamed between the two versions is compared by following its old path.
+- Compare notebooks: use Compare on any GitHub notebook (pick a branch, tag or commit, any earlier commit in the file’s history, filter that list by message, author or date, or a different notebook), on a gist (earlier revisions), on a local file or a notebook opened by URL; or compare any two notebooks by link, gist link or `owner/repo/path.ipynb` (different repos and branches are fine), two local files, or one of each: a link on one side and a file from disk on the other. A comparison with a file on either side has no address to share, because the file stays in the browser, so **Swap sides** on the result flips the two sides where they are. Changed lines highlight the changed words, and changes show cell by cell, in one column (unified) or side by side, with optional output changes. A changed image output, such as a plot, can be inspected **Side by side**, with a **Slider** curtain, or as a **Pixel diff** highlight, a notebook renamed between the two versions is compared by following its old path, and any diff can be downloaded with **Export HTML** as a self-contained, script-free HTML report.
 - Plotly charts can run: a chart that was saved with its data shows a “Run interactive chart” button, and clicking it zooms, pans and hovers inside an isolated frame (off until you click)
 - Export a notebook as a Python script, Markdown, a standalone HTML page, or a PDF (via your browser’s print dialog), all built locally in your browser
 - Download a **clean copy** of the notebook itself: outputs and execution counts removed, or only the markdown cells, so a notebook can be shared without uploading it anywhere
-- **Embed** a notebook: the Embed button copies an `<iframe>` snippet for `/embed/...`, which shows the notebook without the toolbar and may be framed by other sites (the rest of the site still can’t be)
-- Notebooks you open are kept in this browser so they still read with no network; the home page shows how many are saved and clears them in one click
+- **Embed** a notebook: the Embed dialog builds an `<iframe>` snippet for `/embed/...` with optional cell ranges (`?cells=2-5`), `?hide-code=1`, `?hide-outputs=1`, and `?theme=light|dark`, and posts its rendered height (`nbview:height`) so host pages can auto-resize the frame (the rest of the site still can’t be framed)
+- Notebooks you open are kept in this browser (alongside the cached syntax and math libraries) so they still read with no network; the home page lists them on a **Saved for offline reading** shelf with per-notebook remove, a one-click clear button, and `offline` badges on **Recently opened**
 - Light and dark mode, following your system until you pick one
 
 nbview is an independent project and is not affiliated with Project Jupyter or nbviewer.
@@ -58,7 +58,7 @@ There is no build step: the repo is served as-is by Cloudflare Pages, and every 
 nbview/
 ├── index.html           page shell and static home text
 ├── _redirects           nbviewer-style /url and /urls paths -> /#/... routes (the domain swap)
-├── functions/           /github and /gist: redirect to the viewer, and answer link-preview crawlers with a card made from the link
+├── functions/           /github, /gist and /compare: redirect to the viewer, and answer link-preview crawlers with a card made from the link
 │                        /embed: the same page without the toolbar, framed by other sites; /auth: optional GitHub sign-in
 │                        /compare-jupyter-notebooks and /view-ipynb-from-github: rendered pages for the two searches the
 │                        viewer answers, since the app itself is one hash-routed page a crawler cannot index;
@@ -68,7 +68,7 @@ nbview/
 ├── manifest.webmanifest  name, colours and icon for a home screen install
 ├── favicon.ico          the tab icon browsers request by name, alongside the SVG and PNG ones
 ├── _headers             security headers: strict CSP (no forms, only this site can frame it, scripts from this site only)
-├── sw.js                the service worker: an offline copy of the shell and its stamped CSS and JS
+├── sw.js                the service worker: an offline copy of the shell, stamped CSS and JS, and lazy syntax/math libs
 ├── sandbox/plotly/      the page inside the isolated chart frame
 ├── robots.txt           allow all crawlers, points to the sitemap
 ├── llms.txt             plain-language summary and link formats for AI agents (llmstxt.org)
@@ -81,9 +81,9 @@ nbview/
 │   ├── css/style.css
 │   ├── js/
 │   │   ├── app.js       routing, GitHub fetching, notebook rendering
-│   │   ├── export.js    builds the .py, .md, .html and clean .ipynb exports
+│   │   ├── export.js    builds the .py, .md, .html, diff .html and clean .ipynb exports
 │   │   ├── diff.js      cell and line diff used by Compare
-│   │   ├── embed-boot.js  turns an /embed/... address into the viewer's route
+│   │   ├── embed-boot.js  turns an /embed/... address and options into the viewer's route and reports height
 │   │   ├── auth-callback.js  hands a sign-in token to the page that opened it
 │   │   └── theme.js     restores light/dark theme before first paint
 │   ├── icon.svg         the [ ] cell mark, used for the tab icon and the wordmark (with favicon-16/32/48, apple-touch-icon, icon-512)
@@ -93,7 +93,7 @@ nbview/
 │   ├── og-light.png     1200x630 link-preview image (og-dark.png is the dark variant)
 │   └── og-dark.png
 ├── scripts/check-changelog-refs.mjs  fails when a changelog entry cites a commit outside its release tag
-├── scripts/stamp-assets.mjs  writes the ?v= content hash for CSS and JS into index.html
+├── scripts/stamp-assets.mjs  writes the ?v= content hash for CSS and JS into index.html and functions/embed/[[path]].js
 ├── tests/               regression tests (Playwright)
 ├── package.json         dev dependencies for the tests only
 ├── CHANGELOG.md

@@ -142,5 +142,20 @@
     }, null, 1) + '\n';
   }
 
-  window.nbvExport = { toPython, toMarkdown, toHtml, toNotebook };
+  // One self-contained comparison page: the rendered cell diff (and any visible output/plot diffs) with the same
+  // strict script-free CSP as notebook HTML exports, so a local or mixed comparison can be shared as one file.
+  function toDiffHtml(o) {
+    const css = String(o.css || '').replace(/<\/style/gi, '<\\/style');
+    const fonts = escHtml(o.origin || '');
+    return '<!doctype html>\n<html lang="en" data-theme="light">\n<head>\n<meta charset="utf-8">\n' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1">\n' +
+      `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; font-src ${fonts} data:; img-src * data:">\n` +
+      `<title>Compare ${escHtml(o.title)} | nbview</title>\n<style>\n${css}\nbody { display: block; }\n</style>\n</head>\n` +
+      `<body>\n<main>\n<article class="nb diffview${o.split ? ' is-split' : ''}">\n` +
+      `<h1 class="nb-title">${escHtml(o.title)}</h1>\n` +
+      `<p class="nb-meta"><span class="dlabels"><span class="dl-del">${escHtml(o.labelA)}</span> to <span class="dl-add">${escHtml(o.labelB)}</span></span><span>${escHtml(o.summary)}</span><span>Exported from nbview.org</span></p>\n` +
+      `<div class="diff">\n${o.diffHtml}\n</div>\n</article>\n</main>\n</body>\n</html>\n`;
+  }
+
+  window.nbvExport = { toPython, toMarkdown, toHtml, toDiffHtml, toNotebook };
 })();

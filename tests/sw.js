@@ -52,13 +52,19 @@ test('only stamped URLs are cache-first, and only build output is pruned', () =>
   assert(!skip.test('/assets/css/style.css'));
 });
 
-test('the precache reads its file list from the real page', () => {
+test('the precache reads its file list from the real page and covers lazy render libs', () => {
   const ref = literal('REF');
   const refs = [...PAGE.matchAll(ref)].map(m => m[1]);
   assert(refs.length >= 4, 'index.html refs: ' + refs.length);
   assert(refs.some(r => /(^|\/)assets\/css\/style\.css\?v=/.test(r)), 'stylesheet with its stamp');
   assert(refs.some(r => /(^|\/)assets\/js\/app\.js\?v=/.test(r)), 'app.js with its stamp');
   assert(SW.includes("shell.match('/')"), 'the cached page is where the list comes from');
+  const appSrc = read('assets/js/app.js');
+  const m = appSrc.match(/function ensureRenderLibs\(\) \{[\s\S]*?\n  \}/);
+  assert(m, 'ensureRenderLibs not found in app.js');
+  const lazy = [...m[0].matchAll(/'(assets\/vendor\/[^']+)'/g)].map(x => '/' + x[1]);
+  assert(lazy.length >= 4, 'lazy libs: ' + lazy.length);
+  for (const lib of lazy) assert(SW.includes(`'${lib}'`), `sw.js RENDER_LIBS is missing ${lib}`);
 });
 
 test('the page is not treated as cacheable when the response is not the app', () => {

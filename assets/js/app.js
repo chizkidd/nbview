@@ -134,8 +134,8 @@
     if ((m = s.match(/^(?:https?:\/\/)?raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+?)(?:[?#].*)?$/i))) {
       return hashFor(m[1], m[2], 'blob', m[3], safeDecode(m[4]));
     }
-    if ((m = s.match(/^(?:https?:\/\/)?gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]+)(?:[/?#].*)?$/i))) {
-      return '#/gist/' + m[1];
+    if ((m = s.match(/^(?:https?:\/\/)?gist\.github\.com\/(?:[^/]+\/)?([0-9a-f]+)(?:\/([0-9a-f]{7,40}))?(?:[/?#].*)?$/i))) {
+      return '#/gist/' + m[1] + (m[2] ? '/' + m[2] : '');
     }
     const forge = crossForgeRaw(s);
     if (forge) return '#/url/' + encodeURIComponent(forge);
@@ -299,7 +299,7 @@
     };
   }
 
-  function crumbs(owner, repo, ref, path) {
+  function crumbs(owner, repo, ref, path, kind = 'tree') {
     const parts = [
       `<a href="${hashFor(owner)}">${esc(owner)}</a>`,
       path
@@ -315,7 +315,69 @@
         : `<a href="${hashFor(owner, repo, 'tree', ref, p)}">${esc(s)}</a>`);
     });
     return parts.join('<span class="sep">/</span>') +
-      `<span class="ref" title="Branch, tag or commit">${esc(ref)}</span>`;
+      `<details class="menu menu-left ref-menu" data-owner="${esc(owner)}" data-repo="${esc(repo)}" data-ref="${esc(ref)}" data-kind="${esc(kind)}" data-path="${esc(path || '')}">` +
+      `<summary class="ref" title="Switch branch or tag">${esc(ref)}</summary>` +
+      `<div class="menu-list ref-list"><p class="ref-status">Loading branches and tags...</p></div>` +
+      `</details>`;
+  }
+
+  // Loads branches and tags only when the reader clicks the ref pill, keeping normal page views at zero extra API calls.
+  async function loadRefMenu(menu) {
+    if (menu.dataset.loaded) return;
+    menu.dataset.loaded = '1';
+    const box = menu.querySelector('.ref-list');
+    const { owner, repo, ref, kind, path } = menu.dataset;
+    const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    try {
+      const [brRes, tgRes] = await Promise.allSettled([
+        gh(`${base}/branches?per_page=100`),
+        gh(`${base}/tags?per_page=100`),
+      ]);
+      const branches = brRes.status === 'fulfilled' && Array.isArray(brRes.value)
+        ? brRes.value.map(b => b && b.name).filter(Boolean) : [];
+      const tags = tgRes.status === 'fulfilled' && Array.isArray(tgRes.value)
+        ? tgRes.value.map(t => t && t.name).filter(Boolean) : [];
+      if (!branches.length && !tags.length) {
+        const err = brRes.status === 'rejected' ? brRes.reason : tgRes.status === 'rejected' ? tgRes.reason : null;
+        const msg = err instanceof ViewError ? err.title : 'No branches or tags found.';
+        box.innerHTML = `<p class="ref-status">${esc(msg)}</p>`;
+        delete menu.dataset.loaded;
+        return;
+      }
+      const total = branches.length + tags.length;
+      const itemLink = (name, group) => {
+        const href = kind === 'notebooks'
+          ? hashFor(owner, repo, 'notebooks', name)
+          : hashFor(owner, repo, kind === 'blob' ? 'blob' : 'tree', name, path);
+        const cur = name === ref ? ' aria-current="true"' : '';
+        return `<a class="ref-item" data-ref-name="${esc(name.toLowerCase())}" href="${href}"${cur}>${esc(name)}<span class="ref-kind">${group}</span></a>`;
+      };
+      const html = [];
+      if (total > 10) {
+        html.push('<input type="search" class="ref-filter" placeholder="Filter branches or tags" aria-label="Filter branches or tags" autocomplete="off" spellcheck="false">');
+      }
+      for (const b of branches) html.push(itemLink(b, 'branch'));
+      for (const t of tags) html.push(itemLink(t, 'tag'));
+      html.push('<p class="ref-status ref-empty" hidden>No matching branches or tags.</p>');
+      box.innerHTML = html.join('');
+      const filter = box.querySelector('.ref-filter');
+      const empty = box.querySelector('.ref-empty');
+      if (filter) {
+        filter.addEventListener('input', () => {
+          const q = filter.value.trim().toLowerCase();
+          let shown = 0;
+          for (const a of box.querySelectorAll('.ref-item')) {
+            const match = !q || (a.dataset.refName || '').includes(q);
+            a.hidden = !match;
+            if (match) shown++;
+          }
+          if (empty) empty.hidden = shown > 0;
+        });
+      }
+    } catch {
+      box.innerHTML = '<p class="ref-status">Couldn’t load branches or tags.</p>';
+      delete menu.dataset.loaded;
+    }
   }
 
   // Recents live in localStorage, which anything on this origin can edit, so every read is checked.
@@ -393,7 +455,11 @@
     return saved.find(f => f && f.url === url) || null;
   }
 
-  const offCount = async () => (await offAll()).length;
+  async function offDelete(url) {
+    const db = await offOpen();
+    if (!db) return;
+    try { await offDone(db.transaction('files', 'readwrite').objectStore('files').delete(url)); } catch { /* best effort */ }
+  }
 
   async function offClear() {
     const db = await offOpen();
@@ -419,6 +485,13 @@
 
   const offWhen = t => new Date(Number(t) || Date.now()).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 
+  function offHashFor(item) {
+    if (item && typeof item.hash === 'string' && item.hash.startsWith('#/') && item.hash.length <= MAX_RECENT_HASH) return item.hash;
+    const m = item && typeof item.url === 'string' ? parseRawGithub(item.url) : null;
+    if (m) return hashFor(m.owner, m.repo, 'blob', m.ref, m.path);
+    return item && item.url ? '#/url/' + encodeURIComponent(item.url) : '#/';
+  }
+
   function renderHome() {
     document.title = 'nbview: Jupyter notebook viewer for GitHub';
     const recents = getRecents();
@@ -439,13 +512,13 @@
         </div>
         <p class="hint guides">Two short guides: <a href="/view-ipynb-from-github">how to open a .ipynb from GitHub</a>, and <a href="/compare-jupyter-notebooks">how to compare two notebooks</a>.</p>
         <p class="hint"><a href="/privacy">Privacy</a>: what nbview stores in this browser, and what leaves it.</p>
-        <p class="hint" id="offline-home" hidden></p>
+        <section class="offline-shelf" id="offline-home" hidden></section>
         ${recents.length ? `
           <section class="recent">
             <h2>Recently opened</h2>
-            <ul class="listing">
+            <ul class="listing" id="recent-list">
               ${recents.map(r => `
-                <li class="entry ${r.kind === 'nb' ? 'is-nb' : 'is-dir'}">
+                <li class="entry ${r.kind === 'nb' ? 'is-nb' : 'is-dir'}" data-hash="${esc(r.hash)}">
                   <a href="${esc(r.hash)}">${r.kind === 'nb' ? ICONS.nb : ICONS.repo}
                     <span class="stack"><span class="name">${esc(r.title)}</span>${r.sub ? `<span class="desc">${esc(r.sub)}</span>` : ''}</span>
                   </a><span class="size"></span>
@@ -461,18 +534,53 @@
     });
     document.getElementById('file-input').addEventListener('change', e => openLocal(e.target.files[0]));
 
-    offCount().then(n => {
-      const line = document.getElementById('offline-home');
-      if (!line || !n) return;
-      line.hidden = false;
-      line.innerHTML = `${n} notebook${n === 1 ? '' : 's'} saved in this browser for offline reading. ` +
-        '<button class="btn" id="offline-clear" type="button">Clear saved notebooks</button>';
+    const paintOffline = async () => {
+      const box = document.getElementById('offline-home');
+      if (!box) return;
+      const saved = (await offAll()).filter(f => f && typeof f.url === 'string' && typeof f.text === 'string').sort((a, b) => (b.saved || 0) - (a.saved || 0));
+      const savedHashes = new Set(saved.map(offHashFor));
+      const recList = document.getElementById('recent-list');
+      if (recList) {
+        for (const li of recList.querySelectorAll('.entry')) {
+          const sz = li.querySelector('.size');
+          if (sz) sz.innerHTML = savedHashes.has(li.dataset.hash) ? '<span class="tag">offline</span>' : '';
+        }
+      }
+      if (!saved.length) {
+        box.hidden = true;
+        box.textContent = '';
+        return;
+      }
+      const n = saved.length;
+      box.hidden = false;
+      box.innerHTML = `
+        <div class="offline-head">
+          <h2>Saved for offline reading</h2>
+          <p class="hint">${n} notebook${n === 1 ? '' : 's'} saved in this browser for offline reading.</p>
+          <button class="btn" id="offline-clear" type="button">Clear saved notebooks</button>
+        </div>
+        <ul class="listing offline-list">
+          ${saved.map(item => {
+            const href = offHashFor(item);
+            const sub = [item.sub || '', `saved ${offWhen(item.saved)}`, fmtSize(item.text.length)].filter(Boolean).join(' · ');
+            return `<li class="entry is-nb">
+              <a href="${esc(href)}">${ICONS.nb}<span class="stack"><span class="name">${esc(item.name || 'notebook.ipynb')}</span><span class="desc">${esc(sub)}</span></span></a>
+              <span class="size"><button class="btn off-rm" type="button" data-off-url="${esc(item.url)}" aria-label="Remove ${esc(item.name || 'notebook')} from offline storage">Remove</button></span>
+            </li>`;
+          }).join('')}
+        </ul>`;
       document.getElementById('offline-clear').addEventListener('click', async () => {
         await offClear();
-        line.hidden = true;
-        line.textContent = '';
+        await paintOffline();
       });
-    });
+      for (const rm of box.querySelectorAll('[data-off-url]')) {
+        rm.addEventListener('click', async () => {
+          await offDelete(rm.dataset.offUrl);
+          await paintOffline();
+        });
+      }
+    };
+    paintOffline();
   }
 
   // Client-side filter for long repo, folder and notebook listings: zero extra API requests.
@@ -723,7 +831,7 @@
     document.title = `${files.length} notebook${files.length === 1 ? '' : 's'} in ${owner}/${repo} | nbview`;
     app.innerHTML = `
       <div class="page">
-        <nav class="crumbs">${crumbs(owner, repo, ref, '')}</nav>
+        <nav class="crumbs">${crumbs(owner, repo, ref, '', 'notebooks')}</nav>
         <header class="page-head">
           <h1>Notebooks in ${esc(repo)}</h1>
           <div class="toolbar"><a class="btn" href="${hashFor(owner, repo, 'tree', ref, '')}">Browse folders</a></div>
@@ -757,14 +865,39 @@
     }
   }
 
-  async function viewGist(gistId, id) {
+  const GIST_REV = /^[0-9a-f]{7,40}$/i;
+
+  async function viewGist(gistId, extra, id) {
     showLoading('Fetching gist');
-    const g = await gh(`/gists/${encodeURIComponent(gistId)}`);
+    let rev = '', wanted = '';
+    const segs = Array.isArray(extra) ? extra.filter(Boolean) : [];
+    if (segs.length === 1) {
+      if (isNbName(segs[0])) wanted = segs[0];
+      else if (GIST_REV.test(segs[0])) rev = segs[0];
+    } else if (segs.length >= 2) {
+      if (GIST_REV.test(segs[0])) { rev = segs[0]; wanted = segs.slice(1).join('/'); }
+      else wanted = segs.join('/');
+    }
+    const g = await gh(`/gists/${encodeURIComponent(gistId)}${rev ? '/' + encodeURIComponent(rev) : ''}`);
     if (stale(id)) return;
-    const files = Object.values(g.files || {});
-    const file = files.find(f => isNbName(f.filename));
-    if (!file) throw new ViewError('No notebook in this gist', "The gist doesn’t contain an .ipynb file.");
-    location.replace('#/url/' + encodeURIComponent(file.raw_url));
+    const nbs = Object.values((g && g.files) || {})
+      .filter(f => f && typeof f.filename === 'string' && isNbName(f.filename) && typeof f.raw_url === 'string')
+      .sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true, sensitivity: 'base' }));
+    if (!nbs.length) throw new ViewError('No notebook in this gist', "The gist doesn’t contain an .ipynb file.");
+    const file = wanted ? nbs.find(f => f.filename === wanted) : nbs[0];
+    if (!file) throw new ViewError('Notebook not found in gist', `This gist doesn’t have a notebook named ${clip(wanted, 80)}.`);
+    return await viewNotebook({
+      url: file.raw_url,
+      gist: {
+        id: gistId,
+        rev,
+        owner: g && g.owner && typeof g.owner.login === 'string' ? g.owner.login : '',
+        description: g && typeof g.description === 'string' ? g.description : '',
+        htmlUrl: g && typeof g.html_url === 'string' ? g.html_url : `https://gist.github.com/${encodeURIComponent(gistId)}`,
+        files: nbs.map(f => f.filename),
+        current: file.filename,
+      },
+    }, id);
   }
 
   function showBigWarning(name, text, onOpen) {
@@ -804,6 +937,7 @@
   async function viewNotebook(src, id) {
     showLoading('Fetching notebook');
     const isGh = !src.url;
+    const gm = src.gist || null;
     if (!isGh && !/^https?:\/\//i.test(src.url)) {
       throw new ViewError('Unsupported link', 'Only http and https notebook links can be opened.');
     }
@@ -855,7 +989,7 @@
     if (stale(id)) return;
 
     if (text.length > BIG_NB && !bigOk.has(location.hash)) {
-      const name = clip(isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
+      const name = clip(isGh ? src.path.split('/').pop() : gm ? gm.current : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
       showBigWarning(name, text, () => { bigOk.add(location.hash); route(); });
       return;
     }
@@ -866,30 +1000,37 @@
     }
 
     const host = isGh ? null : new URL(url).host;
-    const name = clip(isGh ? src.path.split('/').pop() : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
+    const name = clip(isGh ? src.path.split('/').pop() : gm ? gm.current : (safeDecode(new URL(url).pathname.split('/').pop()) || 'notebook.ipynb'), 120);
     const ghPath = isGh ? `${enc(src.owner)}/${enc(src.repo)}/blob/${enc(src.ref)}/${enc(src.path)}` : null;
     const ctx = isGh
       ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path, dir: src.path.split('/').slice(0, -1).join('/'), rawBase: url }
       : { rawBase: url };
+    const sub = isGh ? `${src.owner}/${src.repo}` : gm ? (gm.owner ? `gist by ${gm.owner}` : `gist ${gm.id.slice(0, 7)}`) : host;
+    const cleanHash = location.hash.replace(/\?cell=\d+$/, '');
 
-    addRecent({ kind: 'nb', hash: location.hash, title: name, sub: isGh ? `${src.owner}/${src.repo}` : host });
-    if (!offline) offPut({ url, text, name, saved: Date.now() });
+    addRecent({ kind: 'nb', hash: cleanHash, title: name, sub });
+    if (!offline) offPut({ url, hash: cleanHash, sub, text, name, saved: Date.now() });
+
+    const gistCrumbs = gm
+      ? `<a href="#/">Home</a><span class="sep">/</span>${gm.owner ? `<a href="${hashFor(gm.owner)}">${esc(gm.owner)}</a><span class="sep">/</span>` : ''}<span>Gist ${esc(gm.id.slice(0, 7))}</span><span class="sep">/</span><span aria-current="page">${esc(gm.current)}</span>${gm.rev ? `<span class="ref" title="Gist revision">${esc(gm.rev.slice(0, 7))}</span>` : ''}`
+      : null;
 
     await showNotebook(nb, ctx, {
       name,
       text,
       offline,
       shareable: true,
+      gist: gm,
       crumbs: isGh
-        ? crumbs(src.owner, src.repo, src.ref, src.path)
-        : `<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">${esc(host)}</span>`,
-      github: isGh ? `https://github.com/${ghPath}` : null,
+        ? crumbs(src.owner, src.repo, src.ref, src.path, 'blob')
+        : gistCrumbs || `<a href="#/">Home</a><span class="sep">/</span><span aria-current="page">${esc(host)}</span>`,
+      github: isGh ? `https://github.com/${ghPath}` : gm ? gm.htmlUrl : null,
       colab: isGh ? `https://colab.research.google.com/github/${ghPath}` : null,
       // Binder runs the notebook in standard JupyterLab; a ref with slashes must be encoded as one segment.
       binder: isGh ? `https://mybinder.org/v2/gh/${enc(src.owner)}/${enc(src.repo)}/${encodeURIComponent(src.ref)}?urlpath=${encodeURIComponent('lab/tree/' + src.path)}` : null,
-      source: isGh ? null : url,
-      compare: isGh ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path } : gistInfo(url),
-      seed: !isGh && !gistInfo(url) ? { link: url } : null,
+      source: isGh || gm ? null : url,
+      compare: isGh ? { owner: src.owner, repo: src.repo, ref: src.ref, path: src.path } : gm ? { gist: gm.id, url } : gistInfo(url),
+      seed: !isGh && !gm && !gistInfo(url) ? { link: url } : null,
     }, id);
   }
 
@@ -977,10 +1118,19 @@
     mathMs = 0;
     mathCount = 0;
     document.title = `${info.name} | nbview`;
-    document.body.classList.remove('hide-code', 'hide-outputs');
+    const embedOpts = EMBED && window.NBV_EMBED_OPTS && typeof window.NBV_EMBED_OPTS === 'object' ? window.NBV_EMBED_OPTS : null;
+    document.body.classList.toggle('hide-code', Boolean(embedOpts && embedOpts.hideCode));
+    document.body.classList.toggle('hide-outputs', Boolean(embedOpts && embedOpts.hideOutputs));
 
     const health = analyzeNotebook(cells);
     const healthHtml = renderHealthHtml(health);
+    const gistFilesHtml = info.gist && info.gist.files && info.gist.files.length > 1
+      ? `<nav class="gist-files" aria-label="Notebooks in this gist">${info.gist.files.map(fn => {
+          const href = `#/gist/${encodeURIComponent(info.gist.id)}${info.gist.rev ? '/' + encodeURIComponent(info.gist.rev) : ''}/${encodeURIComponent(fn)}`;
+          const cur = fn === info.gist.current ? ' aria-current="page"' : '';
+          return `<a class="btn gist-tab" href="${href}"${cur}>${esc(fn)}</a>`;
+        }).join('')}</nav>`
+      : '';
 
     app.innerHTML = `
       <article class="nb">
@@ -1021,6 +1171,7 @@
           ${healthHtml}
           ${info.offline ? `<p class="hint" id="offline-note">${esc(info.offline)}</p>` : ''}
         </header>
+        ${gistFilesHtml}
         <div class="findbar" id="findbar" role="search" hidden>
           <input id="find-input" type="search" aria-label="Find in this notebook" autocomplete="off" spellcheck="false" placeholder="Find in this notebook">
           <span class="find-count" id="find-count" role="status" aria-live="polite"></span>
@@ -1124,11 +1275,13 @@
       });
     }
     setupFind(host, () => current.rendered);
+    const embedRange = embedOpts && Array.isArray(embedOpts.cells) ? embedOpts.cells : null;
     try {
       let frameStart = performance.now();
       const wanted = targetCell;
       for (let i = 0; i < cells.length; i++) {
         if (stale(id)) return;
+        if (embedRange && (i + 1 < embedRange[0] || i + 1 > embedRange[1])) continue;
         try {
           const el = renderCell(cells[i], ctx, lang);
           if (el) {
@@ -1212,11 +1365,11 @@
     return `<details class="nb-health" id="nb-health"><summary>Notebook notes: ${esc(summary.join(' · '))}</summary><ul class="health-list">${items.join('')}</ul></details>`;
   }
 
-  // The address to share. GitHub notebooks use the nbviewer-style path (nbview.org/github/...), which the server
-  // answers with a title and description for link previews and then sends people to the viewer.
+  // The address to share. GitHub notebooks and gists use the path form (nbview.org/github/... or /gist/...), which
+  // answers link-preview crawlers with a card and sends people straight into the viewer.
   function shareUrl() {
-    const m = /^#\/(github\/.+)$/.exec(location.hash);
-    if (m && /\/blob\//.test(m[1])) return location.origin + '/' + m[1];
+    const m = /^#\/((?:github|gist)\/.+)$/.exec(location.hash.replace(/\?cell=\d+$/, ''));
+    if (m && (m[1].startsWith('gist/') || /\/blob\//.test(m[1]))) return location.origin + '/' + m[1];
     // Inside an embed the address to share is the viewer's, not /embed/.
     if (EMBED) return location.origin + '/' + location.hash.replace(/^#\//, '');
     return location.origin + location.pathname + location.search + location.hash;
@@ -1242,10 +1395,27 @@
   }
 
 
-  // The iframe snippet. The height is fixed because a frame cannot resize itself from inside without a script on the
-  // host page; readers scroll the notebook inside it.
+  // The iframe snippet, with optional query flags for cell range, hidden code/outputs, and theme.
   function embedSnippet() {
-    const src = shareUrl().replace(location.origin + '/', location.origin + '/embed/');
+    let base = shareUrl();
+    const urlMatch = /^#\/url\/(.+)$/.exec(location.hash.replace(/\?cell=\d+$/, ''));
+    if (urlMatch) base = location.origin + '/url/' + urlMatch[1];
+    let src = base.replace(location.origin + '/', location.origin + '/embed/');
+    const q = new URLSearchParams();
+    const cellsEl = document.getElementById('embed-cells');
+    const cellsVal = cellsEl ? cellsEl.value.trim() : '';
+    if (/^\d{1,5}(?:-\d{1,5})?$/.test(cellsVal)) {
+      const [a, b] = cellsVal.split('-').map(Number);
+      if (a >= 1 && (!b || b >= a)) q.set('cells', cellsVal);
+    }
+    const hc = document.getElementById('embed-hide-code');
+    if (hc && hc.checked) q.set('hide-code', '1');
+    const ho = document.getElementById('embed-hide-outputs');
+    if (ho && ho.checked) q.set('hide-outputs', '1');
+    const th = document.getElementById('embed-theme');
+    if (th && (th.value === 'light' || th.value === 'dark')) q.set('theme', th.value);
+    const qs = q.toString();
+    if (qs) src += '?' + qs;
     return '<iframe src="' + src + '" title="Jupyter notebook" width="100%" height="600" loading="lazy" '
       + 'style="border:1px solid #d0d7de;border-radius:6px"></iframe>';
   }
@@ -1254,6 +1424,14 @@
     const dlgEmbed = document.getElementById('embed-dialog');
     const box = document.getElementById('embed-code');
     if (!dlgEmbed || !box) return;
+    const cellsEl = document.getElementById('embed-cells');
+    const hc = document.getElementById('embed-hide-code');
+    const ho = document.getElementById('embed-hide-outputs');
+    const th = document.getElementById('embed-theme');
+    if (cellsEl) cellsEl.value = '';
+    if (hc) hc.checked = false;
+    if (ho) ho.checked = false;
+    if (th) th.value = '';
     box.value = embedSnippet();
     dlgEmbed.showModal();
     box.select();
@@ -1316,7 +1494,7 @@
 
   const MAX_FIND = 3000;
   const HAS_HIGHLIGHTS = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight === 'function';
-  const FIND_SKIP = '.prompt, .gutter, .cell-actions, .cell-link, .cell-copy, .out-actions, .plotly-ui, script, style, [aria-hidden="true"]';
+  const FIND_SKIP = '.prompt, .gutter, .cell-actions, .cell-link, .cell-copy, .cell-reveal, .out-actions, .plotly-ui, script, style, [aria-hidden="true"]';
 
   function clearFindHighlights() {
     if (HAS_HIGHLIGHTS) { CSS.highlights.delete('nbv-find'); CSS.highlights.delete('nbv-find-current'); }
@@ -1471,7 +1649,10 @@
     if (kind === 'html') {
       await nbState.rendered;
       const host = document.getElementById('cells').cloneNode(true);
-      for (const x of host.querySelectorAll('.cell-actions, .cell-link, .cell-copy, .out-actions')) x.remove();
+      for (const x of host.querySelectorAll('.cell-actions, .cell-link, .cell-copy, .cell-reveal, .out-reveal-row, .out-actions')) x.remove();
+      for (const x of host.querySelectorAll('.is-src-collapsed, .is-out-collapsed')) {
+        x.classList.remove('is-src-collapsed', 'is-out-collapsed');
+      }
       for (const x of host.querySelectorAll('.plotly-box')) {
         const n = document.createElement('div');
         n.className = 'note';
@@ -1501,6 +1682,28 @@
     c.className = 'content';
     row.append(p, c);
     return row;
+  }
+
+  // Honors standard JupyterLab, nbconvert and Jupyter Book cell collapse metadata and tags.
+  function cellMetadataFlags(cell) {
+    const m = cell && cell.metadata && typeof cell.metadata === 'object' ? cell.metadata : {};
+    const j = m.jupyter && typeof m.jupyter === 'object' ? m.jupyter : {};
+    const tags = new Set(Array.isArray(m.tags) ? m.tags.map(t => String(t).toLowerCase()) : []);
+    return {
+      hideSource: Boolean(j.source_hidden || tags.has('hide-input') || tags.has('hide_input')),
+      hideOutputs: Boolean(m.collapsed || j.outputs_hidden || tags.has('hide-output') || tags.has('hide_output')),
+    };
+  }
+
+  function makePromptToggle(label, kind, title, ariaLabel) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `btn prompt prompt-toggle ${kind}`;
+    b.textContent = label;
+    b.title = title;
+    b.setAttribute('aria-label', ariaLabel);
+    b.setAttribute('aria-expanded', 'true');
+    return b;
   }
 
   // Shown instead of a cell that threw while rendering, with its raw source so nothing is silently lost.
@@ -1546,9 +1749,14 @@
     }
 
     if (cell.cell_type === 'code') {
+      const flags = cellMetadataFlags(cell);
       const ec = cell.execution_count;
-      const input = makeRow(`In [${ec ?? ' '}]:`, 'in');
+      const inLabel = `In [${ec ?? ' '}]:`;
+      const input = makeRow('', 'in');
       input.classList.add('input');
+      const inToggle = makePromptToggle(inLabel, 'in', 'Collapse or expand code', `Collapse or expand code for ${inLabel}`);
+      input.firstChild.replaceWith(inToggle);
+
       const pre = document.createElement('pre');
       pre.tabIndex = 0; // long lines scroll sideways, so keyboard users need to reach it
       const code = document.createElement('code');
@@ -1563,10 +1771,29 @@
         pre.append(gutter);
       }
       pre.append(code);
+      let srcReveal = null;
+      const setSrcCollapsed = on => {
+        sec.classList.toggle('is-src-collapsed', on);
+        inToggle.setAttribute('aria-expanded', String(!on));
+        if (on && !srcReveal) {
+          srcReveal = document.createElement('button');
+          srcReveal.type = 'button';
+          srcReveal.className = 'btn cell-reveal cell-reveal-src';
+          srcReveal.textContent = 'Show code';
+          srcReveal.addEventListener('click', () => setSrcCollapsed(false));
+          input.lastChild.append(srcReveal);
+        } else if (!on && srcReveal) {
+          srcReveal.remove();
+          srcReveal = null;
+        }
+      };
+      inToggle.addEventListener('click', () => setSrcCollapsed(!sec.classList.contains('is-src-collapsed')));
       input.lastChild.append(pre);
       sec.append(input);
+      if (flags.hideSource) setSrcCollapsed(true);
 
       const outs = Array.isArray(cell.outputs) ? cell.outputs.filter(o => o && typeof o === 'object') : [];
+      const outRows = [];
       for (const out of mergeStreams(outs)) {
         let content;
         try { content = renderOutput(out, ctx); } catch (err) {
@@ -1579,6 +1806,35 @@
         row.classList.add('output-row');
         row.lastChild.append(content);
         sec.append(row);
+        outRows.push(row);
+      }
+
+      if (outRows.length) {
+        const firstOut = outRows[0];
+        const outLabel = firstOut.firstChild.textContent || '';
+        const outToggle = makePromptToggle(outLabel, 'out', 'Collapse or expand output', outLabel ? `Collapse or expand output for ${outLabel}` : 'Collapse or expand output');
+        firstOut.firstChild.replaceWith(outToggle);
+        let outRevealRow = null;
+        const setOutCollapsed = on => {
+          sec.classList.toggle('is-out-collapsed', on);
+          outToggle.setAttribute('aria-expanded', String(!on));
+          if (on && !outRevealRow) {
+            outRevealRow = makeRow('', 'out');
+            outRevealRow.className = 'row out-reveal-row';
+            const outReveal = document.createElement('button');
+            outReveal.type = 'button';
+            outReveal.className = 'btn cell-reveal cell-reveal-out';
+            outReveal.textContent = outRows.length === 1 ? 'Show output' : `Show ${outRows.length} outputs`;
+            outReveal.addEventListener('click', () => setOutCollapsed(false));
+            outRevealRow.lastChild.append(outReveal);
+            sec.append(outRevealRow);
+          } else if (!on && outRevealRow) {
+            outRevealRow.remove();
+            outRevealRow = null;
+          }
+        };
+        outToggle.addEventListener('click', () => setOutCollapsed(!sec.classList.contains('is-out-collapsed')));
+        if (flags.hideOutputs) setOutCollapsed(true);
       }
       return sec;
     }
@@ -2553,6 +2809,7 @@
       labelA: shortRef(base),
       labelB: shortRef(head),
       entries: nbvDiff.diffCells(a, b),
+      shareUrl: location.origin + '/' + compareHash(owner, repo, base, head, path).slice(2),
       links: `<a class="btn" href="${compareHash(owner, repo, head, base, path)}">Swap versions</a>` +
         `<a class="btn" href="${hashFor(owner, repo, 'blob', head, path)}">Back to notebook</a>` +
         `<a class="btn" href="https://github.com/${enc(owner)}/${enc(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}" target="_blank" rel="noopener">Commits on GitHub</a>`,
@@ -2952,6 +3209,8 @@
             <button class="btn" id="d-expand" type="button">Expand unchanged</button>
             <button class="btn" id="d-prev" type="button" title="Previous change (press k)">Previous change</button>
             <button class="btn" id="d-next" type="button" title="Next change (press j)">Next change</button>
+            <button class="btn" id="d-export-html" type="button">Export HTML</button>
+            ${d.shareUrl ? '<button class="btn" id="d-copy-link" type="button">Copy link</button>' : ''}
             ${d.links || ''}
           </div>
           <p class="nb-meta"><span class="dlabels"></span><span id="d-summary"></span><span id="d-pos" aria-live="polite"></span></p>
@@ -2975,11 +3234,73 @@
     };
     const draw = lines => (state.layout === 'split' ? splitBody(numberLines(lines)) : unifiedBody(numberLines(lines)));
 
+    const imgSrc = img => (img.mime === 'image/svg+xml'
+      ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(img.data)}`
+      : `data:${img.mime};base64,${img.data}`);
+
+    const loadImgEl = src => new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('image failed'));
+      im.src = src;
+    });
+
+    const MAX_DIFF_DIM = 2048;
+
+    // Zero-dependency pixel-by-pixel diff on a canvas, highlighting changed pixels in magenta.
+    async function paintPixelDiff(oldSrc, newSrc, host) {
+      host.textContent = 'Computing pixel diff...';
+      try {
+        const [a, b] = await Promise.all([loadImgEl(oldSrc), loadImgEl(newSrc)]);
+        const aw = a.naturalWidth || a.width || 1, ah = a.naturalHeight || a.height || 1;
+        const bw = b.naturalWidth || b.width || 1, bh = b.naturalHeight || b.height || 1;
+        const maxW = Math.max(aw, bw), maxH = Math.max(ah, bh);
+        const scale = Math.min(1, MAX_DIFF_DIM / Math.max(maxW, maxH));
+        const w = Math.max(1, Math.round(maxW * scale));
+        const h = Math.max(1, Math.round(maxH * scale));
+        const readPixels = (im, iw, ih) => {
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          const ctx = c.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(im, 0, 0, Math.max(1, Math.round(iw * scale)), Math.max(1, Math.round(ih * scale)));
+          return ctx.getImageData(0, 0, w, h).data;
+        };
+        const da = readPixels(a, aw, ah);
+        const db = readPixels(b, bw, bh);
+        const out = document.createElement('canvas');
+        out.width = w; out.height = h;
+        const ctx = out.getContext('2d');
+        const imgData = ctx.createImageData(w, h);
+        const dst = imgData.data;
+        let diff = 0;
+        const total = w * h;
+        for (let i = 0; i < da.length; i += 4) {
+          const delta = Math.abs(da[i] - db[i]) + Math.abs(da[i + 1] - db[i + 1]) + Math.abs(da[i + 2] - db[i + 2]) + Math.abs(da[i + 3] - db[i + 3]);
+          if (delta > 12) {
+            diff++;
+            dst[i] = 224; dst[i + 1] = 36; dst[i + 2] = 122; dst[i + 3] = 255;
+          } else {
+            const g = Math.round(255 - (255 - (db[i] * 0.299 + db[i + 1] * 0.587 + db[i + 2] * 0.114)) * 0.22);
+            dst[i] = g; dst[i + 1] = g; dst[i + 2] = g; dst[i + 3] = 255;
+          }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        const pct = ((diff / total) * 100).toFixed(diff && diff / total < 0.001 ? 3 : 1);
+        const sizeNote = aw !== bw || ah !== bh ? ` · sizes differ (${aw} x ${ah} vs ${bw} x ${bh})` : '';
+        const info = mk('p', 'imgmeta', (diff ? `${diff.toLocaleString()} pixel${diff === 1 ? '' : 's'} differ (${pct}%)` : 'No pixel differences') + sizeNote);
+        host.replaceChildren(out, info);
+      } catch {
+        host.textContent = 'Couldn’t compute a pixel diff for these images.';
+      }
+    }
+
     // A changed plot is the thing output review is for, so images are shown rather than described as text.
     const sideBySide = e => {
       const oldImgs = (e.a && e.a.images) || [], newImgs = (e.b && e.b.images) || [];
       if (!oldImgs.length && !newImgs.length) return null;
-      const wrap = mk('div', 'imgdiff');
+      const side = mk('div', 'imgdiff');
       for (const [list, cls, label] of [[oldImgs, 'old', 'before'], [newImgs, 'new', 'after']]) {
         const fig = mk('figure', `imgside ${cls}`);
         fig.append(mk('figcaption', 'imgside-head', label));
@@ -2988,16 +3309,89 @@
           const el = document.createElement('img');
           el.loading = 'lazy';
           el.alt = `${label} image output`;
-          el.src = img.mime === 'image/svg+xml'
-            ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(img.data)}`
-            : `data:${img.mime};base64,${img.data}`;
+          el.src = imgSrc(img);
           const meta = mk('span', 'imgmeta', '');
           el.addEventListener('load', () => { meta.textContent = `${el.naturalWidth} x ${el.naturalHeight}`; });
           fig.append(el, meta);
         }
-        wrap.append(fig);
+        side.append(fig);
       }
-      return wrap;
+      if (!oldImgs.length || !newImgs.length) return side;
+
+      const box = mk('div', 'imgdiff-wrap');
+      const modes = mk('div', 'imgdiff-modes');
+      const sliderBox = mk('div', 'imgdiff-slider');
+      sliderBox.hidden = true;
+      const pixelBox = mk('div', 'imgdiff-canvas');
+      pixelBox.hidden = true;
+      let sliderBuilt = false, pixelBuilt = false;
+
+      const pairs = Math.min(oldImgs.length, newImgs.length);
+      const buildSlider = () => {
+        if (sliderBuilt) return;
+        sliderBuilt = true;
+        for (let i = 0; i < pairs; i++) {
+          const card = mk('div', 'slider-pair');
+          const stage = mk('div', 'slider-stage');
+          stage.style.setProperty('--split', '50%');
+          const after = document.createElement('img');
+          after.alt = 'after image output';
+          after.src = imgSrc(newImgs[i]);
+          const beforeWrap = mk('div', 'slider-before');
+          const before = document.createElement('img');
+          before.alt = 'before image output';
+          before.src = imgSrc(oldImgs[i]);
+          beforeWrap.append(before);
+          const line = mk('div', 'slider-line');
+          stage.append(after, beforeWrap, line);
+          const range = document.createElement('input');
+          range.type = 'range';
+          range.min = '0';
+          range.max = '100';
+          range.value = '50';
+          range.className = 'slider-range';
+          range.setAttribute('aria-label', 'Slide between before and after images');
+          range.addEventListener('input', () => stage.style.setProperty('--split', range.value + '%'));
+          const cap = mk('div', 'slider-labels');
+          cap.append(mk('span', 'dl-del', 'before'), mk('span', 'dl-add', 'after'));
+          card.append(stage, range, cap);
+          sliderBox.append(card);
+        }
+      };
+
+      const buildPixel = () => {
+        if (pixelBuilt) return;
+        pixelBuilt = true;
+        for (let i = 0; i < pairs; i++) {
+          const slot = mk('div', 'pixel-pair');
+          pixelBox.append(slot);
+          paintPixelDiff(imgSrc(oldImgs[i]), imgSrc(newImgs[i]), slot);
+        }
+      };
+
+      const btns = [
+        ['side', 'Side by side'],
+        ['slider', 'Slider'],
+        ['pixel', 'Pixel diff'],
+      ].map(([key, label]) => {
+        const b = mk('button', 'btn out-btn', label);
+        b.type = 'button';
+        b.dataset.imgMode = key;
+        b.setAttribute('aria-pressed', String(key === 'side'));
+        b.addEventListener('click', () => {
+          for (const x of btns) x.setAttribute('aria-pressed', String(x === b));
+          side.hidden = key !== 'side';
+          sliderBox.hidden = key !== 'slider';
+          pixelBox.hidden = key !== 'pixel';
+          if (key === 'slider') buildSlider();
+          if (key === 'pixel') buildPixel();
+        });
+        modes.append(b);
+        return b;
+      });
+
+      box.append(modes, side, sliderBox, pixelBox);
+      return box;
     };
 
     const changeBox = e => {
@@ -3079,6 +3473,31 @@
     document.getElementById('d-expand').addEventListener('click', () => body.querySelectorAll('details.dgroup').forEach(x => { x.open = true; }));
     document.getElementById('d-prev').addEventListener('click', () => go(-1));
     document.getElementById('d-next').addEventListener('click', () => go(1));
+    document.getElementById('d-export-html').addEventListener('click', () => {
+      const clone = body.cloneNode(true);
+      for (const x of clone.querySelectorAll('.imgdiff-modes, .imgdiff-slider, .imgdiff-canvas')) x.remove();
+      for (const x of clone.querySelectorAll('.imgdiff[hidden]')) x.hidden = false;
+      const base = String(d.title || 'diff').replace(/\.ipynb$/i, '').replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_') || 'diff';
+      const html = window.nbvExport.toDiffHtml({
+        title: d.title,
+        labelA: d.labelA,
+        labelB: d.labelB,
+        summary: document.getElementById('d-summary').textContent,
+        split: state.layout === 'split',
+        diffHtml: clone.innerHTML,
+        css: pageCss(),
+        origin: location.origin,
+      });
+      saveFile(base + '-diff.html', html, 'text/html');
+    });
+    const dCopy = document.getElementById('d-copy-link');
+    if (dCopy && d.shareUrl) {
+      dCopy.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(d.shareUrl); dCopy.textContent = 'Copied'; }
+        catch { window.prompt('Copy this link', d.shareUrl); }
+        setTimeout(() => { dCopy.textContent = 'Copy link'; }, 2000);
+      });
+    }
     paint();
   }
 
@@ -3128,7 +3547,7 @@
         return await viewNotebook({ url: nbviewerUrl(parts[0], parts.slice(1).join('/')) }, id);
       }
 
-      if (parts[0] === 'gist' && parts[1]) return await viewGist(parts[1], id);
+      if (parts[0] === 'gist' && parts[1]) return await viewGist(parts[1], parts.slice(2), id);
 
       if (parts[0] === 'compare') {
         if (!parts[1]) return viewComparePick();
@@ -3761,10 +4180,24 @@
   const embedDlg = document.getElementById('embed-dialog');
   if (embedDlg) {
     const box = document.getElementById('embed-code');
+    const syncEmbed = () => { box.value = embedSnippet(); };
+    for (const id of ['embed-cells', 'embed-hide-code', 'embed-hide-outputs', 'embed-theme']) {
+      const el = document.getElementById(id);
+      if (el) {
+        el.addEventListener('input', syncEmbed);
+        el.addEventListener('change', syncEmbed);
+      }
+    }
     document.getElementById('embed-copy').addEventListener('click', async () => {
       try { await navigator.clipboard.writeText(box.value); } catch { box.select(); }
     });
   }
+
+  // Lazy branch/tag switcher: fetches branches and tags only when the reader opens the ref menu.
+  document.addEventListener('toggle', e => {
+    const m = e.target;
+    if (m && m.classList && m.classList.contains('ref-menu') && m.open) loadRefMenu(m);
+  }, true);
 
   // The toolbar menus (Contents, Export) close on an outside click or Escape.
   document.addEventListener('click', e => {

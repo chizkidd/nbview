@@ -6,12 +6,13 @@
 
 - GitHub notebook: https://nbview.org/github/{owner}/{repo}/blob/{branch}/{path}.ipynb
 - GitHub repo or folder: https://nbview.org/github/{owner}/{repo}
-- Gist: https://nbview.org/gist/{user}/{id}
-- Every notebook in a repository: https://nbview.org/#/github/{owner}/{repo}/notebooks/{branch}
+- Gist (single or multi-notebook): https://nbview.org/gist/{id} or https://nbview.org/gist/{id}/{file}.ipynb
+- Every notebook in a repository: https://nbview.org/github/{owner}/{repo}/notebooks/{branch}
+- Compare two versions on GitHub: https://nbview.org/compare/github/{owner}/{repo}/{older}...{newer}/{path}.ipynb
 - Any direct .ipynb URL that allows cross-origin reads: https://nbview.org/#/url/{url}
 - Replace nbviewer.org with nbview.org in an existing nbviewer link and it works.
 - Add ?cell=N to a notebook link to open it scrolled to cell N.
-- Embeddable frame: https://nbview.org/embed/github/{owner}/{repo}/blob/{branch}/{path}.ipynb (no toolbar; other sites may frame this path)
+- Embeddable frame: https://nbview.org/embed/github/{owner}/{repo}/blob/{branch}/{path}.ipynb (no toolbar; optional ?cells=2-5, ?hide-code=1, ?hide-outputs=1, ?theme=light|dark; posts nbview:height to parent)
 
 ## Docs
 

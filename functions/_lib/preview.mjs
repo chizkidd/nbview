@@ -16,28 +16,77 @@ function safeDecode(s) { try { return decodeURIComponent(s); } catch { return nu
 
 const badSegment = x => !x || x === '.' || x === '..' || /[\x00-\x1f\\/]/.test(x);
 
-// What a /github/... path says about its notebook, or null when it is not a plain notebook link.
-function githubCard(segments) {
+const REF_SEG = /^[A-Za-z0-9._~:@+-]{1,200}$/;
+const shortRef = s => (/^[0-9a-f]{40}$/i.test(s) ? s.slice(0, 7) : clip(s, 30));
+
+// What a /github/... path says about its target (notebook, repo, folder or notebook index).
+function githubCard(segments, search = '') {
   const [owner, repo, kind, ref, ...rest] = segments;
-  if (kind !== 'blob' || !ref || !rest.length) return null;
-  const o = safeDecode(owner), r = safeDecode(repo), f = safeDecode(ref);
+  if (!owner || !repo) return null;
+  const o = safeDecode(owner), r = safeDecode(repo);
+  if (!o || !r || !OWNER.test(o) || !REPO.test(r)) return null;
+
+  if (!kind) {
+    return { title: clip(`${o}/${r}`, 90), description: `Jupyter notebooks in ${o}/${r} on GitHub` };
+  }
+  if (!ref) return null;
+  const f = safeDecode(ref);
+  if (!f || badSegment(f)) return null;
+
+  if (kind === 'notebooks' && !rest.length) {
+    return { title: clip(`Notebooks in ${o}/${r}`, 90), description: `Every Jupyter notebook in ${o}/${r}` };
+  }
+  if (kind === 'tree') {
+    const path = rest.map(safeDecode);
+    if (path.includes(null) || path.some(badSegment)) return null;
+    const label = path.length ? `${path[path.length - 1]} in ${o}/${r}` : `${o}/${r}`;
+    return { title: clip(label, 90), description: `Browse notebooks in ${o}/${r} on GitHub` };
+  }
+  if (kind === 'blob' && rest.length) {
+    const path = rest.map(safeDecode);
+    if (path.includes(null) || path.some(badSegment) || !/\.ipynb$/i.test(path[path.length - 1])) return null;
+    const name = path[path.length - 1].replace(/\.ipynb$/i, '');
+    const cellMatch = /[?&]cell=(\d{1,6})(?:&|$)/.exec(search || '');
+    const suffix = cellMatch ? ` (cell ${cellMatch[1]})` : '';
+    return { title: clip(name + suffix, 90), description: `Jupyter notebook in ${o}/${r}` };
+  }
+  return null;
+}
+
+// What a /compare/github/owner/repo/base...head/path.ipynb link says about its diff.
+function compareCard(segments) {
+  const [kind, owner, repo, spec, ...rest] = segments;
+  if (kind !== 'github' || !owner || !repo || !spec || !rest.length) return null;
+  const o = safeDecode(owner), r = safeDecode(repo), sp = safeDecode(spec);
   const path = rest.map(safeDecode);
-  if (!o || !r || !f || path.includes(null) || !OWNER.test(o) || !REPO.test(r)) return null;
-  if (badSegment(f) || path.some(badSegment) || !/\.ipynb$/i.test(path[path.length - 1])) return null;
-  const name = path[path.length - 1].replace(/\.ipynb$/i, '');
-  return { title: clip(name, 90), description: `Jupyter notebook in ${o}/${r}` };
+  if (!o || !r || !sp || path.includes(null) || !OWNER.test(o) || !REPO.test(r)) return null;
+  const cut = sp.indexOf('...');
+  if (cut <= 0 || cut + 3 >= sp.length) return null;
+  const base = sp.slice(0, cut), head = sp.slice(cut + 3);
+  if (!REF_SEG.test(base) || !REF_SEG.test(head) || path.some(badSegment) || !/\.ipynb$/i.test(path[path.length - 1])) return null;
+  const file = path[path.length - 1];
+  const name = file.replace(/\.ipynb$/i, '');
+  return {
+    title: clip(`Compare ${name} (${shortRef(base)} to ${shortRef(head)})`, 90),
+    description: `Cell and line diff of ${clip(file, 60)} in ${o}/${r}`,
+  };
 }
 
 function gistCard(segments) {
   if (segments.length < 2) return null;
   const user = safeDecode(segments[0]), id = safeDecode(segments[1]);
   if (!user || !id || !OWNER.test(user) || !GIST_ID.test(id)) return null;
+  const file = segments.length >= 3 ? safeDecode(segments[segments.length - 1]) : null;
+  if (file && !badSegment(file) && /\.ipynb$/i.test(file)) {
+    return { title: clip(file.replace(/\.ipynb$/i, ''), 90), description: `Jupyter notebook gist by ${user}` };
+  }
   return { title: `Notebook gist by ${user}`, description: `Jupyter notebook gist by ${user}` };
 }
 
-function previewPage({ title, description, path }) {
-  const url = SITE + path;
-  const hash = `${SITE}/#${path}`;
+function previewPage({ title, description, path, search = '' }) {
+  const q = /^\?cell=\d{1,6}$/.test(search || '') ? search : '';
+  const url = SITE + path + q;
+  const hash = `${SITE}/#${path}${q}`;
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <title>${esc(title)} | nbview</title>
@@ -56,10 +105,16 @@ function previewPage({ title, description, path }) {
 `;
 }
 
-// Where a /kind/... path lands in the viewer. /gist/user/id and /gist/id both open the gist by id, as the old
-// redirect rules did.
+// Where a /kind/... path lands in the viewer. /gist/user/id and /gist/id both open the gist by id, and an extra
+// trailing segment (a notebook filename or revision) is preserved so multi-notebook gists link cleanly.
 function hashPathFor(kind, segments) {
-  return kind === 'gist' ? `/gist/${segments[segments.length - 1] || ''}` : `/${kind}/${segments.join('/')}`;
+  if (kind === 'gist') {
+    if (!segments.length) return '/gist/';
+    if (GIST_ID.test(segments[0])) return `/gist/${segments.join('/')}`;
+    if (segments.length >= 2 && GIST_ID.test(segments[1])) return `/gist/${segments.slice(1).join('/')}`;
+    return `/gist/${segments[segments.length - 1] || ''}`;
+  }
+  return `/${kind}/${segments.join('/')}`;
 }
 
 // The plain redirect to the viewer, kept separate so it can still be built when something else has gone wrong.
@@ -74,7 +129,7 @@ function viewerRedirect(request, kind) {
   }
 }
 
-// kind is 'github' or 'gist'. Always returns a Response: the preview is a nicety, opening the notebook is the product.
+// kind is 'github', 'gist' or 'compare'. Always returns a Response: the preview is a nicety, opening the notebook is the product.
 function handle(request, kind) {
   try {
     const url = new URL(request.url);
@@ -83,9 +138,11 @@ function handle(request, kind) {
     const human = viewerRedirect(request, kind);
     if (!segments.length || request.method === 'POST' || !BOT.test(request.headers.get('user-agent') || '')) return human;
 
-    const card = kind === 'github' ? githubCard(segments) : gistCard(segments);
+    const card = kind === 'github' ? githubCard(segments, url.search)
+      : kind === 'compare' ? compareCard(segments)
+      : gistCard(segments);
     if (!card) return human;
-    return new Response(previewPage({ ...card, path: hashPath }), {
+    return new Response(previewPage({ ...card, path: hashPath, search: url.search }), {
       headers: {
         'content-type': 'text/html; charset=utf-8',
         'cache-control': 'public, max-age=3600',
@@ -99,4 +156,4 @@ function handle(request, kind) {
   }
 }
 
-export { handle, previewPage, githubCard, gistCard };
+export { handle, previewPage, githubCard, gistCard, compareCard, hashPathFor };

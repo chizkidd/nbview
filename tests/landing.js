@@ -132,7 +132,7 @@ async function expectReachable(addr, ctx) {
     return { via: 'embed' };
   }
 
-  if (/^\/(github|gist)\//.test(bare)) {
+  if (/^\/(github|gist|compare)\//.test(bare)) {
     const dir = bare.slice(1).split('/')[0];
     const fn = await load('functions', dir, '[[path]].js');
     const res = await fn.onRequest({ request: new Request(ORIGIN + addr) });
@@ -243,10 +243,13 @@ function addresses(html) {
     }
   });
 
-  test('the check has teeth: the two mistakes that shipped once are rejected', async () => {
-    await rejects(expectReachable('/compare/github/o/r/main...dev/nb.ipynb', ctx), /missing its "#"/);
-    await rejects(expectReachable('/compare/links/a/b', ctx), /missing its "#"/);
+  test('the check has teeth: unknown paths, hash-only routes missing # and bad embed paths are rejected', async () => {
+    await rejects(expectReachable('/does-not-exist/nb.ipynb', ctx), /matches no Function/);
+    const hashOnlyCtx = { ...ctx, router: { ...ctx.router, kinds: new Set([...ctx.router.kinds, 'local']) } };
+    await rejects(expectReachable('/local/nb.ipynb', hashOnlyCtx), /missing its "#"/);
     await rejects(expectReachable('/embed/o/r/blob/main/nb.ipynb', ctx), /not one it accepts/);
+    const cmp = await expectReachable('/compare/github/o/r/main...dev/nb.ipynb', ctx);
+    assert(cmp.via === 'compare' && cmp.status === 302, cmp);
   });
 
   test('the ?cell=N the view page promises survives the /github redirect', async () => {
