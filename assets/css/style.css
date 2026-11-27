@@ -161,7 +161,9 @@ code, pre { font-family: var(--mono); }
 }
 .theme-btn:hover { border-color: var(--in); color: var(--in); }
 .theme-btn svg { width: 16px; height: 16px; }
-.gh-link { margin-left: 0; flex: none; }
+.gh-link, .shortcuts-btn { margin-left: 0; flex: none; }
+.shortcuts-btn { font: 600 14px var(--mono); }
+@media (hover: none), (max-width: 700px) { .shortcuts-btn { display: none; } }
 .theme-btn[data-current="dark"] .moon,
 .theme-btn[data-current="light"] .sun { display: none; }
 

@@ -1904,13 +1904,23 @@ test('listings: filter and sort toggle on All notebooks, plus filter on long fol
   });
 });
 
-test('keyboard shortcuts: ? dialog, notebook navigation and toggles, and Compare stepping', async () => {
+test('keyboard shortcuts: ? button and key, notebook navigation and toggles, and Compare stepping', async () => {
   const doc = nb([md('# First heading'), code('a = 1', [{ output_type: 'stream', name: 'stdout', text: ['1\n'] }]), code('b = 2')]);
   await run({ hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }) }, async ({ page }) => {
+    await page.click('#shortcuts-btn');
+    assert(await page.evaluate(() => document.querySelector('#shortcuts-dialog').open), '#shortcuts-btn did not open shortcuts');
+    await page.keyboard.press('?');
+    assert(await page.evaluate(() => !document.querySelector('#shortcuts-dialog').open), '? did not close shortcuts');
     await page.keyboard.press('?');
     assert(await page.evaluate(() => document.querySelector('#shortcuts-dialog').open), '? did not open shortcuts');
     await page.keyboard.press('?');
-    assert(await page.evaluate(() => !document.querySelector('#shortcuts-dialog').open), '? did not close shortcuts');
+
+    const tips = await page.evaluate(() => ({
+      code: document.querySelector('#toggle-code').title,
+      out: document.querySelector('#toggle-outputs').title,
+      toc: document.querySelector('#toc-menu summary').title,
+    }));
+    assert(/press c/.test(tips.code) && /press o/.test(tips.out) && /press t/.test(tips.toc), tips);
 
     await page.keyboard.press('j');
     await page.keyboard.press('j');
@@ -1929,8 +1939,14 @@ test('keyboard shortcuts: ? dialog, notebook navigation and toggles, and Compare
     assert(toggled.code && toggled.out && toggled.toc, toggled);
   });
 
-  // In Compare: j / k step changes and o toggles outputs.
+  // In Compare: j / k step changes, o toggles outputs, and buttons carry shortcut hints.
   await run({ hash: CMP, settle: 400, raw: byRef }, async ({ page }) => {
+    const tips = await page.evaluate(() => ({
+      next: document.querySelector('#d-next').title,
+      prev: document.querySelector('#d-prev').title,
+      out: document.querySelector('#d-outputs').title,
+    }));
+    assert(/press j/.test(tips.next) && /press k/.test(tips.prev) && /press o/.test(tips.out), tips);
     await page.keyboard.press('j');
     assert(await page.evaluate(() => /Change 1 of/.test(document.querySelector('#d-pos').textContent)), 'j in compare');
     await page.keyboard.press('o');

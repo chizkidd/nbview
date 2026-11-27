@@ -989,14 +989,14 @@
           <h1 class="nb-title">${esc(info.name).replace(/([_.-])/g, '$1<wbr>')}</h1>
           <div class="toolbar">
             <details class="menu menu-left" id="toc-menu" hidden>
-              <summary class="btn">Contents</summary>
+              <summary class="btn" title="Contents (press t)">Contents</summary>
               <div class="menu-list toc-list" id="toc-list"></div>
             </details>
             <button class="btn" id="find-btn" type="button" aria-expanded="false" aria-controls="findbar" title="Find in this notebook (press / )">Find</button>
-            <button class="btn" id="toggle-code" type="button" aria-pressed="false">Hide code</button>
-            <button class="btn" id="toggle-outputs" type="button" aria-pressed="false">Hide outputs</button>
-            <button class="btn" id="toggle-lines" type="button" aria-pressed="false">Line numbers</button>
-            <button class="btn" id="toggle-wrap" type="button" aria-pressed="false">Wrap lines</button>
+            <button class="btn" id="toggle-code" type="button" aria-pressed="false" title="Hide or show code (press c)">Hide code</button>
+            <button class="btn" id="toggle-outputs" type="button" aria-pressed="false" title="Hide or show outputs (press o)">Hide outputs</button>
+            <button class="btn" id="toggle-lines" type="button" aria-pressed="false" title="Line numbers (press l)">Line numbers</button>
+            <button class="btn" id="toggle-wrap" type="button" aria-pressed="false" title="Wrap lines (press w)">Wrap lines</button>
             <a class="btn" id="dl">Download</a>
             <details class="menu" id="export-menu">
               <summary class="btn">Export</summary>
@@ -2948,10 +2948,10 @@
           <div class="toolbar">
             <button class="btn" id="d-unified" type="button" aria-pressed="false">Unified</button>
             <button class="btn" id="d-split" type="button" aria-pressed="false">Side by side</button>
-            <button class="btn" id="d-outputs" type="button" aria-pressed="false">Show output changes</button>
+            <button class="btn" id="d-outputs" type="button" aria-pressed="false" title="Show or hide output changes (press o)">Show output changes</button>
             <button class="btn" id="d-expand" type="button">Expand unchanged</button>
-            <button class="btn" id="d-prev" type="button">Previous change</button>
-            <button class="btn" id="d-next" type="button">Next change</button>
+            <button class="btn" id="d-prev" type="button" title="Previous change (press k)">Previous change</button>
+            <button class="btn" id="d-next" type="button" title="Next change (press j)">Next change</button>
             ${d.links || ''}
           </div>
           <p class="nb-meta"><span class="dlabels"></span><span id="d-summary"></span><span id="d-pos" aria-live="polite"></span></p>
@@ -3176,6 +3176,13 @@
   }
 
   // Keyboard shortcuts across the home page, listings, notebooks and Compare.
+  const shortcutsBtn = document.getElementById('shortcuts-btn');
+  if (shortcutsBtn) {
+    shortcutsBtn.addEventListener('click', () => {
+      const dlg = document.getElementById('shortcuts-dialog');
+      if (dlg && !dlg.open) dlg.showModal();
+    });
+  }
   let kbCell = -1;
   document.addEventListener('keydown', e => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
