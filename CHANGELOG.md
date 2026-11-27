@@ -4,13 +4,17 @@ All notable changes to nbview. Dates are when the release’s last change landed
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-27
+
+Copy code, tables and plots straight from cells, filter and sort listings in place, navigate by keyboard, compare a link with a local file, and open notebooks from more hosts.
+
 ### Added
-- **Copy code, copy or download tables as CSV, and save plots.** Code cells now have a **Copy** button next to `#` that copies raw source without line numbers or highlighting markup. HTML tables in cell outputs carry **Copy CSV** and **CSV** download buttons, and image outputs carry a **Save** link. All action buttons stay out of Find, HTML exports and print.
-- **Filter and sort long listings in place.** **All notebooks** now has a client-side path filter and, when dates are loaded, a button to switch between newest first and path order. Folders and repository lists with eight or more entries get the same live filter with no extra GitHub requests.
-- **Keyboard shortcuts and a `?` sheet.** Press `?` anywhere (or click `?` in the top bar on desktop) for the shortcut list, with shortcut hints in toolbar tooltips: `j` and `k` step cells in a notebook or changes in Compare, `c`, `o`, `l`, `w` and `t` toggle code, outputs, line numbers, line wrapping and the Contents menu, and `/` also jumps into a listing’s filter box.
-- **Notebook notes.** Notebooks with tracebacks, out-of-order execution counts, unexecuted code cells or heavy outputs now show a collapsible **Notebook notes** summary with links that jump straight to each flagged cell; clean notebooks stay uncluttered.
-- **Hugging Face Hub, GitLab and Codeberg blob links.** Pasting a notebook’s browser link from `huggingface.co`, `gitlab.com` or `codeberg.org` rewrites it to its raw endpoint in both the viewer and Compare.
-- **Audio and video outputs.** Embedded `audio/*` and `video/*` MIME outputs render native media controls with a **Save** link (invalid base64 falls back cleanly), HTML `<audio>` outputs are no longer treated as empty, and standalone HTML exports allow `data:` media sources.
+- **Copy code, copy or download tables as CSV, and save plots.** Code cells now have a **Copy** button next to `#` that copies raw source without line numbers or highlighting markup. HTML tables in cell outputs carry **Copy CSV** and **CSV** download buttons, and image outputs carry a **Save** link. All action buttons stay out of Find, HTML exports and print. (#115)
+- **Filter and sort long listings in place.** **All notebooks** now has a client-side path filter and, when dates are loaded, a button to switch between newest first and path order. Folders and repository lists with eight or more entries get the same live filter with no extra GitHub requests. (#115)
+- **Keyboard shortcuts and a `?` sheet.** Press `?` anywhere (or click `?` in the top bar on desktop) for the shortcut list, with shortcut hints in toolbar tooltips: `j` and `k` step cells in a notebook or changes in Compare, `c`, `o`, `l`, `w` and `t` toggle code, outputs, line numbers, line wrapping and the Contents menu, and `/` also jumps into a listing’s filter box. (#115, #116)
+- **Notebook notes.** Notebooks with tracebacks, out-of-order execution counts, unexecuted code cells or heavy outputs now show a collapsible **Notebook notes** summary with links that jump straight to each flagged cell; clean notebooks stay uncluttered. (#115)
+- **Hugging Face Hub, GitLab and Codeberg blob links.** Pasting a notebook’s browser link from `huggingface.co`, `gitlab.com` or `codeberg.org` rewrites it to its raw endpoint in both the viewer and Compare. (#115)
+- **Audio and video outputs.** Embedded `audio/*` and `video/*` MIME outputs render native media controls with a **Save** link (invalid base64 falls back cleanly), HTML `<audio>` outputs are no longer treated as empty, and standalone HTML exports allow `data:` media sources. (#115)
 - **One of each in Compare.** The Compare page has a third tab, **One of each**: paste a link to one notebook and choose the other from disk. The link is the original side and the file is the modified side, **Swap sides** flips them, pressing Enter in the link field compares as it does in **Two links**, and a file already picked in **Two files** stays picked when the tabs change. The file never leaves the browser, so this comparison has no address of its own: **New comparison** is the only link on the result. (#107)
 - **Two files can swap sides too.** Two local notebooks picked in the wrong order used to mean choosing them again; the diff now carries the same **Swap sides** button **One of each** has, re-rendering the two files in the other direction. Neither order fits in the address, because the files never leave the browser. (#109)
 - **A Colab or Google Drive link explains itself in Compare.** Pasting one into either tab used to end in a CORS message; Compare now says the link needs a Google sign-in and points at downloading the notebook and comparing the file, as the viewer already did. (#107)
@@ -269,6 +273,7 @@ First release.
 - JavaScript outputs (ipywidgets, Plotly, Bokeh) are not run; a note points to Colab.
 - Public GitHub repositories only.
 
+[0.14.0]: https://github.com/chizkidd/nbview/releases/tag/v0.14.0
 [0.13.0]: https://github.com/chizkidd/nbview/releases/tag/v0.13.0
 [0.12.0]: https://github.com/chizkidd/nbview/releases/tag/v0.12.0
 [0.11.0]: https://github.com/chizkidd/nbview/releases/tag/v0.11.0
