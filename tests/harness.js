@@ -149,7 +149,7 @@ const visibleCopy = page => page.evaluate(() => {
   const parts = [];
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
     const el = node.parentElement;
-    if (!el || el.closest(SKIP) || !el.getClientRects().length) continue;
+    if (!el || el.closest(SKIP) || (el.closest('.html-out') && !el.closest('.out-actions')) || !el.getClientRects().length) continue;
     parts.push(node.nodeValue);
   }
   return parts.join('\n');

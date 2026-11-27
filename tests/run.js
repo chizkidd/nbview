@@ -1748,6 +1748,285 @@ test('compare pages pass axe', async () => {
   }
 });
 
+test('cell actions: copy code, table CSV copy/download, and plot save link (cleaned on export and print)', () => {
+  const png1x1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+  const srcCode = 'x = 1\nprint("hi, world")';
+  const doc = nb([
+    md('# Intro'),
+    code(srcCode, [
+      { output_type: 'display_data', metadata: {}, data: { 'text/html': ['<table><thead><tr><th>Name</th><th>Note</th></tr></thead><tbody><tr><td>a, b</td><td>say "ok"</td></tr></tbody></table>'] } },
+      { output_type: 'display_data', metadata: {}, data: { 'image/png': [png1x1] } },
+    ]),
+  ]);
+  return run({
+    hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }),
+    init: 'window.__copied = []; Object.defineProperty(navigator, "clipboard", { value: { writeText: t => { window.__copied.push(t); return Promise.resolve(); } } });',
+  }, async ({ page }) => {
+    await page.click('#toggle-lines');
+    const copyBtns = await page.locator('.cell-copy').count();
+    assert(copyBtns === 1, { copyBtns });
+    await page.locator('.cell-copy').click({ force: true });
+    await page.locator('.table-copy-csv').click({ force: true });
+    const [dlCsv] = await Promise.all([
+      page.waitForEvent('download'),
+      page.locator('.table-dl-csv').click({ force: true }),
+    ]);
+    fs.mkdirSync(OUT, { recursive: true });
+    const csvFile = path.join(OUT, 'table-export.csv');
+    await dlCsv.saveAs(csvFile);
+    const csvText = fs.readFileSync(csvFile, 'utf8');
+
+    const r = await page.evaluate(() => ({
+      copied: window.__copied,
+      saveHref: document.querySelector('.img-save').getAttribute('href'),
+      saveDl: document.querySelector('.img-save').getAttribute('download'),
+    }));
+    assert(r.copied[0] === srcCode, r.copied);
+    assert(r.copied[1] === 'Name,Note\n"a, b","say ""ok"""\n', r.copied);
+    assert(csvText === r.copied[1], csvText);
+    assert(r.saveHref.startsWith('data:image/png;base64,') && r.saveDl === 'output.png', r);
+
+    // Find must skip our own button labels.
+    await page.click('#find-btn');
+    await page.fill('#find-input', 'Copy CSV');
+    await page.waitForTimeout(250);
+    assert(await page.evaluate(() => /No matches/.test(document.querySelector('#find-count').textContent)), 'find matched button label');
+
+    // HTML export strips all cell and output action controls.
+    await page.click('#export-menu summary');
+    const [dlHtml] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('[data-export="html"]'),
+    ]);
+    const htmlFile = path.join(OUT, 'actions-export.html');
+    await dlHtml.saveAs(htmlFile);
+    const exported = fs.readFileSync(htmlFile, 'utf8');
+    const body = exported.split('<div class="cells">')[1] || '';
+    assert(!/cell-actions|cell-copy|out-actions|table-copy-csv|img-save/.test(body), 'export kept action buttons');
+
+    await page.emulateMedia({ media: 'print' });
+    const hiddenPrint = await page.evaluate(() => (
+      getComputedStyle(document.querySelector('.cell-actions')).display === 'none'
+      && getComputedStyle(document.querySelector('.out-actions')).display === 'none'
+    ));
+    assert(hiddenPrint, 'actions not hidden in print');
+  });
+});
+
+test('listings: filter and sort toggle on All notebooks, plus filter on long folders and user repos', async () => {
+  const tree = {
+    truncated: false,
+    tree: [
+      { path: 'alpha/train.ipynb', type: 'blob', size: 1024 },
+      { path: 'beta/eval.ipynb', type: 'blob', size: 2048 },
+      { path: 'alpha/prep.ipynb', type: 'blob', size: 512 },
+    ],
+  };
+  const dates = {
+    'alpha/train.ipynb': '2024-03-01T10:00:00Z',
+    'beta/eval.ipynb': '2026-05-04T08:00:00Z',
+    'alpha/prep.ipynb': '2025-01-02T09:00:00Z',
+  };
+  await run({
+    hash: '#/github/o/r/notebooks/main', settle: 500,
+    init: `localStorage.setItem('nbv.token', JSON.stringify('ghp_testtoken'))`,
+    api: u => {
+      const url = decodeURIComponent(u);
+      if (/^https:\/\/api\.github\.com\/user$/.test(u)) return { body: { login: 'octo' } };
+      if (/git\/trees\/main\?recursive=1/.test(u)) return { body: tree };
+      const m = url.match(/\/commits\?path=([^&]+)/);
+      return m && dates[m[1]] ? { body: [{ sha: 'abc', commit: { message: 'm', committer: { date: dates[m[1]] } } }] } : null;
+    },
+  }, async ({ page, requests }) => {
+    await page.waitForSelector('#list-filter');
+    const reqBefore = requests.length;
+    await page.fill('#list-filter', 'alpha');
+    const filtered = await page.evaluate(() => ({
+      shown: [...document.querySelectorAll('.listing .entry')].filter(e => !e.hidden).map(e => e.querySelector('.name').textContent),
+      count: document.querySelector('#list-count').textContent,
+    }));
+    assert(filtered.shown.join(' ') === 'alpha/prep.ipynb alpha/train.ipynb', filtered);
+    assert(/2 of 3 notebooks/.test(filtered.count) && /newest first/.test(filtered.count), filtered.count);
+
+    await page.click('#list-sort');
+    const byPath = await page.evaluate(() => ({
+      shown: [...document.querySelectorAll('.listing .entry')].filter(e => !e.hidden).map(e => e.querySelector('.name').textContent),
+      count: document.querySelector('#list-count').textContent,
+      btn: document.querySelector('#list-sort').textContent,
+    }));
+    assert(byPath.shown.join(' ') === 'alpha/prep.ipynb alpha/train.ipynb' && /ordered by path/.test(byPath.count) && byPath.btn === 'Newest first', byPath);
+
+    await page.fill('#list-filter', '');
+    const allByPath = await page.evaluate(() => [...document.querySelectorAll('.listing .entry')].filter(e => !e.hidden).map(e => e.querySelector('.name').textContent));
+    assert(allByPath.join(' ') === 'alpha/prep.ipynb alpha/train.ipynb beta/eval.ipynb', allByPath);
+
+    await page.fill('#list-filter', 'nope');
+    assert(await page.evaluate(() => !document.querySelector('#list-empty').hidden), 'empty state missing');
+    assert(requests.length === reqBefore, 'filtering made network requests');
+  });
+
+  // Long folder (>= 8 entries) gets a filter that cooperates with Notebooks only.
+  const folder = Array.from({ length: 8 }, (_, i) => ({
+    name: i < 4 ? `nb-${i}.ipynb` : `file-${i}.txt`,
+    path: i < 4 ? `nb-${i}.ipynb` : `file-${i}.txt`,
+    type: 'file', size: 100, html_url: 'https://github.com/o/r',
+  }));
+  await run({
+    hash: '#/github/o/r/tree/main', settle: 400,
+    api: u => (/\/contents/.test(u) ? { body: folder } : null),
+  }, async ({ page }) => {
+    await page.waitForSelector('#list-filter');
+    await page.fill('#list-filter', 'file-');
+    assert(await page.evaluate(() => /4 matching items/.test(document.querySelector('#list-count').textContent)), 'folder filter count');
+    await page.check('#only-nb');
+    assert(await page.evaluate(() => /0 matching items/.test(document.querySelector('#list-count').textContent) && !document.querySelector('#list-empty').hidden), 'folder filter + only-nb');
+  });
+
+  // Long user repo list (>= 8 repos) filters by name and description.
+  const repos = Array.from({ length: 8 }, (_, i) => ({
+    name: i === 2 ? 'ml-notebooks' : `repo-${i}`,
+    owner: { login: 'ada' },
+    description: i === 5 ? 'Jupyter tutorials for vision' : '',
+    language: 'Python',
+    private: false,
+  }));
+  await run({
+    hash: '#/github/ada', settle: 400,
+    api: u => (/\/users\/ada\/repos/.test(u) ? { body: repos } : null),
+  }, async ({ page }) => {
+    await page.waitForSelector('#list-filter');
+    await page.fill('#list-filter', 'vision');
+    const r = await page.evaluate(() => ({
+      shown: [...document.querySelectorAll('.listing .entry')].filter(e => !e.hidden).map(e => e.querySelector('.name').textContent),
+      count: document.querySelector('#list-count').textContent,
+    }));
+    assert(r.shown.join(' ') === 'repo-5' && /1 of 8 public repositories/.test(r.count), r);
+  });
+});
+
+test('keyboard shortcuts: ? dialog, notebook navigation and toggles, and Compare stepping', async () => {
+  const doc = nb([md('# First heading'), code('a = 1', [{ output_type: 'stream', name: 'stdout', text: ['1\n'] }]), code('b = 2')]);
+  await run({ hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }) }, async ({ page }) => {
+    await page.keyboard.press('?');
+    assert(await page.evaluate(() => document.querySelector('#shortcuts-dialog').open), '? did not open shortcuts');
+    await page.keyboard.press('?');
+    assert(await page.evaluate(() => !document.querySelector('#shortcuts-dialog').open), '? did not close shortcuts');
+
+    await page.keyboard.press('j');
+    await page.keyboard.press('j');
+    assert(await page.evaluate(() => document.activeElement === document.querySelectorAll('.cell')[1]), 'j did not step to cell 2');
+    await page.keyboard.press('k');
+    assert(await page.evaluate(() => document.activeElement === document.querySelectorAll('.cell')[0]), 'k did not step back to cell 1');
+
+    await page.keyboard.press('c');
+    await page.keyboard.press('o');
+    await page.keyboard.press('t');
+    const toggled = await page.evaluate(() => ({
+      code: document.body.classList.contains('hide-code'),
+      out: document.body.classList.contains('hide-outputs'),
+      toc: document.querySelector('#toc-menu').open,
+    }));
+    assert(toggled.code && toggled.out && toggled.toc, toggled);
+  });
+
+  // In Compare: j / k step changes and o toggles outputs.
+  await run({ hash: CMP, settle: 400, raw: byRef }, async ({ page }) => {
+    await page.keyboard.press('j');
+    assert(await page.evaluate(() => /Change 1 of/.test(document.querySelector('#d-pos').textContent)), 'j in compare');
+    await page.keyboard.press('o');
+    assert(await page.evaluate(() => document.querySelector('#d-outputs').getAttribute('aria-pressed') === 'true'), 'o in compare');
+  });
+});
+
+test('notebook notes: clean notebooks stay quiet; out-of-order, unexecuted, error and heavy outputs appear with jumps', async () => {
+  await run({ hash: H, settle: 350, raw: () => ({ body: JSON.stringify(nb([md('# Clean'), code('x = 1', [], 1), code('y = 2', [], 2)])) }) }, async ({ page }) => {
+    assert(await page.evaluate(() => !document.querySelector('#nb-health')), 'clean notebook showed notes');
+  });
+
+  const noisy = nb([
+    code('x = 1', [], 5),
+    code('y = 2', [{ output_type: 'error', ename: 'ValueError', evalue: 'bad', traceback: ['ValueError: bad'] }], 2),
+    code('z = 3', [], null),
+    code('big()', [{ output_type: 'stream', name: 'stdout', text: ['a'.repeat(600000)] }], 6),
+  ]);
+  await run({ hash: H, settle: 400, raw: () => ({ body: JSON.stringify(noisy) }) }, async ({ page }) => {
+    const sum = await page.evaluate(() => document.querySelector('#nb-health summary').textContent);
+    assert(/1 error/.test(sum) && /1 cell out of order/.test(sum) && /1 unexecuted code cell/.test(sum) && /in outputs/.test(sum), sum);
+    await page.click('#nb-health summary');
+    await page.locator('.health-jump[data-jump-cell="2"]').first().click();
+    assert(await page.evaluate(() => document.querySelectorAll('.cell')[1].classList.contains('cell-target')), 'jump did not highlight cell 2');
+  });
+});
+
+test('cross-forge URLs: Hugging Face, GitLab and Codeberg blob links open as raw notebooks (and work in Compare)', async () => {
+  const cases = [
+    ['https://huggingface.co/datasets/org/ds/blob/main/dir/nb.ipynb', 'https://huggingface.co/datasets/org/ds/resolve/main/dir/nb.ipynb'],
+    ['https://gitlab.com/group/sub/proj/-/blob/main/path/nb.ipynb', 'https://gitlab.com/group/sub/proj/-/raw/main/path/nb.ipynb'],
+    ['https://codeberg.org/owner/repo/src/branch/main/nb.ipynb', 'https://codeberg.org/owner/repo/raw/branch/main/nb.ipynb'],
+  ];
+  for (const [pasted, want] of cases) {
+    await run({
+      hash: '#/', settle: 300,
+      other: u => (u === want ? { body: JSON.stringify(good) } : null),
+    }, async ({ page, requests }) => {
+      await page.fill('#hero-input', pasted);
+      await page.press('#hero-input', 'Enter');
+      await page.waitForSelector('.cell');
+      assert(requests.includes(want), { pasted, want, requests });
+    });
+  }
+
+  // Also works in Compare Two links.
+  const hfA = 'https://huggingface.co/org/a/blob/main/nb.ipynb';
+  const glB = 'https://gitlab.com/org/b/-/blob/main/nb.ipynb';
+  await run({
+    hash: '#/compare', settle: 300,
+    other: u => {
+      if (u === 'https://huggingface.co/org/a/resolve/main/nb.ipynb') return { body: JSON.stringify(oldNb) };
+      if (u === 'https://gitlab.com/org/b/-/raw/main/nb.ipynb') return { body: JSON.stringify(newNb) };
+      return null;
+    },
+  }, async ({ page }) => {
+    await page.fill('#link-a', hfA);
+    await page.fill('#link-b', glB);
+    await page.click('#links-form button[type="submit"]');
+    await page.waitForSelector('.diffview');
+    assert(await page.evaluate(() => /2 modified/.test(document.querySelector('#d-summary').textContent)), 'cross-forge compare failed');
+  });
+});
+
+test('media outputs: audio/* and video/* MIME bundles render controls, invalid base64 falls back, and HTML <audio> stays visible', () => {
+  const wavB64 = 'UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+  const doc = nb([
+    code('Audio()', [{ output_type: 'display_data', metadata: {}, data: { 'audio/wav': [wavB64] } }]),
+    code('Video()', [{ output_type: 'display_data', metadata: {}, data: { 'video/mp4': [wavB64] } }]),
+    code('Bad()', [{ output_type: 'display_data', metadata: {}, data: { 'audio/wav': ['not valid!!'], 'text/plain': ['fallback text'] } }]),
+    code('HtmlAudio()', [{ output_type: 'display_data', metadata: {}, data: { 'text/html': [`<audio controls src="data:audio/wav;base64,${wavB64}"></audio>`] } }]),
+  ]);
+  return run({ hash: H, settle: 400, raw: () => ({ body: JSON.stringify(doc) }) }, async ({ page }) => {
+    const r = await page.evaluate(() => ({
+      audios: document.querySelectorAll('.cells audio[controls]').length,
+      videos: document.querySelectorAll('.cells video[controls]').length,
+      audioSrc: (document.querySelector('.media-out audio') || {}).getAttribute('src') || '',
+      videoSave: (document.querySelector('.media-out video ~ .out-actions a') || {}).getAttribute('download') || '',
+      fallback: document.querySelectorAll('.cell')[2].textContent.includes('fallback text'),
+    }));
+    assert(r.audios === 2 && r.videos === 1, r);
+    assert(r.audioSrc.startsWith('data:audio/wav;base64,') && r.videoSave === 'output.mp4', r);
+    assert(r.fallback, r);
+
+    await page.click('#export-menu summary');
+    const [dlHtml] = await Promise.all([
+      page.waitForEvent('download'),
+      page.click('[data-export="html"]'),
+    ]);
+    const htmlFile = path.join(OUT, 'media-export.html');
+    await dlHtml.saveAs(htmlFile);
+    const html = fs.readFileSync(htmlFile, 'utf8');
+    assert(/media-src data:/.test(html), 'exported HTML CSP missing media-src data:');
+  });
+});
+
 /* ---------- harness ---------- */
 
 // If the injected faces stop reaching a page, text lays out with no glyph metrics: every line box collapses and a dozen

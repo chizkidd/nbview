@@ -292,6 +292,7 @@ body.is-home main { padding-bottom: 1rem; }
   align-items: center;
   border-top: 1px solid var(--rule);
 }
+.entry[hidden] { display: none; }
 .entry:first-child { border-top: 0; }
 .entry a {
   display: flex;
@@ -321,6 +322,18 @@ body.is-home main { padding-bottom: 1rem; }
 .icon { width: 16px; height: 16px; flex: none; }
 .tag { color: var(--in); border: 1px solid currentColor; border-radius: 3px; padding: 0 0.35rem; }
 .empty { color: var(--muted); padding: 1rem 0.9rem; margin: 0; }
+.list-controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0 0 0.75rem; }
+.list-filter {
+  flex: 1 1 14rem;
+  min-width: 0;
+  font: 14px var(--mono);
+  padding: 0.45rem 0.7rem;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.list-filter:focus { border-color: var(--in); outline: none; }
 #readme:not(:empty) {
   margin-top: 2rem;
   padding: 1.5rem 1.75rem;
@@ -358,14 +371,18 @@ body.is-home main { padding-bottom: 1rem; }
 /* Notebook: typography and boxes follow nbviewer's Jupyter classic look */
 .cells { margin-top: 1.75rem; font: 14px/1.42857 var(--nb-sans); color: var(--nb-text); }
 .cell { margin-bottom: 0.9rem; position: relative; }
-.cell-link {
+.cell-actions {
   position: absolute; top: 0; right: 0; z-index: 1;
-  font: 12px var(--mono); padding: 0.1rem 0.45rem; color: var(--muted);
-  background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; cursor: pointer;
+  display: flex; gap: 0.25rem;
   opacity: 0;
 }
-.cell:hover > .cell-link, .cell-link:focus-visible, .cell.cell-target > .cell-link { opacity: 1; }
-@media (hover: none) { .cell-link { opacity: 0.7; } }
+.cell-link, .cell-copy {
+  font: 12px var(--mono); padding: 0.1rem 0.45rem; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 3px; cursor: pointer;
+}
+.cell-link:hover, .cell-copy:hover { border-color: var(--in); color: var(--ink); }
+.cell:hover > .cell-actions, .cell-actions:focus-within, .cell.cell-target > .cell-actions { opacity: 1; }
+@media (hover: none) { .cell-actions { opacity: 0.7; } }
 .cell-target { outline: 2px solid var(--in); outline-offset: 4px; border-radius: 2px; }
 .cell-target:focus { outline: 2px solid var(--in); }
 .row {
@@ -528,12 +545,13 @@ dialog::backdrop { background: rgba(10, 14, 20, 0.45); }
 #oauth-block { margin: 0 0 1.2rem; }
 #oauth-btn { margin: 0 0 0.6rem; }
 .dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
-.dialog-actions .btn:first-child { margin-right: auto; }
+.dialog-actions .btn:first-child:not(:last-child) { margin-right: auto; }
 
 /* Embed shell: the frame shows the notebook, not the site around it. */
 html[data-embed] .bar,
 html[data-embed] .nb-head .toolbar,
 html[data-embed] .cell-link,
+html[data-embed] .nb-health,
 html[data-embed] .nb-meta { display: none !important; }
 html[data-embed] main { padding-top: 0.5rem; }
 
@@ -616,7 +634,7 @@ html[data-embed] main { padding-top: 0.5rem; }
 /* Printing and Save as PDF */
 @media print {
   :root { color-scheme: light; }
-  .bar, .toolbar, .crumbs, .cell-link { display: none !important; }
+  .bar, .toolbar, .crumbs, .cell-actions, .cell-link, .cell-copy, .out-actions, .nb-health { display: none !important; }
   .cell-target { outline: none; }
   body { background: #fff; }
   main { padding: 0; }
@@ -780,3 +798,68 @@ html[data-embed] main { padding-top: 0.5rem; }
 .imgside img { display: block; max-width: 100%; height: auto; image-rendering: auto; }
 .imgmeta { display: block; font-size: .75rem; opacity: .7; margin-top: .25rem; }
 @media (max-width: 640px) { .imgdiff { grid-template-columns: 1fr; } }
+
+/* Output actions: CSV for HTML tables, Save for plots and media */
+.table-out, .img-out { position: relative; max-width: 100%; }
+.img-out { display: inline-block; }
+.table-out > .out-actions, .img-out > .out-actions {
+  position: absolute; top: 0.25rem; right: 0.25rem; z-index: 1;
+  display: flex; gap: 0.25rem;
+  opacity: 0;
+}
+.table-out:hover > .out-actions, .table-out > .out-actions:focus-within,
+.img-out:hover > .out-actions, .img-out > .out-actions:focus-within { opacity: 1; }
+@media (hover: none) { .table-out > .out-actions, .img-out > .out-actions { opacity: 0.8; } }
+.out-btn { font-size: 11px; padding: 0.12rem 0.45rem; color: var(--muted); border-radius: 3px; }
+.out-btn:hover { color: var(--ink); }
+.media-out { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 0.2rem 0; }
+.media-out audio, .media-out video { max-width: 100%; display: block; }
+.media-out > .out-actions { display: flex; gap: 0.25rem; }
+
+/* Notebook notes: execution order, unexecuted cells, tracebacks and heavy outputs */
+.nb-health {
+  grid-column: 1 / -1;
+  margin-top: 0.25rem;
+  font: 13px/1.45 var(--mono);
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  background: var(--surface);
+  padding: 0.4rem 0.7rem;
+}
+.nb-health > summary { cursor: pointer; color: var(--ink); }
+.health-list { margin: 0.5rem 0 0.15rem; padding-left: 1.2rem; }
+.health-list li { margin: 0.2rem 0; }
+.health-jump {
+  font: inherit;
+  color: var(--in);
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.health-jump:focus-visible { outline: 2px solid var(--in); outline-offset: 2px; border-radius: 2px; }
+
+/* Keyboard shortcuts dialog */
+#shortcuts-dialog { width: min(30rem, 94vw); }
+.shortcuts-list {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem 1rem;
+  align-items: baseline;
+  margin: 0.75rem 0 0;
+  font-size: 0.92rem;
+}
+.shortcuts-list dt { font: 12px var(--mono); white-space: nowrap; }
+.shortcuts-list dd { margin: 0; color: var(--muted); }
+.shortcuts-list kbd {
+  display: inline-block;
+  font: 12px var(--mono);
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 0.08rem 0.38rem;
+}
+
